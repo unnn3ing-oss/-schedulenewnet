@@ -6,7 +6,7 @@ const cfg = require('../web/config.js');
 
 const URL_ = 'https://news.tvbs.com.tw/life/3012345';
 const frame = (extra) => Object.assign({
-  mode: 'single', template: 'newsnet_news', imageUrl: 'https://snn-images.19jpz-3.workers.dev/i/' + 'a'.repeat(32) + '.jpg',
+  mode: 'single', frame: 'news', imageUrl: 'https://snn-images.19jpz-3.workers.dev/i/' + 'a'.repeat(32) + '.jpg',
   lines: ['颱風假 最新！北北基桃', ' 明天照常上班上課 ', ''], caption: '北北基桃明天照常上班上課！\n#颱風', url: URL_,
   guard: { checkId: 'g1', level: 'yellow', ack: false }, hasImage: true
 }, extra);
@@ -50,6 +50,24 @@ test('純文字底圖：template／image_url 空、title_lines 空陣列、加�
   assert.equal(b.width, 1080); assert.equal(b.height, 1080);
   assert.equal(b.wordmark, 'wordmark_newsnet.png'); assert.equal(b.font, 'hanwang');
   assert.equal(b.shadow, true); assert.equal(b.line_gap, 1.45); assert.equal(b.center_on_canvas, true);
+});
+
+test('版型只看藍框／粉框：每台都送同一個 template（newsnet_news／newsnet_ent）', () => {
+  const all = cfg.pages.map(p => ({ code: p.code, at: null }));
+  assert.ok(P.buildRequests(frame(), all).every(r => r.body.template === 'newsnet_news'));
+  assert.ok(P.buildRequests(frame({ frame: 'ent' }), all).every(r => r.body.template === 'newsnet_ent'));
+  assert.equal(P.buildBase(frame({ frame: undefined })).template, 'newsnet_news', '沒指定＝預設藍框');
+  assert.equal(P.buildBase(card({ frame: 'ent' })).template, '', '純文字底圖 template 空字串');
+  assert.equal(P.previewRequest(frame({ frame: 'ent' })).body.template, 'newsnet_ent');
+});
+
+test('純文字底圖：卡面文字＝共用的標題（各行以 \\n 接起），title_lines／line1／line2 照交接文件為空', () => {
+  const b = P.buildBase(card({ cardText: undefined, lines: [' 【快訊】北市宣布 ', '', '明天停班停課'] }));
+  assert.equal(b.text, '【快訊】北市宣布\n明天停班停課');
+  assert.deepEqual(b.title_lines, []); assert.equal(b.line1, ''); assert.equal(b.line2, '');
+  assert.equal(b.short_title, '【快訊】北');
+  assert.deepEqual(P.guardBody(card({ cardText: undefined, lines: ['甲', '乙'] })).text, '甲\n乙');
+  assert.equal(P.validateInput(card({ cardText: undefined, lines: [' '] })), '請填文字內容');
 });
 
 test('每台一個請求：page、link（各台 UTM）、schedule、端點', () => {
@@ -102,7 +120,7 @@ test('未知粉專丟錯', () => {
 test('guardBody／guardKey（§5）', () => {
   assert.deepEqual(P.guardBody(frame()), { ip: 'newsnet', title_lines: ['颱風假 最新！北北基桃', '明天照常上班上課'], caption: '北北基桃明天照常上班上課！\n#颱風', text: '' });
   assert.deepEqual(P.guardBody(card()), { ip: 'newsnet', title_lines: [], caption: '快訊', text: '【快訊】北市宣布\n明天停班停課' });
-  assert.equal(P.guardKey(frame()), P.guardKey(frame({ template: 'newsnet_intl' })), '版型不影響判讀');
+  assert.equal(P.guardKey(frame()), P.guardKey(frame({ frame: 'ent' })), '版型不影響判讀');
   assert.notEqual(P.guardKey(frame()), P.guardKey(frame({ caption: '改了' })));
 });
 

@@ -3,7 +3,7 @@
   const $ = id => document.getElementById(id);
   const C = window.NEWSNET_CONFIG;
   const overlay = $('overlay'), modal = $('modal');
-  const state = { mode: 'frame', template: 'newsnet_news', articleId: '', summary: '', cardStyle: C.textCardStyles[0].key, openedBy: null,
+  const state = { mode: 'frame', frame: 'news', articleId: '', summary: '', cardStyle: C.textCardStyles[0].key, openedBy: null,
     // 每台：on 勾選、sched 排程（at 為時間）、status ''｜sending｜ok｜fail、result 送出結果
     pages: Object.fromEntries(C.pages.map(p => [p.code, { on: false, sched: false, at: null, status: '', result: null }])) };
 
@@ -34,39 +34,46 @@
     text.textContent = '外掛已連線・' + (days === null ? '已登入' : `登入剩 ${days} 天`);
   }
 
-  // ---- 標題行與字數 ----
-  const lineEls = () => [...document.querySelectorAll('#lines .line')];
-  const lineInputs = () => [...document.querySelectorAll('#lines .ln')];
-  const getLines = () => lineInputs().map(i => i.value);
+  // ---- 標題：一個輸入框、一行一句（作圖框與純文字底圖共用）；每行字數顯示在框外右側 ----
+  const titleEl = $('title');
+  const tpl = () => Rules.frameTemplate(state.frame);
+  const rows = () => titleEl.value.replace(/\r/g, '').split('\n');
+  const getLines = () => rows().map(l => l.trim()).filter(Boolean);   // 送出／判讀／預覽用：去掉空行
   function updateCounters() {
-    const limits = Rules.limitsFor(state.template);
-    $('limitNote').textContent = `每行上限 ${limits.join('／')}（全形 1、半形 0.5）`;
-    lineEls().forEach((row, i) => {
-      const v = row.querySelector('.ln').value, w = Rules.charWidth(v), lim = limits[i];
-      row.querySelector('.cnt').textContent = `${w % 1 ? w.toFixed(1) : w}/${lim}`;
-      row.classList.toggle('over', w > lim);
+    const limits = Rules.limitsFor(tpl());
+    $('limitNote').textContent = `每行上限 ${limits.join('／')}（全形 1、半形 0.5），最多 ${limits.length} 行`;
+    const rs = rows();
+    titleEl.rows = Math.max(3, rs.length);
+    let n = 0, bad = false;
+    const spans = rs.map(r => {
+      const el = document.createElement('span');
+      if (!r.trim()) return el;               // 空行：不算一行，計數留白
+      const w = Rules.charWidth(r.trim()), lim = limits[n++];
+      const over = lim === undefined || w > lim;   // 第 4 行起一律標紅
+      el.textContent = `${w % 1 ? w.toFixed(1) : w}/${lim === undefined ? '—' : lim}`;
+      if (lim === undefined) el.title = `標題最多 ${limits.length} 行`;
+      el.classList.toggle('over', over);
+      bad = bad || over;
+      return el;
     });
-    Editor.setGuideLines(getLines());
+    $('titleCnts').replaceChildren(...spans);
+    titleEl.classList.toggle('over', bad);
+    titleEl.setAttribute('aria-invalid', String(bad));
+    Editor.setTitleLines(getLines());
+    if (state.mode === 'text') drawTextCard();
   }
-  function setLines(lines) {
-    const els = lineEls();
-    if (lines.length > 3) lines = [lines[0], lines[1], lines.slice(2).join('')];   // 最多 3 行，多的併進第 3 行（會標紅提醒）
-    lineInputs().forEach((inp, i) => { inp.value = lines[i] || ''; });
-    const show3 = !!lines[2];
-    if (show3) { els[2].hidden = false; $('addLineBtn').hidden = true; }
-    updateCounters();
-  }
-  $('addLineBtn').addEventListener('click', () => { lineEls()[2].hidden = false; $('addLineBtn').hidden = true; lineInputs()[2].focus(); });
-  $('lines').addEventListener('input', updateCounters);
+  function setLines(lines) { titleEl.value = lines.join('\n'); updateCounters(); }
+  titleEl.addEventListener('input', updateCounters);
 
   // ---- 版型 / 模式 ----
   function setActive(container, btn) { [...container.children].forEach(b => { if (b.tagName === 'BUTTON') b.classList.toggle('active', b === btn); }); }
-  $('tplSwitch').addEventListener('click', e => {
-    const b = e.target.closest('button[data-tpl]');
+  // 新聞（藍框）／娛樂（粉框）：只決定預覽的疊圖與送給後端的 template（所有勾選的粉專都用同一個）
+  $('frameSwitch').addEventListener('click', e => {
+    const b = e.target.closest('button[data-frame]');
     if (!b) return;
-    state.template = b.dataset.tpl;
-    setActive($('tplSwitch'), b);
-    Editor.setTemplate(state.template);
+    state.frame = b.dataset.frame;
+    setActive($('frameSwitch'), b);
+    Editor.setFrame(state.frame);
     updateCounters(); flowEdit();
   });
   $('modeSwitch').addEventListener('click', e => {
@@ -75,11 +82,10 @@
     state.mode = b.dataset.mode;
     setActive($('modeSwitch'), b);
     const text = state.mode === 'text';
-    $('framePane').hidden = text; $('textPane').hidden = !text; $('titleBlock').hidden = text;
+    $('framePane').hidden = text; $('textPane').hidden = !text;   // 右欄（網址、標題、小編文）兩種模式共用，內容不清
     if (text) drawTextCard();
     flowEdit();
   });
-  $('guideToggle').addEventListener('change', e => Editor.showGuides(e.target.checked));
   $('pickBtn').addEventListener('click', () => $('fileInput').click());
   $('clearImgBtn').addEventListener('click', () => Editor.clearImage());
   Editor.onChange(() => { $('clearImgBtn').disabled = !Editor.hasImage(); });
@@ -118,7 +124,7 @@
   function drawTextCard() {
     const cv = $('textCanvas'), c = cv.getContext('2d'), st = C.textCardStyles.find(s => s.key === state.cardStyle);
     c.fillStyle = st.bg; c.fillRect(0, 0, cv.width, cv.height);
-    const text = $('cardText').value.trim() || '在這裡輸入卡面文字';
+    const text = getLines().join('\n') || '在右邊輸入標題';   // 卡面文字＝標題（照輸入框的分行）
     const size = 84, maxW = 900;
     c.font = `700 ${size}px "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif`;
     c.fillStyle = st.fg; c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -133,7 +139,6 @@
     rows.forEach((r, i) => c.fillText(r, cv.width / 2, y0 + i * lh));
     c.shadowColor = 'transparent';
   }
-  $('cardText').addEventListener('input', drawTextCard);
 
   // ---- 快速帶入 ----
   const hint = (msg, cls) => { const h = $('urlHint'); h.textContent = msg || ''; h.className = 'hint' + (cls ? ' ' + cls : ''); };
@@ -177,10 +182,7 @@
         return;
       }
       state.summary = meta.summary || '';
-      if (meta.title) {
-        if (state.mode === 'text') { if (!$('cardText').value) { $('cardText').value = meta.title; drawTextCard(); } }
-        else setLines(Rules.overrideLines(meta.title));   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle
-      }
+      if (meta.title) setLines(Rules.overrideLines(meta.title));   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle；兩種模式共用
       let msg = '已帶入' + (meta.title ? '標題' : '') + (state.articleId ? `（文章 ${state.articleId}）` : ''), cls = 'ok';
       if (meta.image && state.mode === 'frame') {
         const im = await Ext.fetchImage(meta.image);
@@ -354,8 +356,8 @@
     if (input.mode === 'text_card' && !input.cardText.trim()) { toast('請填文字內容'); return; }
     previewing = true; $('previewBtn').disabled = $('previewTextBtn').disabled = true;
     $('bePrev').hidden = false;
-    const tplName = $('tplSwitch').querySelector('.active').textContent;
-    $('bePrevCap').textContent = input.mode === 'single' ? `後端產圖・${tplName}版型` : '後端產圖・純文字底圖';
+    const tplName = $('frameSwitch').querySelector('.active').textContent;
+    $('bePrevCap').textContent = input.mode === 'single' ? `後端產圖・${tplName}` : '後端產圖・純文字底圖';
     try {
       const key = previewKeyNow();
       if (input.mode === 'single') {
@@ -387,7 +389,7 @@
   }
   async function aiCaption(kind) {
     const input = currentInput(), body = Payload.aiCaptionBody(kind, input);
-    if (kind === 'generate' && !body.title) { capHint(input.mode === 'text_card' ? '請先填文字內容' : '請先填標題', 'bad'); return; }
+    if (kind === 'generate' && !body.title) { capHint('請先填標題', 'bad'); return; }
     if (kind === 'proofread' && !body.text.trim()) { capHint('請先寫小編文', 'bad'); return; }
     $('aiGenBtn').disabled = $('aiFixBtn').disabled = true;
     capHint(kind === 'generate' ? 'AI 產生中…' : '校對中…');
@@ -412,8 +414,9 @@
   const sendBtn = $('sendBtn'), bub = $('bubble');
   function currentInput() {
     const card = state.mode === 'text';
-    return { mode: card ? 'text_card' : 'single', template: state.template, lines: getLines(), caption: $('caption').value,
-      url: $('url').value.trim(), cardText: $('cardText').value, cardStyle: state.cardStyle, summary: state.summary, hasImage: Editor.hasImage() };
+    const lines = getLines();
+    return { mode: card ? 'text_card' : 'single', frame: state.frame, lines, caption: $('caption').value,
+      url: $('url').value.trim(), cardText: lines.join('\n'), cardStyle: state.cardStyle, summary: state.summary, hasImage: Editor.hasImage() };
   }
   const pending = () => C.pages.filter(p => state.pages[p.code].on && state.pages[p.code].status !== 'ok').map(p => p.code);
   const targetOf = code => { const st = state.pages[code]; return { code, at: st.sched ? st.at : null }; };
@@ -562,14 +565,12 @@
     $('confirm').hidden = false; $('cfStay').focus();
   }
   function isDirty() {
-    return !!($('url').value.trim() || getLines().some(l => l.trim()) || $('caption').value.trim() || $('cardText').value.trim() || Editor.hasContent());
+    return !!($('url').value.trim() || getLines().length || $('caption').value.trim() || Editor.hasContent());
   }
   const allSent = () => C.pages.some(p => state.pages[p.code].status === 'ok') && !pending().length;
   function resetAll() {
-    $('url').value = ''; $('caption').value = ''; $('cardText').value = ''; hint(''); capHint('');
+    $('url').value = ''; $('caption').value = ''; titleEl.value = ''; hint(''); capHint('');
     state.articleId = ''; state.summary = '';
-    lineInputs().forEach(i => { i.value = ''; });
-    lineEls()[2].hidden = true; $('addLineBtn').hidden = false;
     Editor.reset();
     Object.values(state.pages).forEach(s => { s.on = false; s.sched = false; s.at = null; s.status = ''; s.result = null; });
     C.pages.forEach(p => renderPage(p.code));
@@ -630,7 +631,7 @@
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   });
 
-  Editor.setTemplate(state.template);
+  Editor.setFrame(state.frame);
   updateCounters(); drawTextCard(); renderFlow();
   window.App = { state, flow, getLines, setLines, currentInput };   // 後續 PR 與測試用
   refreshExt();

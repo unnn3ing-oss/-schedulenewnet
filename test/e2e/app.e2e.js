@@ -4,7 +4,36 @@ const { chromium } = require('playwright');
 const ROOT = path.join(__dirname, '..', '..');
 const WEB = path.join(ROOT, 'web');
 const SHOTS = process.env.SHOT_DIR || os.tmpdir();
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json', '.ttf': 'font/ttf' };
+const TITLE3 = '金鐘61／《飢餓》10週年大禮！\n峮峮驚喜合體遭催回歸\n蔡黃汝羞謝「好友」閃瞎全場';
+// 畫布上某點的顏色（預覽畫布或匯出的 JPEG）
+const near = (a, b, tol) => a.every((v, i) => Math.abs(v - b[i]) <= (tol || 24));
+const BLUE = [0, 56, 148], PINK = [253, 183, 242];   // frames/news.png、ent.png 右上角
+async function previewPx(page, x, y) {
+  return page.evaluate(([x, y]) => [...document.getElementById('editorCanvas').getContext('2d').getImageData(x, y, 1, 1).data].slice(0, 3), [x, y]);
+}
+async function exportInfo(page, pts) {
+  return page.evaluate(async pts => {
+    const blob = await Editor.exportBlob();
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+    const g = c.getContext('2d'); g.drawImage(bmp, 0, 0);
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let h = 0; for (const b of buf) h = (h * 31 + b) >>> 0;
+    return { w: bmp.width, h: bmp.height, type: blob.type, hash: h, px: pts.map(([x, y]) => [...g.getImageData(x, y, 1, 1).data].slice(0, 3)) };
+  }, pts);
+}
+// 每行字數在框外右側、和該行對齊（誤差 2px 內）
+async function counterGeom(page) {
+  return page.evaluate(() => {
+    const ta = document.getElementById('title'), cs = getComputedStyle(ta), r = ta.getBoundingClientRect();
+    const lh = parseFloat(cs.lineHeight), top0 = r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop) - ta.scrollTop;
+    return [...document.querySelectorAll('#titleCnts span')].map((s, i) => {
+      const b = s.getBoundingClientRect();
+      return { i, text: s.textContent, over: s.classList.contains('over'), dy: Math.abs((b.top + b.height / 2) - (top0 + i * lh + lh / 2)), outside: b.left >= r.right };
+    });
+  });
+}
 
 const server = http.createServer((req, res) => {
   const p = path.join(WEB, decodeURIComponent(req.url.split('?')[0]).replace(/^\/$/, '/index.html'));
@@ -39,17 +68,19 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert(await page.isVisible('#modal'));
   ok('開啟新增發文彈窗');
 
-  // 3 版型與畫布尺寸
+  // 3 版型只有新聞（藍框）／娛樂（粉框），預設藍框；畫布一律 1080×1080
   const size = () => page.evaluate(() => [document.getElementById('editorCanvas').width, document.getElementById('editorCanvas').height]);
   assert.deepStrictEqual(await size(), [1080, 1080]);
-  await page.click('[data-tpl="newsnet_intl"]');
-  assert.deepStrictEqual(await size(), [1200, 675]);
-  ok('國際＋ → 1200×675');
-  const counter = await page.textContent('#lines .line:first-child .cnt');
-  assert.match(counter, /\/10$/);
-  await page.click('[data-tpl="newsnet_news"]');
+  assert.deepStrictEqual(await page.$$eval('#frameSwitch button', bs => bs.map(b => b.textContent)), ['新聞（藍框）', '娛樂（粉框）']);
+  assert.strictEqual(await page.textContent('#frameSwitch .active'), '新聞（藍框）');
+  assert.strictEqual(await page.locator('[data-tpl], #guides, #guideToggle, #addLineBtn, #cardText, #lines').count(), 0, '舊的五種版型、標題區參考線、分行輸入都拿掉了');
+  assert(near(await previewPx(page, 1060, 20), BLUE), '預覽右上角是藍框');
+  await page.click('[data-frame="ent"]');
+  assert(near(await previewPx(page, 1060, 20), PINK), '切粉框 → 預覽右上角變粉紅');
   assert.deepStrictEqual(await size(), [1080, 1080]);
-  ok('新聞 → 1080×1080');
+  await page.click('[data-frame="news"]');
+  assert(near(await previewPx(page, 1060, 20), BLUE));
+  ok('藍框／粉框切換預覽疊圖，畫布維持 1080×1080');
 
   // 4 上傳照片、貼圖、馬賽克
   await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
@@ -69,27 +100,41 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await page.mouse.wheel(0, -300);
   ok('貼圖拖曳、滾輪縮放');
 
-  // 5 匯出
-  const dims = () => page.evaluate(async () => {
-    const blob = await Editor.exportBlob();
-    const bmp = await createImageBitmap(blob);
-    return { w: bmp.width, h: bmp.height, type: blob.type };
-  });
-  assert.deepStrictEqual(await dims(), { w: 1080, h: 1080, type: 'image/jpeg' });
-  await page.click('[data-tpl="newsnet_intl"]');
-  assert.deepStrictEqual(await dims(), { w: 1200, h: 675, type: 'image/jpeg' });
-  ok('exportBlob：1080×1080 與 1200×675，JPEG');
-  await page.click('[data-tpl="newsnet_news"]');
+  // 5 匯出（上傳圖床的圖）：不含疊圖、不含標題
+  await page.fill('#title', TITLE3);
+  await page.evaluate(() => document.fonts.load('67px "WHZ-Heavy"'));
+  assert(await page.evaluate(() => document.fonts.check('67px "WHZ-Heavy"')), 'WHZ-Heavy 字型已載入');
+  const PTS = [[1060, 20], [540, 880]];
+  const ex1 = await exportInfo(page, PTS);
+  assert.deepStrictEqual([ex1.w, ex1.h, ex1.type], [1080, 1080, 'image/jpeg']);
+  const pv = await previewPx(page, 1060, 20);
+  assert(near(pv, BLUE), '預覽右上角有藍框 ' + pv);
+  assert(!near(ex1.px[0], BLUE, 40) && !near(ex1.px[0], PINK, 40), '匯出的圖右上角沒有邊框 logo ' + ex1.px[0]);
+  await page.click('[data-frame="ent"]');
+  const ex2 = await exportInfo(page, PTS);
+  await page.fill('#title', '');
+  const ex3 = await exportInfo(page, PTS);
+  assert.strictEqual(ex1.hash, ex2.hash, '換框不影響匯出的圖');
+  assert.strictEqual(ex1.hash, ex3.hash, '標題不影響匯出的圖（匯出不含標題）');
+  await page.click('[data-frame="news"]');
+  ok('exportBlob：1080×1080 JPEG，沒有疊圖、沒有標題（右上角 ' + ex1.px[0] + '，預覽 ' + pv + '）');
 
-  // 6 字數計數
-  await page.fill('#lines .ln >> nth=0', '一二三四五六七八九十一二三四五');
-  assert(!(await page.locator('#lines .line').first().getAttribute('class')).includes('over'));
-  await page.fill('#lines .ln >> nth=0', '一二三四五六七八九十一二三四五六');
-  assert((await page.locator('#lines .line').first().getAttribute('class')).includes('over'));
-  assert.match(await page.textContent('#lines .line:first-child .cnt'), /16\/15/);
-  await page.fill('#lines .ln >> nth=0', 'abcdefghijklmnopqrstuvwxyzabcd');   // 30 個半形 = 15
-  assert(!(await page.locator('#lines .line').first().getAttribute('class')).includes('over'));
-  ok('字數計數：16 全形字超過 15 變紅，半形 0.5');
+  // 6 標題：一個輸入框；每行字數在框外右側、和該行對齊，超過變紅；第 4 行起一律紅
+  assert.strictEqual(await page.locator('textarea#title').count(), 1);
+  await page.fill('#title', '一二三四五六七八九十一二三四五');
+  let g = await counterGeom(page);
+  assert.deepStrictEqual(g.map(x => [x.text, x.over]), [['15/15', false]]);
+  await page.fill('#title', '一二三四五六七八九十一二三四五六\nabcdefghijklmnopqrstuvwxyzabcd\n短\n第四行');   // 第 2 行 30 個半形 = 15
+  g = await counterGeom(page);
+  assert.deepStrictEqual(g.map(x => [x.text, x.over]), [['16/15', true], ['15/15', false], ['1/15', false], ['3/—', true]]);
+  assert(g.every(x => x.dy <= 2 && x.outside), '計數和各行對齊、在框外 ' + JSON.stringify(g));
+  assert.strictEqual(await page.getAttribute('#title', 'aria-invalid'), 'true');
+  await page.fill('#title', '第一行\n\n第三行');   // 中間空行：計數留白，下一行仍算第 2 行
+  g = await counterGeom(page);
+  assert.deepStrictEqual(g.map(x => x.text), ['3/15', '', '3/15']);
+  assert(g.every(x => x.dy <= 2));
+  assert.deepStrictEqual(await page.evaluate(() => App.getLines()), ['第一行', '第三行']);
+  ok('單一標題框：每行字數在框外對齊、超過 15 變紅、半形 0.5、第 4 行標紅');
 
   // 7 快速帶入（網路被擋，只測錯誤路徑）
   await page.fill('#url', 'https://news.tvbs.com.tw/life/3012345');
@@ -109,8 +154,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
 
   // 8 截圖（桌面）
   await page.fill('#caption', '北北基桃明天照常上班上課！\n#颱風 #停班停課');
-  await page.fill('#lines .ln >> nth=0', '颱風假最新！北北基桃');
-  await page.fill('#lines .ln >> nth=1', '明天照常上班上課');
+  await page.fill('#title', '颱風假最新！北北基桃\n明天照常上班上課');
   await page.click('.pg >> nth=0 >> button >> nth=0');
   await page.click('.pg >> nth=2 >> button >> nth=0');
   await page.click('.pg >> nth=2 >> .pg-mode');
@@ -139,10 +183,37 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert(!(await page.isVisible('#modal')), '沒有內容時 Esc 直接關閉');
   ok('沒有內容 Esc 直接關閉');
 
-  // 10 純文字底圖
+  // 10 純文字底圖：右欄（網址、標題、小編文）兩種模式共用，切換不清內容
   await page.click('#newBtn');
+  await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
+  await page.waitForFunction(() => Editor.hasImage());
+  await page.fill('#title', TITLE3);
+  await page.fill('#caption', '金鐘 61 頒獎典禮 #金鐘61');
+  await page.evaluate(() => document.fonts.load('67px "WHZ-Heavy"'));
+  await page.waitForTimeout(100);
+  await page.evaluate(() => { document.querySelector('.m-body').scrollTop = 0; });
+  await page.screenshot({ path: path.join(SHOTS, 'prB2-desktop-news.png') });
+  await page.click('[data-frame="ent"]');
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: path.join(SHOTS, 'prB2-desktop-ent.png') });
+  await page.click('[data-frame="news"]');
+  ok('已截圖 prB2-desktop-news.png、prB2-desktop-ent.png');
+  const order = () => page.evaluate(() => [...document.querySelectorAll('.m-right input, .m-right textarea')].filter(e => e.offsetParent).map(e => e.id));
+  const frameOrder = await order();
   await page.click('[data-mode="text"]');
   assert(await page.isVisible('#textCanvas') && !(await page.isVisible('#editorCanvas')));
+  assert.deepStrictEqual(await order(), frameOrder, '右欄順序相同');
+  assert.deepStrictEqual(frameOrder, ['url', 'title', 'caption']);
+  assert.strictEqual(await page.inputValue('#title'), TITLE3);
+  assert.strictEqual(await page.inputValue('#caption'), '金鐘 61 頒獎典禮 #金鐘61');
+  assert.strictEqual(await page.evaluate(() => App.currentInput().cardText), TITLE3, '卡面文字＝標題（同樣分行）');
+  await page.screenshot({ path: path.join(SHOTS, 'prB2-text.png') });
+  await page.fill('#title', TITLE3 + '！');
+  await page.click('[data-mode="frame"]');
+  assert.strictEqual(await page.inputValue('#title'), TITLE3 + '！');
+  assert.strictEqual(await page.inputValue('#caption'), '金鐘 61 頒獎典禮 #金鐘61');
+  await page.click('[data-mode="text"]');
+  ok('切換作圖框／純文字底圖：標題與小編文共用、順序相同；已截圖 prB2-text.png');
   assert.strictEqual(await page.locator('.sw').count(), 7);
   const px = () => page.evaluate(() => [...document.getElementById('textCanvas').getContext('2d').getImageData(3, 3, 1, 1).data].slice(0, 3).join(','));
   const before = await px();
@@ -152,6 +223,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert.strictEqual(await page.getAttribute('.sw >> nth=3', 'aria-checked'), 'true');
   ok('純文字底圖：7 色票、切換改變底色（' + before + ' → ' + after + '）');
   await page.keyboard.press('Escape');
+  await page.click('#cfLeave');
 
   // 11 手機
   await page.setViewportSize({ width: 390, height: 844 });
@@ -167,7 +239,15 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert.strictEqual(sw[3], 390);
   await page.evaluate(() => { document.querySelector('.m-body').scrollTop = 0; });
   await page.screenshot({ path: path.join(SHOTS, 'prA-mobile.png') });
-  ok('手機：全螢幕、無橫向捲動、輸入 16px；已截圖 prA-mobile.png');
+  await page.fill('#title', TITLE3);
+  await page.waitForTimeout(100);
+  const mg = await counterGeom(page);
+  assert(mg.length === 3 && mg.every(x => x.dy <= 2 && x.outside && !x.over), '手機：計數對齊 ' + JSON.stringify(mg));
+  assert.strictEqual(await page.evaluate(() => document.documentElement.scrollWidth), 390);
+  await page.screenshot({ path: path.join(SHOTS, 'prB2-mobile.png'), fullPage: false });
+  await page.evaluate(() => document.getElementById('title').scrollIntoView({ block: 'center' }));
+  await page.screenshot({ path: path.join(SHOTS, 'prB2-mobile-title.png') });
+  ok('手機：全螢幕、無橫向捲動、輸入 16px、標題計數對齊；已截圖 prA-mobile.png、prB2-mobile*.png');
 
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   ok('沒有 page error / console error');
@@ -197,6 +277,7 @@ const MOCK_BRIDGE = () => {
     if (op === 'cookies') return { ok: true, data: [{ name: 'queen_session', sameSite: 'lax', httpOnly: true, expires: new Date(Date.now() + 5 * 864e5).toISOString() }] };
     if (op !== 'call') return { ok: false, error: 'unknown_op' };
     calls.push({ path: p.path, method: p.method, body: p.body });
+    if (/^\/page_meta\?/.test(p.path)) return json(200, { title: '蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始', description: '摘要' });
     if (p.path === '/guard/check') return json(200, { level: window.__mock.guardLevel, check_id: 'chk-1', reasons: ['標題用語較聳動'] });
     if (p.path === '/render') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '後端套版（模擬）') } };
     if (p.path === '/render_text_card') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '純文字（模擬）') } };
@@ -261,8 +342,16 @@ async function prB(origin) {
   await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
   await page.waitForFunction(() => Editor.hasImage());
   await page.fill('#url', 'https://news.tvbs.com.tw/life/3012345');
-  await page.fill('#lines .ln >> nth=0', '颱風假最新！北北基桃');
-  await page.fill('#lines .ln >> nth=1', '明天照常上班上課');
+  // 快速帶入：標題照 QPT breakTitle 分行，一行一句填進標題框
+  await page.click('#fillBtn');
+  await page.waitForFunction(() => /已帶入標題/.test(document.getElementById('urlHint').textContent));
+  const broke = await page.evaluate(() => Rules.breakTitle('蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始'));
+  assert.strictEqual(broke.length, 3);
+  assert.strictEqual(await page.inputValue('#title'), broke.join('\n'));
+  assert.strictEqual(await page.locator('#titleCnts span').count(), 3);
+  assert.deepStrictEqual(await page.evaluate(() => App.getLines()), broke);
+  ok('快速帶入：標題以 breakTitle 分行填入單一標題框（' + broke.join('／') + '）');
+  await page.fill('#title', '颱風假最新！北北基桃\n明天照常上班上課');
 
   // AI 小編文
   await page.click('#aiGenBtn');
@@ -271,7 +360,7 @@ async function prB(origin) {
   await page.click('#aiFixBtn');
   await page.waitForFunction(() => /上班上課/.test(document.getElementById('caption').value));
   const ai = (await calls()).filter(c => c.path === '/ai_caption').map(c => c.body);
-  assert.deepStrictEqual(ai[0], { ip: 'newsnet', mode: 'generate', title: '颱風假最新！北北基桃 明天照常上班上課', summary: '' });
+  assert.deepStrictEqual(ai[0], { ip: 'newsnet', mode: 'generate', title: '颱風假最新！北北基桃 明天照常上班上課', summary: '摘要' });
   assert.deepStrictEqual(ai[1].titles, ['颱風假最新！北北基桃', '明天照常上班上課']);
   assert.strictEqual(ai[1].mode, 'proofread');
   ok('AI 產生＋校錯字填入小編文');
@@ -331,6 +420,7 @@ async function prB(origin) {
   assert.strictEqual(render.image_url, `${IMG_BASE}/i/${'1'.repeat(32)}.jpg`);
   assert.strictEqual(render.crop, null);
   assert.strictEqual(render.template, 'newsnet_news');
+  assert.strictEqual(await page.textContent('#bePrevCap'), '後端產圖・新聞（藍框）');
   ok('後端預覽：跳圖床登入、錯密碼提示、上傳後 /render 帶圖床網址與 crop:null');
 
   // 第 1 次按：自動判讀（紅燈）→ 泡泡；未勾「我知道風險」不能送
@@ -381,6 +471,7 @@ async function prB(origin) {
   assert.deepStrictEqual([news.rd_write, shao.rd_write, wx.rd_write], [true, true, true]);
   assert.strictEqual(news.article_id, '3012345'); assert.strictEqual(news.short_title, '颱風假最新');
   assert.deepStrictEqual(news.title_lines, ['颱風假最新！北北基桃', '明天照常上班上課']);
+  assert.deepStrictEqual(s1.map(c => c.body.template), ['newsnet_news', 'newsnet_news', 'newsnet_news'], '藍框：每台都送 newsnet_news');
   const msg = await page.textContent('#sendMsg');
   assert.match(msg, /2 台成功・1 台失敗/);
   assert.match(msg, /502/);
@@ -415,10 +506,34 @@ async function prB(origin) {
   assert.strictEqual(await page.locator('.pg.done').count(), 0);
   ok('全部成功後「清空頁面」直接清空');
 
+  // 娛樂（粉框）：預覽換粉框，送出的每一台都是 newsnet_ent
+  await page.evaluate(() => { window.__mock.guardLevel = 'green'; });
+  await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
+  await page.waitForFunction(() => Editor.hasImage());
+  await page.fill('#url', 'https://news.tvbs.com.tw/entertainment/3012399');
+  await page.fill('#title', '金鐘61／《飢餓》10週年大禮！\n峮峮驚喜合體遭催回歸\n蔡黃汝羞謝「好友」閃瞎全場');
+  await page.click('[data-frame="ent"]');
+  const px = await page.evaluate(() => [...document.getElementById('editorCanvas').getContext('2d').getImageData(1060, 20, 1, 1).data].slice(0, 3));
+  assert(px[0] > 220 && px[1] > 150 && px[1] < 215 && px[2] > 210, '預覽右上角是粉框 ' + px);
+  for (const i of [0, 1, 3]) await pg(i).locator('button').first().click();
+  const sentBefore = (await sends()).length, upBefore = worker.uploads;
+  await page.click('#sendBtn');
+  await page.waitForSelector('#bubble:not([hidden])');
+  await page.click('#sendBtn');
+  await page.waitForFunction(() => App.flow.state === 'done');
+  const s3 = (await sends()).slice(sentBefore);
+  assert.deepStrictEqual(s3.map(c => [c.body.page, c.body.template]), [['news', 'newsnet_ent'], ['ent', 'newsnet_ent'], ['jkk', 'newsnet_ent']]);
+  assert.deepStrictEqual(s3[0].body.title_lines, ['金鐘61／《飢餓》10週年大禮！', '峮峮驚喜合體遭催回歸', '蔡黃汝羞謝「好友」閃瞎全場']);
+  assert.strictEqual(worker.uploads, upBefore + 1);
+  await page.click('#clearBtn');
+  await page.click('[data-frame="news"]');
+  ok('粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
+
   // 手機：純文字底圖 → 預覽 /render_text_card → 泡泡
   await page.setViewportSize({ width: 390, height: 844 });
   await page.click('[data-mode="text"]');
-  await page.fill('#cardText', '【快訊】北市宣布明天停班停課');
+  const upText = worker.uploads;
+  await page.fill('#title', '【快訊】北市宣布明天停班停課');
   await page.click('#previewTextBtn');
   await page.waitForSelector('#bePrevImg:not([hidden])');
   const tc = (await calls()).filter(c => c.path === '/render_text_card').pop().body;
@@ -441,7 +556,7 @@ async function prB(origin) {
   const last = (await sends()).pop().body;
   assert.strictEqual(last.mode, 'text_card'); assert.strictEqual(last.template, ''); assert.strictEqual(last.image_url, '');
   assert.deepStrictEqual(last.guard, { check_id: 'chk-1', level: 'yellow', ack: false });
-  assert.strictEqual(worker.uploads, 1, '純文字不上傳圖床');
+  assert.strictEqual(worker.uploads, upText, '純文字不上傳圖床');
   ok('手機：純文字預覽、黃燈泡泡在畫面內、送出 text_card；已截圖 prB-mobile.png');
 
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));

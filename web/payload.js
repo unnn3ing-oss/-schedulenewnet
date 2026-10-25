@@ -9,6 +9,8 @@
 })(typeof self !== 'undefined' ? self : this, function (cfg, Rules, Sched) {
   const IP = cfg.ip.name;
   const clean = lines => (Array.isArray(lines) ? lines : []).map(l => String(l == null ? '' : l).trim());
+  // 純文字底圖的卡面文字＝標題（兩種模式共用同一個標題框，照分行以 \n 接起來）；呼叫端也可以直接給 cardText
+  const cardTextOf = input => String(input.cardText != null ? input.cardText : clean(input.lines).filter(Boolean).join('\n')).trim();
   const styleOf = key => cfg.textCardStyles.find(s => s.key === key) || cfg.textCardStyles[0];
 
   // 純文字底圖的額外欄位（§4）：底色、字色來自色票；寬高、wordmark、字體、陰影、行距、置中取自設定檔
@@ -28,26 +30,26 @@
       ip: IP,
       title_lines: card ? [] : clean(input.lines).filter(Boolean),
       caption: String(input.caption == null ? '' : input.caption),
-      text: card ? String(input.cardText == null ? '' : input.cardText).trim() : ''
+      text: card ? cardTextOf(input) : ''
     };
   }
   // 以 body 的 JSON 字串當 key：內容一改，key 就不同，燈號作廢
   const guardKey = input => JSON.stringify(guardBody(input));
 
   // 各粉專共用的部分（§4 通用欄位；粉專、link、schedule 另外加）
-  //   input: { mode:'single'|'text_card', template, imageUrl, lines[], caption, url, shortTitle, rdWrite, cardText, cardStyle,
+  //   input: { mode:'single'|'text_card', frame:'news'|'ent', imageUrl, lines[], caption, url, shortTitle, rdWrite, cardText, cardStyle,
   //            guard:{ checkId, level, ack } }
   function buildBase(input) {
     const card = input.mode === 'text_card';
     const lines = card ? [] : clean(input.lines);
     const titleLines = lines.filter(Boolean);
-    const cardText = card ? String(input.cardText == null ? '' : input.cardText).trim() : '';
+    const cardText = card ? cardTextOf(input) : '';
     const manual = String(input.shortTitle == null ? '' : input.shortTitle).trim();
     const g = input.guard || {};
     const base = {
       ip: IP,
       mode: card ? 'text_card' : 'single',
-      template: card ? '' : String(input.template || ''),
+      template: card ? '' : Rules.frameTemplate(input.frame),   // 藍框 newsnet_news／粉框 newsnet_ent，每台都一樣
       image_url: card ? '' : String(input.imageUrl || ''),
       crop: null,                      // 圖床的圖已是成品尺寸，不取景（已驗證後端收 crop:null）
       line1: lines[0] || '',
@@ -95,7 +97,7 @@
   // AI 小編文（§3）：generate 帶 title、summary；proofread 帶 text、titles
   function aiCaptionBody(kind, input) {
     const card = input.mode === 'text_card';
-    const titles = card ? [String(input.cardText || '').trim()].filter(Boolean) : clean(input.lines).filter(Boolean);
+    const titles = card ? [cardTextOf(input)].filter(Boolean) : clean(input.lines).filter(Boolean);
     if (kind === 'generate') return { ip: IP, mode: 'generate', title: titles.join(' '), summary: String(input.summary || '') };
     return { ip: IP, mode: 'proofread', text: String(input.caption || ''), titles };
   }
@@ -103,7 +105,7 @@
   // 送出前檢查（§6.6，順序照舊版）：回錯誤訊息或空字串
   function validateInput(input) {
     if (input.mode === 'text_card') {
-      if (!String(input.cardText || '').trim()) return '請填文字內容';
+      if (!cardTextOf(input)) return '請填文字內容';
       return '';
     }
     if (!String(input.url || '').trim()) return '請先貼文章網址';
