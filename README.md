@@ -4,6 +4,20 @@
 
 - 主要分支：`main`；所有改動都先開 PR，確認後才併入。
 
+## 網址總覽
+
+| 用途 | 網址 |
+|---|---|
+| 正式介面 | https://unnn3ing-oss.github.io/-schedulenewnet/ |
+| 連線驗證 | https://unnn3ing-oss.github.io/-schedulenewnet/verify.html |
+| 出圖測試 | https://unnn3ing-oss.github.io/-schedulenewnet/render-test.html |
+| 後端（原發文台） | https://digi-social-post.tvbs.ai/ip/newsnet/ |
+| 圖床 Worker | https://snn-images.19jpz-3.workers.dev |
+| 圖床自我檢查（應回 404 JSON） | https://snn-images.19jpz-3.workers.dev/i/00000000000000000000000000000000.jpg |
+| Worker 設定（Variables and Secrets） | https://dash.cloudflare.com/?to=/:account/workers/services/view/snn-images/production/settings |
+| R2 儲存桶 | https://dash.cloudflare.com/?to=/:account/r2/overview |
+| GitHub 儲存庫 | https://github.com/unnn3ing-oss/-schedulenewnet |
+
 ## 架構（B 方案）
 
 GitHub Pages 上的介面沒辦法直接帶網新後台的 cookie（全部是 `SameSite=Lax`），所以透過 Chrome 外掛代送：
@@ -111,6 +125,12 @@ PR C（送出紀錄）：
    ```
 
    回 `misconfigured`（HTTP 500）代表 Secret、綁定或名稱有漏設或打錯。
+
+   **登入時出現「Worker 尚未設定完成。」**：到 [Worker 設定](https://dash.cloudflare.com/?to=/:account/workers/services/view/snn-images/production/settings) → Variables and Secrets 檢查：
+   - `APP_PASSWORD`（至少 8 字元）與 `SESSION_SECRET`（至少 32 字元）兩個都在，名稱大小寫、底線完全一致。
+   - `SESSION_SECRET` 複製時沒有連引號一起貼上。
+   - 設在 `snn-images` 這個 Worker；儲存後若出現 Deploy 按鈕要按。
+   - 登入成功但上傳仍出現同一句：Bindings 要有 R2 bucket，變數名稱為 `IMAGES`。
 
 ### 注意
 
