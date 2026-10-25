@@ -1,10 +1,11 @@
-// 正式介面（PR A：外殼＋新增發文彈窗＋作圖框＋快速帶入）。送出、AI、守則判讀在後續 PR。
+// 正式介面。PR A：外殼＋新增發文彈窗＋作圖框＋快速帶入；PR B：圖床上傳、後端預覽、AI 小編文、守則判讀、兩段式送出、本機紀錄。
 (function () {
   const $ = id => document.getElementById(id);
   const C = window.NEWSNET_CONFIG;
   const overlay = $('overlay'), modal = $('modal');
-  const state = { mode: 'frame', template: 'newsnet_news', articleId: '', cardStyle: C.textCardStyles[0].key, openedBy: null,
-    pages: Object.fromEntries(C.pages.map(p => [p.code, { on: false, sched: false, time: '' }])) };
+  const state = { mode: 'frame', template: 'newsnet_news', articleId: '', summary: '', cardStyle: C.textCardStyles[0].key, openedBy: null,
+    // 每台：on 勾選、sched 排程（at 為時間）、status ''｜sending｜ok｜fail、result 送出結果
+    pages: Object.fromEntries(C.pages.map(p => [p.code, { on: false, sched: false, at: null, status: '', result: null }])) };
 
   // ---- 小工具 ----
   let toastTimer = 0;
@@ -66,7 +67,7 @@
     state.template = b.dataset.tpl;
     setActive($('tplSwitch'), b);
     Editor.setTemplate(state.template);
-    updateCounters();
+    updateCounters(); flowEdit();
   });
   $('modeSwitch').addEventListener('click', e => {
     const b = e.target.closest('button[data-mode]');
@@ -76,6 +77,7 @@
     const text = state.mode === 'text';
     $('framePane').hidden = text; $('textPane').hidden = !text; $('titleBlock').hidden = text;
     if (text) drawTextCard();
+    flowEdit();
   });
   $('guideToggle').addEventListener('change', e => Editor.showGuides(e.target.checked));
   $('pickBtn').addEventListener('click', () => $('fileInput').click());
@@ -110,7 +112,7 @@
     b.type = 'button'; b.className = 'sw'; b.dataset.key = s.key; b.title = s.label; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', s.label);
     b.style.background = s.bg;
     b.setAttribute('aria-checked', String(s.key === state.cardStyle));
-    b.addEventListener('click', () => { state.cardStyle = s.key; sw.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-checked', String(x === b))); drawTextCard(); });
+    b.addEventListener('click', () => { state.cardStyle = s.key; sw.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-checked', String(x === b))); drawTextCard(); flowEdit(); });
     sw.appendChild(b);
   });
   function drawTextCard() {
@@ -143,7 +145,8 @@
   function pickMeta(obj) {
     const pools = [obj, obj && obj.data, obj && obj.meta, obj && obj.result].filter(o => o && typeof o === 'object');
     const first = keys => { for (const o of pools) for (const k of keys) if (typeof o[k] === 'string' && o[k].trim()) return o[k].trim(); return ''; };
-    return { title: first(['title', 'og_title', 'ogTitle']), image: first(['image', 'og_image', 'ogImage', 'hero']) };
+    return { title: first(['title', 'og_title', 'ogTitle']), image: first(['image', 'og_image', 'ogImage', 'hero']),
+      summary: first(['description', 'og_description', 'ogDescription', 'summary']) };   // 摘要給 AI 產生小編文用
   }
   function metaError(r) {
     if (!r.ok) return r.error === 'no_extension' ? '未偵測到外掛，無法帶入' : '外掛回報錯誤：' + r.error;
@@ -173,6 +176,7 @@
         hint(/<(!doctype|html)/i.test(raw || '') ? '後端回了網頁（可能被導去登入頁），請先登入網新發文台' : '讀不到標題或圖片（回應格式不認得），請手動填寫', 'bad');
         return;
       }
+      state.summary = meta.summary || '';
       if (meta.title) {
         if (state.mode === 'text') { if (!$('cardText').value) { $('cardText').value = meta.title; drawTextCard(); } }
         else setLines(Rules.overrideLines(meta.title));   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle
@@ -184,26 +188,30 @@
         else { msg += '；主圖沒抓到（' + (im.error === 'host_not_allowed' ? '圖片網域不在允許範圍' : im.error === 'no_extension' ? '外掛沒回應，請更新外掛到 0.4.0 以上' : im.error) + '），請手動上傳'; cls = 'bad'; }
       }
       hint(msg, cls);
+      flowEdit();
     } finally { filling = false; $('fillBtn').disabled = false; }
   }
 
-  // ---- 粉專按鈕（送出之後再串接；現在只有狀態與介面）----
-  const MIN_LEAD = C.ip.minLeadMinutes, DEF_LEAD = C.ip.defaultLeadMinutes;
-  const fmtDate = d => `${d.getMonth() + 1}/${d.getDate()}`;
-  const parseTime = (s, base) => {   // '2130' 或 '21:30' → Date（日期取 base）
-    const m = /^(\d{1,2}):?(\d{2})$/.exec(s.trim());
-    if (!m || +m[1] > 23 || +m[2] > 59) return null;
-    const d = new Date(base); d.setHours(+m[1], +m[2], 0, 0); return d;
-  };
-  const addMin = (d, n) => new Date(d.getTime() + n * 60000);
+  // ---- 粉專按鈕：點名稱勾選；▾ 選立即／排程（排程才開時間視窗）----
+  const now = () => new Date();
+  const labelOf = code => Rules.pageByCode(code).label;
   const pgEls = {};
   function renderPage(code) {
     const st = state.pages[code], el = pgEls[code];
-    el.root.classList.toggle('on', st.on);
+    const done = st.status === 'ok', fail = st.status === 'fail', busy = st.status === 'sending';
+    el.root.classList.toggle('on', st.on && !done && !fail);
+    el.root.classList.toggle('done', done); el.root.classList.toggle('fail', fail); el.root.classList.toggle('busy', busy);
     el.main.setAttribute('aria-pressed', String(st.on));
+    el.main.disabled = done || busy;
     el.box.textContent = st.on ? '✓' : '';
     el.mode.hidden = !st.on;
-    el.mode.textContent = (st.sched ? `排程 ${st.time}` : '立即') + ' ▾';
+    el.mode.disabled = busy;
+    el.retry.hidden = !fail;
+    el.mode.title = fail && st.result ? st.result.error : '';
+    if (done) el.mode.textContent = st.sched ? `✓ 排程 ${Sched.fmtWhen(st.at, now())}` : '✓ 已發布' + (st.result && st.result.link ? ' ↗' : '');
+    else if (fail) el.mode.textContent = '✗ 失敗 ▾';
+    else if (busy) el.mode.textContent = '送出中…';
+    else el.mode.textContent = (st.sched && st.at ? `排程 ${Sched.fmtWhen(st.at, now())}` : '立即') + ' ▾';
   }
   C.pages.forEach(p => {
     const root = document.createElement('div'); root.className = 'pg';
@@ -212,10 +220,22 @@
     main.append(box, p.label);
     const mode = document.createElement('button'); mode.type = 'button'; mode.className = 'pg-mode'; mode.hidden = true;
     mode.setAttribute('aria-haspopup', 'menu');
-    root.append(main, mode); $('pages').appendChild(root);
-    pgEls[p.code] = { root, main, box, mode };
-    main.addEventListener('click', () => { state.pages[p.code].on = !state.pages[p.code].on; closePops(); renderPage(p.code); });
-    mode.addEventListener('click', e => { e.stopPropagation(); openMenu(p.code); });
+    const retry = document.createElement('button'); retry.type = 'button'; retry.className = 'retry'; retry.hidden = true;
+    retry.textContent = '↻ 重送'; retry.setAttribute('aria-label', `重送${p.label}`);
+    root.append(main, mode, retry); $('pages').appendChild(root);
+    pgEls[p.code] = { root, main, box, mode, retry };
+    main.addEventListener('click', () => {
+      const st = state.pages[p.code];
+      st.on = !st.on; st.status = ''; st.result = null;
+      closePops(); renderPage(p.code); flowEdit();
+    });
+    mode.addEventListener('click', e => {
+      e.stopPropagation();
+      const st = state.pages[p.code];
+      if (st.status === 'ok') { if (st.result && st.result.link) window.open(st.result.link, '_blank', 'noopener'); return; }
+      openMenu(p.code);
+    });
+    retry.addEventListener('click', () => resend(p.code));
     renderPage(p.code);
   });
   const menu = $('modeMenu'), pop = $('timePop');
@@ -238,59 +258,325 @@
     const b = e.target.closest('button[data-m]');
     if (!b || !popFor) return;
     const code = popFor, st = state.pages[code];
-    if (b.dataset.m === 'now') { st.sched = false; closePops(); renderPage(code); pgEls[code].mode.focus(); return; }
+    if (b.dataset.m === 'now') { st.sched = false; closePops(); renderPage(code); flowEdit(); pgEls[code].mode.focus(); return; }
     st.sched = true;
-    if (!st.time) { const d = addMin(new Date(), DEF_LEAD); d.setMinutes(Math.ceil(d.getMinutes() / 10) * 10, 0, 0); st.time = `${pad(d.getHours())}:${pad(d.getMinutes())}`; st.date = d; }
-    renderPage(code); menu.hidden = true; openPop(code);
+    if (!st.at || Sched.validate(st.at, now())) st.at = Sched.defaultAt(now());   // 預填 現在＋30 分
+    renderPage(code); flowEdit(); menu.hidden = true; openPop(code);
   });
+
+  // 時間視窗：日期預設今天（可改，最多到 3 天後）；時間直接打 4 碼（2130→21:30），↑↓ ±10 分
   function openPop(code) {
-    const st = state.pages[code];
-    $('tpDate').textContent = fmtDate(st.date || new Date());
-    $('tpTime').value = st.time;
-    updateTimeHint(code);
+    const st = state.pages[code], n = now();
+    $('tpDate').min = Sched.fmtDateInput(n); $('tpDate').max = Sched.fmtDateInput(Sched.latest(n));
+    $('tpDate').value = Sched.fmtDateInput(st.at);
+    $('tpTime').value = Sched.fmtTime(st.at);
+    updateTimeHint();
     place(pop, pgEls[code].mode);
     $('tpTime').focus(); $('tpTime').select();
   }
-  function updateTimeHint(code) {
-    const st = state.pages[code], earliest = addMin(new Date(), MIN_LEAD);
-    $('tpHint').textContent = `直接打 4 碼（2130＝21:30）・最早 ${pad(earliest.getHours())}:${pad(earliest.getMinutes())}（現在＋${MIN_LEAD} 分）`;
-    const d = parseTime($('tpTime').value, st.date || new Date());
-    $('tpHint').className = 'hint' + (d && d < earliest ? ' bad' : '');
+  function updateTimeHint() {
+    const n = now(), at = Sched.combine($('tpDate').value, $('tpTime').value), err = Sched.validate(at, n);
+    $('tpHint').textContent = err ? err.msg : `排程 ${Sched.fmtWhen(at, n)}・直接打 4 碼（2130＝21:30），↑↓ 每次 10 分`;
+    $('tpHint').className = 'hint ' + (err ? 'bad' : 'ok');
+    $('tpTime').setAttribute('aria-invalid', String(!!err));
+    return !err;
+  }
+  function setAt(at) {   // 由按鍵／快捷鈕改時間：兩個欄位一起更新
+    const st = state.pages[popFor]; if (!st) return;
+    st.at = at;
+    $('tpDate').value = Sched.fmtDateInput(at); $('tpTime').value = Sched.fmtTime(at);
+    renderPage(popFor); flowEdit(); updateTimeHint();
+  }
+  function takeInputs() {   // 由打字／選日期改時間：合法的時間才寫回（超出範圍也寫，送出前會擋並在視窗裡標紅）
+    const st = state.pages[popFor]; if (!st) return;
+    const at = Sched.combine($('tpDate').value, $('tpTime').value);
+    if (at) { st.at = at; renderPage(popFor); flowEdit(); }
+    updateTimeHint();
   }
   $('tpTime').addEventListener('input', () => {
-    const st = state.pages[popFor]; if (!st) return;
-    const v = $('tpTime').value;
-    const d = parseTime(v, st.date || new Date());
-    if (d) { st.time = `${pad(d.getHours())}:${pad(d.getMinutes())}`; renderPage(popFor); }
-    updateTimeHint(popFor);
+    const v = Sched.formatTyping($('tpTime').value);
+    if (v !== $('tpTime').value) $('tpTime').value = v;
+    takeInputs();
   });
-  $('tpTime').addEventListener('blur', () => { const st = state.pages[popFor]; if (st && st.time) $('tpTime').value = st.time; });
-  $('tpTime').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const code = popFor; closePops(); if (code) pgEls[code].mode.focus(); } });
+  $('tpDate').addEventListener('change', takeInputs);
+  $('tpTime').addEventListener('blur', () => { const st = state.pages[popFor]; if (st && st.at) $('tpTime').value = Sched.fmtTime(st.at); });
+  $('tpTime').addEventListener('keydown', e => {
+    const st = state.pages[popFor]; if (!st) return;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setAt(Sched.step(Sched.combine($('tpDate').value, $('tpTime').value) || st.at, e.key === 'ArrowUp' ? 1 : -1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (!updateTimeHint()) return;   // 不合法：留在視窗裡，提示已標紅
+      const code = popFor; closePops(); pgEls[code].mode.focus();
+    }
+  });
   pop.addEventListener('click', e => {
     const b = e.target.closest('button[data-add]');
     if (!b || !popFor) return;
     const st = state.pages[popFor];
-    const base = parseTime(st.time, st.date || new Date()) || new Date();
-    const d = addMin(base, +b.dataset.add);
-    st.date = d; st.time = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    $('tpDate').textContent = fmtDate(d); $('tpTime').value = st.time;
-    renderPage(popFor); updateTimeHint(popFor);
+    setAt(new Date((Sched.combine($('tpDate').value, $('tpTime').value) || st.at).getTime() + b.dataset.add * 60000));
   });
   modal.addEventListener('mousedown', e => { if (!menu.hidden || !pop.hidden) if (!e.target.closest('.menu,.timepop,.pg-mode')) closePops(); });
 
+  // ---- 圖床：預覽與送出共用同一次上傳（照片／貼圖沒變就不重傳）----
+  let editorVer = 0, upCache = null;
+  async function ensureUploaded() {
+    if (upCache && upCache.ver === editorVer) return upCache.url;
+    const ver = editorVer;
+    const blob = await Editor.exportBlob();
+    const d = await ImgHost.ensureUpload(blob);
+    upCache = { ver, url: d.url };
+    return d.url;
+  }
+  function renderImgPill() {
+    const s = ImgHost.session();
+    $('imgPill').className = 'pill img-pill ' + (s ? 'ok' : 'warn');
+    $('imgText').textContent = s ? '圖床已登入' : '圖床未登入';
+    $('imgPill').setAttribute('aria-label', $('imgText').textContent);
+  }
+  ImgHost.onChange(renderImgPill);
+  $('imgPill').addEventListener('click', () => ImgHost.prompt().catch(() => {}));
+  renderImgPill();
+  setInterval(renderImgPill, 60000);
+
+  // ---- 後端預覽（/render、/render_text_card）----
+  let previewKey = '', previewing = false;
+  const previewHint = (msg, cls) => { $('bePrevHint').textContent = msg || ''; $('bePrevHint').className = 'hint' + (cls ? ' ' + cls : ''); };
+  const previewKeyNow = () => JSON.stringify([Payload.previewRequest(Object.assign(currentInput(), { imageUrl: '' })), state.mode === 'text' ? 0 : editorVer]);
+  function markPreviewStale() {
+    if (!$('bePrev').hidden && previewKey && !previewing && previewKey !== previewKeyNow()) previewHint('內容已改，按「後端預覽」更新', 'bad');
+  }
+  async function preview() {
+    if (previewing) return;
+    const input = currentInput();
+    if (input.mode === 'single' && !input.hasImage) { toast('需要照片'); return; }
+    if (input.mode === 'text_card' && !input.cardText.trim()) { toast('請填文字內容'); return; }
+    previewing = true; $('previewBtn').disabled = $('previewTextBtn').disabled = true;
+    $('bePrev').hidden = false;
+    const tplName = $('tplSwitch').querySelector('.active').textContent;
+    $('bePrevCap').textContent = input.mode === 'single' ? `後端產圖・${tplName}版型` : '後端產圖・純文字底圖';
+    try {
+      const key = previewKeyNow();
+      if (input.mode === 'single') {
+        previewHint('上傳圖片到圖床…');
+        try { input.imageUrl = await ensureUploaded(); } catch (e) { previewHint(e.message, 'bad'); return; }
+      }
+      previewHint('後端產圖中…');
+      const rq = Payload.previewRequest(input);
+      const res = SendFlow.apiResult(await Ext.call(rq.path, 'POST', rq.body));
+      if (!res.ok || !res.image) { previewHint(res.error || '後端沒有回圖', 'bad'); $('bePrevImg').hidden = true; return; }
+      $('bePrevImg').src = res.image; $('bePrevImg').hidden = false;
+      previewKey = key;
+      previewHint(previewKey === previewKeyNow() ? '' : '內容已改，按「後端預覽」更新', previewKey === previewKeyNow() ? '' : 'bad');
+    } finally {
+      previewing = false; $('previewBtn').disabled = !Editor.hasImage(); $('previewTextBtn').disabled = false;
+    }
+  }
+  $('previewBtn').addEventListener('click', preview);
+  $('previewTextBtn').addEventListener('click', preview);
+  $('bePrevClose').addEventListener('click', () => { $('bePrev').hidden = true; previewKey = ''; });
+
+  // ---- AI 小編文（/ai_caption：generate 產生、proofread 校錯字）----
+  const capHint = (msg, cls) => { $('capHint').textContent = msg || ''; $('capHint').className = 'hint' + (cls ? ' ' + cls : ''); };
+  function pickCaption(obj) {   // 回應格式未確認：接受常見欄位名，並看一層 data／result
+    if (typeof obj === 'string') return obj.trim();
+    const pools = [obj, obj && obj.data, obj && obj.result].filter(o => o && typeof o === 'object');
+    for (const o of pools) for (const k of ['caption', 'text', 'corrected', 'result', 'content', 'output']) if (typeof o[k] === 'string' && o[k].trim()) return o[k].trim();
+    return '';
+  }
+  async function aiCaption(kind) {
+    const input = currentInput(), body = Payload.aiCaptionBody(kind, input);
+    if (kind === 'generate' && !body.title) { capHint(input.mode === 'text_card' ? '請先填文字內容' : '請先填標題', 'bad'); return; }
+    if (kind === 'proofread' && !body.text.trim()) { capHint('請先寫小編文', 'bad'); return; }
+    $('aiGenBtn').disabled = $('aiFixBtn').disabled = true;
+    capHint(kind === 'generate' ? 'AI 產生中…' : '校對中…');
+    const before = $('caption').value;
+    try {
+      const res = SendFlow.apiResult(await Ext.call('/ai_caption', 'POST', body));
+      if (!res.ok) { capHint(res.error, 'bad'); return; }
+      const text = pickCaption(res.json || SendFlow.parseJson(res.text));
+      if (!text) { capHint('AI 回應格式不認得，請手動撰寫', 'bad'); return; }
+      if ($('caption').value !== before) { capHint('等待期間小編文被改過，沒有套用 AI 結果', 'bad'); return; }
+      if (kind === 'proofread' && text === before.trim()) { capHint('沒有找到錯字', 'ok'); return; }
+      $('caption').value = text;
+      flowEdit();
+      capHint(kind === 'generate' ? '已產生，可以直接修改' : '已套用校對結果，請再看一次', 'ok');
+    } finally { $('aiGenBtn').disabled = $('aiFixBtn').disabled = false; }
+  }
+  $('aiGenBtn').addEventListener('click', () => aiCaption('generate'));
+  $('aiFixBtn').addEventListener('click', () => aiCaption('proofread'));
+
+  // ---- 全部送出（兩段式）：第 1 次自動判讀＋泡泡列出各台，第 2 次才逐台送 ----
+  const flow = { state: 'idle', seq: 0, key: '', guard: null, ack: false, targets: [], recordId: '' };
+  const sendBtn = $('sendBtn'), bub = $('bubble');
+  function currentInput() {
+    const card = state.mode === 'text';
+    return { mode: card ? 'text_card' : 'single', template: state.template, lines: getLines(), caption: $('caption').value,
+      url: $('url').value.trim(), cardText: $('cardText').value, cardStyle: state.cardStyle, summary: state.summary, hasImage: Editor.hasImage() };
+  }
+  const pending = () => C.pages.filter(p => state.pages[p.code].on && state.pages[p.code].status !== 'ok').map(p => p.code);
+  const targetOf = code => { const st = state.pages[code]; return { code, at: st.sched ? st.at : null }; };
+  const sendMsg = (msg, cls) => { $('sendMsg').textContent = msg; $('sendMsg').className = 'guard ' + (cls || 'muted'); };
+  const setFlow = ev => { flow.state = SendFlow.next(flow.state, ev); renderFlow(); };
+  const bubbleNow = () => SendFlow.bubble({ targets: flow.targets.map(targetOf), guard: flow.guard, ack: flow.ack, now: now() });
+
+  function renderFlow() {
+    const s = flow.state, list = pending(), unsent = list.filter(c => !state.pages[c].status);
+    sendBtn.hidden = s === 'done' && !unsent.length;
+    sendBtn.classList.toggle('arm', s === 'armed');
+    sendBtn.textContent = s === 'checking' ? '判讀中…' : s === 'sending' ? '送出中…' : s === 'armed' ? '確認送出' : '全部送出' + (list.length ? `（${list.length} 台）` : '');
+    sendBtn.disabled = s === 'checking' || s === 'sending' || (s !== 'armed' && !list.length);
+    $('clearBtn').hidden = !C.pages.some(p => /^(ok|fail)$/.test(state.pages[p.code].status));
+    renderBubble();
+  }
+  const make = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  function renderBubble() {
+    if (flow.state !== 'armed') { bub.hidden = true; return; }
+    const b = bubbleNow();
+    bub.replaceChildren();
+    bub.append(make('b', 'bub-title', b.title));
+    const table = make('table');
+    b.rows.forEach(r => {
+      const tr = make('tr');
+      const light = make('td', 'lt'); light.append(make('i', 'l ' + (b.level || 'none')));
+      const when = make('td', null, r.when);
+      if (r.error) when.append(make('div', 'err', r.error));
+      tr.append(make('td', null, r.label), when, light);
+      table.append(tr);
+    });
+    bub.append(table);
+    const g = make('p', 'g-line'); g.append(make('i', 'l ' + (b.level || 'none')), make('span', null, b.guardText));
+    bub.append(g);
+    if (b.needAck) {
+      const ck = make('label', 'ck'), box = make('input'); box.type = 'checkbox'; box.id = 'ackChk'; box.checked = flow.ack;
+      box.addEventListener('change', () => { flow.ack = box.checked; renderFlow(); $('ackChk').focus(); });
+      ck.append(box, make('span', null, '我知道風險'));
+      bub.append(ck);
+    }
+    b.blockers.filter(x => !(b.needAck && /我知道風險/.test(x))).forEach(x => bub.append(make('p', 'err', x)));
+    bub.append(make('p', 'foot', !flow.guard || !flow.guard.ok ? '再按一次重新判讀・點其他地方取消' : '再按一次送出・點其他地方取消'));
+    bub.hidden = false;
+    sendBtn.disabled = !b.canConfirm && !!(flow.guard && flow.guard.ok);
+  }
+
+  // 內容（標題、小編文、照片、時間、粉專…）有改：泡泡作廢、回到第 1 步
+  function flowEdit() {
+    if (flow.state === 'armed' || flow.state === 'checking') {
+      flow.seq++;
+      setFlow({ type: 'edit' });
+      sendMsg('內容有改，送出前會重新判讀');
+    } else renderFlow();
+    markPreviewStale();
+  }
+  modal.addEventListener('input', e => { if (!e.target.closest('#bubble,#timePop')) flowEdit(); });
+  Editor.onChange(() => { editorVer++; $('previewBtn').disabled = previewing || !Editor.hasImage(); flowEdit(); });
+  document.addEventListener('mousedown', e => {
+    if (flow.state !== 'armed' || e.target.closest('#sendArea') || ImgHost.isOpen()) return;
+    flow.seq++;
+    setFlow({ type: 'outside' });
+    sendMsg('已取消，要送出請再按一次');
+  });
+
+  sendBtn.addEventListener('click', () => {
+    if (flow.state === 'armed') {
+      const b = bubbleNow();
+      if (b.canConfirm) { send(flow.targets, false); return; }
+      if (!flow.guard || !flow.guard.ok) { check(flow.targets); return; }   // 判讀失敗：再判一次
+      return;
+    }
+    if (flow.state === 'idle' || flow.state === 'done') check(pending());
+  });
+
+  // 第 1 步：檢查內容 → /guard/check → 顯示泡泡
+  async function check(codes) {
+    const input = currentInput();
+    const err = !codes.length ? '請先選粉專' : Payload.validateInput(input);
+    if (err) { sendMsg(err, 'bad'); return; }
+    flow.targets = codes.slice(); flow.ack = false; flow.guard = null;
+    setFlow({ type: 'click', guardFailed: true });
+    sendMsg('🛡 守則判讀中…');
+    const my = ++flow.seq, key = Payload.guardKey(input);
+    const res = SendFlow.apiResult(await Ext.call('/guard/check', 'POST', Payload.guardBody(input)));
+    if (my !== flow.seq || flow.state !== 'checking') return;   // 期間被取消或內容被改
+    const stale = key !== Payload.guardKey(currentInput());
+    flow.guard = SendFlow.parseGuard(res); flow.key = key;
+    setFlow({ type: 'guard', stale });
+    sendMsg(stale ? '判讀期間內容有改，燈號作廢，請再按一次' : '請看泡泡確認各台與時間', stale ? 'bad' : '');
+  }
+
+  // 第 2 步：上傳圖（作圖框）→ 每台各送一次 /publish 或 /schedule
+  async function send(codes, direct) {
+    const input = currentInput();
+    if (!flow.guard || !flow.guard.ok || Payload.guardKey(input) !== flow.key) { flow.seq++; flow.state = 'idle'; renderFlow(); sendMsg('內容有改，請再按一次重新判讀', 'bad'); return; }
+    const late = codes.map(targetOf).find(t => t.at && Sched.validate(t.at, now()));
+    if (late) { sendMsg(`${labelOf(late.code)}：${Sched.validate(late.at, now()).msg}`, 'bad'); renderFlow(); return; }
+    setFlow({ type: direct ? 'resend' : 'click', canConfirm: true });
+    const prev = Object.fromEntries(codes.map(c => [c, state.pages[c].status]));
+    codes.forEach(c => { state.pages[c].status = 'sending'; renderPage(c); });
+    if (input.mode === 'single') {
+      sendMsg('上傳圖片到圖床…');
+      try { input.imageUrl = await ensureUploaded(); } catch (e) {
+        codes.forEach(c => { state.pages[c].status = prev[c]; renderPage(c); });
+        setFlow({ type: 'abort' });
+        sendMsg('圖片沒有上傳：' + e.message, 'bad');
+        return;
+      }
+    }
+    input.guard = { checkId: flow.guard.checkId, level: flow.guard.level, ack: flow.ack };
+    const reqs = Payload.buildRequests(input, codes.map(targetOf));
+    if (!flow.recordId) {
+      flow.recordId = Records.add({ mode: input.mode, title: input.mode === 'single' ? getLines().filter(Boolean).join(' ') : input.cardText.trim().slice(0, 60),
+        articleId: Rules.articleId(input.url), url: input.url, pages: [] });
+    }
+    for (const rq of reqs) {
+      const st = state.pages[rq.code];
+      sendMsg(`送出${labelOf(rq.code)}…`);
+      const out = SendFlow.sendOutcome(SendFlow.apiResult(await Ext.call(rq.path, 'POST', rq.body)));
+      st.status = out.ok ? 'ok' : 'fail'; st.result = out;
+      Records.updatePage(flow.recordId, rq.code, { label: labelOf(rq.code), kind: rq.body.schedule ? 'sched' : 'now', schedule: rq.body.schedule,
+        status: st.status, link: out.link || '', postId: out.postId || '', error: out.error || '', sentAt: new Date().toISOString() });
+      renderPage(rq.code);
+    }
+    setFlow({ type: 'sent' });
+    const sent = C.pages.map(p => p.code).filter(c => /^(ok|fail)$/.test(state.pages[c].status));
+    const failed = sent.filter(c => state.pages[c].status === 'fail');
+    const sum = SendFlow.summary(sent.map(c => state.pages[c].status));
+    sendMsg(failed.length ? sum + '：' + failed.map(c => `${labelOf(c)} ${state.pages[c].result.error}`).join('；') : sum + '・要發下一篇請按「清空頁面」', failed.length ? 'bad' : 'ok');
+  }
+
+  // 失敗的台各自重送：內容沒改、燈號仍有效就直接送；否則先重新判讀（泡泡只列這一台）
+  function resend(code) {
+    if (flow.state === 'sending' || flow.state === 'checking') return;
+    closePops();
+    const g = flow.guard;
+    const valid = g && g.ok && flow.key === Payload.guardKey(currentInput()) && (g.level !== 'red' || flow.ack);
+    if (valid) send([code], true); else check([code]);
+  }
+
   // ---- 開關彈窗 ----
+  let confirmFn = null;
+  function askConfirm(title, body, okText, fn) {
+    $('cfTitle').textContent = title; $('cfBody').textContent = body; $('cfLeave').textContent = okText;
+    confirmFn = fn;
+    $('confirm').hidden = false; $('cfStay').focus();
+  }
   function isDirty() {
     return !!($('url').value.trim() || getLines().some(l => l.trim()) || $('caption').value.trim() || $('cardText').value.trim() || Editor.hasContent());
   }
+  const allSent = () => C.pages.some(p => state.pages[p.code].status === 'ok') && !pending().length;
   function resetAll() {
-    $('url').value = ''; $('caption').value = ''; $('cardText').value = ''; hint('');
-    state.articleId = '';
+    $('url').value = ''; $('caption').value = ''; $('cardText').value = ''; hint(''); capHint('');
+    state.articleId = ''; state.summary = '';
     lineInputs().forEach(i => { i.value = ''; });
     lineEls()[2].hidden = true; $('addLineBtn').hidden = false;
     Editor.reset();
-    Object.values(state.pages).forEach(s => { s.on = false; s.sched = false; s.time = ''; delete s.date; });
+    Object.values(state.pages).forEach(s => { s.on = false; s.sched = false; s.at = null; s.status = ''; s.result = null; });
     C.pages.forEach(p => renderPage(p.code));
-    closePops(); updateCounters(); drawTextCard();
+    Object.assign(flow, { state: 'idle', key: '', guard: null, ack: false, targets: [], recordId: '' }); flow.seq++;
+    upCache = null; previewKey = ''; $('bePrev').hidden = true; $('bePrevImg').hidden = true;
+    sendMsg('🛡 送出時自動判讀');
+    closePops(); updateCounters(); drawTextCard(); renderFlow();
   }
   function openModal() {
     state.openedBy = document.activeElement;
@@ -304,26 +590,37 @@
     if (state.openedBy && state.openedBy.focus) state.openedBy.focus();
   }
   function requestClose() {
-    if (!isDirty()) { closeModal(); return; }
-    $('confirm').hidden = false; $('cfStay').focus();
+    if (flow.state === 'sending') { toast('送出中，請等全部送完'); return; }
+    if (!isDirty() || allSent()) { closeModal(); return; }
+    const some = C.pages.some(p => state.pages[p.code].status);
+    askConfirm('關閉新增發文？', some ? '還有沒送出或失敗的粉專，關閉後會清掉。' : '目前填的內容還沒送出，關閉後會清掉。', '放棄並關閉', closeModal);
   }
+  $('clearBtn').addEventListener('click', () => {
+    if (flow.state === 'sending') return;
+    if (!pending().length) { resetAll(); $('url').focus(); return; }
+    askConfirm('清空頁面？', '還有沒送出或失敗的粉專，清空後要重新填。', '清空', () => { $('confirm').hidden = true; resetAll(); $('url').focus(); });
+  });
   $('newBtn').addEventListener('click', openModal);
   $('closeBtn').addEventListener('click', requestClose);
   $('cfStay').addEventListener('click', () => { $('confirm').hidden = true; $('closeBtn').focus(); });
-  $('cfLeave').addEventListener('click', closeModal);
+  $('cfLeave').addEventListener('click', () => (confirmFn || closeModal)());
   overlay.addEventListener('mousedown', e => { if (e.target === overlay) requestClose(); });
 
   document.addEventListener('keydown', e => {
-    if (overlay.hidden) return;
+    const login = ImgHost.isOpen();
+    if (overlay.hidden && !login) return;
     if (e.key === 'Escape') {
       e.preventDefault();
+      if (login) { ImgHost.cancel(); return; }
       if (!$('confirm').hidden) { $('confirm').hidden = true; return; }
       if (!menu.hidden || !pop.hidden) { const c = popFor; closePops(); if (c) pgEls[c].mode.focus(); return; }
+      if (flow.state === 'armed') { flow.seq++; setFlow({ type: 'outside' }); sendMsg('已取消，要送出請再按一次'); sendBtn.focus(); return; }
       requestClose();
       return;
     }
     if (e.key !== 'Tab') return;
-    const scope = !$('confirm').hidden ? $('confirm') : modal;   // 焦點鎖在彈窗（確認視窗開著時鎖在確認視窗）
+    // 焦點鎖在最上層：圖床登入 > 確認視窗 > 彈窗
+    const scope = login ? $('imgLogin') : !$('confirm').hidden ? $('confirm') : modal;
     const f = [...scope.querySelectorAll('a[href],button,input,textarea,select,[tabindex]:not([tabindex="-1"])')]
       .filter(el => !el.disabled && !el.closest('[hidden]') && el.offsetParent !== null && el.type !== 'file');
     if (!f.length) return;
@@ -334,8 +631,8 @@
   });
 
   Editor.setTemplate(state.template);
-  updateCounters(); drawTextCard();
-  window.App = { state, getLines, setLines };   // 後續 PR 與測試用
+  updateCounters(); drawTextCard(); renderFlow();
+  window.App = { state, flow, getLines, setLines, currentInput };   // 後續 PR 與測試用
   refreshExt();
   setTimeout(() => { if ($('extPill').className === 'pill') refreshExt(); }, 2500);
 })();

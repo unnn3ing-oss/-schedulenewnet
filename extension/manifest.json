@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "網新快速排程 連線驗證",
-  "version": "0.4.0",
-  "description": "驗證 GitHub Pages 介面能否透過外掛帶著網新後台的登入 cookie 呼叫 API（只呼叫唯讀／判讀／預覽端點，不會發文）。",
+  "version": "0.5.0",
+  "description": "讓 GitHub Pages 介面透過外掛帶著網新後台的登入 cookie 呼叫 API（白名單端點：帶入、預覽、AI 小編文、守則判讀、排程與發布）。",
   "action": {
     "default_title": "網新快速排程：開啟側邊欄"
   },

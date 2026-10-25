@@ -21,11 +21,11 @@ GitHub Pages 介面 ──postMessage──▶ 外掛 bridge.js ──▶ 外掛
 2. `chrome://extensions` → 開「開發人員模式」→「載入未封裝項目」→ 選 `extension/` 資料夾。
 3. 開 `https://unnn3ing-oss.github.io/-schedulenewnet/verify.html`，按「開始驗證」。
 
-驗證外掛只允許呼叫 `page_meta`、`hero`、`guard/check`，**不會排程或發文**；cookie 只讀名稱與到期時間，不讀值。
+驗證頁只會呼叫 `page_meta`、`guard/check`，**不會排程或發文**；cookie 只讀名稱與到期時間，不讀值。外掛（0.5.0 起）的端點白名單：`page_meta`、`hero`、`guard/check`、`render`、`render_text_card`、`ai_caption`、`schedule`、`publish`，其他路徑一律拒絕。
 
 ## 正式介面（進行中）
 
-`web/index.html` 是正式介面，分 PR 逐步完成。目前（PR A）可以用的：
+`web/index.html` 是正式介面，分 PR 逐步完成。PR A 的部分：
 
 - 頂列：外掛連線與登入剩餘天數（經外掛的 `cookies`）；沒裝外掛會顯示「未偵測到外掛」並連到上方的安裝步驟。
 - 「＋ 新增發文」置中彈窗（Esc 關閉、焦點鎖定、有未存內容會先確認）：
@@ -33,10 +33,18 @@ GitHub Pages 介面 ──postMessage──▶ 外掛 bridge.js ──▶ 外掛
   - **純文字底圖**：7 種底色與文字，預覽為示意，實際以後端產圖為準。
   - **快速帶入**：貼文章網址按 Enter 或「帶入」，透過外掛呼叫 `page_meta` 填標題（換行規則與 QPT `breakTitle` 相同）、用外掛新增的 `fetchImage`（僅限 tvbs.com.tw 圖片）載入主圖。
   - 標題每行字數即時計算（全形 1、半形 0.5），超過版型上限變紅；小編文欄位。
-  - 粉專按鈕、立即／排程選單與時間視窗目前只有介面，不會送出。
-- 還沒做：送出、AI 產生與校錯字、守則判讀、送出紀錄（後續 PR）。
 
-外掛升到 0.4.0（新增 `fetchImage`），舊外掛仍可用，只是帶不到主圖。測試：`npm test`；瀏覽器端到端：`node test/e2e/app.e2e.js`（需要 Playwright 與 Chromium）。
+PR B（送出）：
+
+- **圖床登入**：頂列「圖床未登入／已登入」可點開登入；第一次預覽或送出作圖框時也會自動跳出。輸入圖床密碼（Worker 的 `APP_PASSWORD`）換 12 小時憑證，存在本機 localStorage（不存密碼）；過期或上傳回 401 會再跳出登入。圖床網址寫在 `web/imghost.js`；Worker 的 `ALLOWED_ORIGIN` 必須是介面所在網址（GitHub Pages 是 `https://unnn3ing-oss.github.io`），本機 localhost 測試時要暫時改這個變數，否則瀏覽器會擋 CORS。
+- **作圖框送出**：`Editor.exportBlob()` 的 JPEG 上傳圖床，網址當 `image_url`、`crop: null`；純文字底圖不上傳，由後端依 `text_card` 欄位產圖。
+- **🖼 後端預覽**：作圖框打 `/render`（目前選的版型）、純文字打 `/render_text_card`，顯示後端實際產的圖。預覽和送出共用同一次上傳（照片／貼圖沒改就不重傳）。
+- **✨ AI 產生／🔍 校錯字**：`/ai_caption`（`generate` 帶標題與帶入的文章摘要；`proofread` 帶小編文與標題），結果填入小編文。
+- **粉專 ▾**：立即發布（預設）／排程發布。排程視窗：日期預設今天、最晚 3 天後；時間直接打 4 碼（`2130` → `21:30`），↑↓ 每次 ±10 分；早於現在＋20 分或超過 3 天會在視窗內標紅。
+- **全部送出（兩段式）**：第 1 次按先檢查內容（照交接文件 §6.6 的順序）並自動打 `/guard/check`，按鈕上方泡泡列出每台與時間（立即或 HH:MM）和燈號，按鈕變「確認送出」；紅燈要勾「我知道風險」。點其他地方或改內容就回到第 1 步。第 2 次按才逐台送 `/publish` 或 `/schedule`（payload 由 `web/payload.js` 產生，完全照交接文件 §4）。失敗的台顯示錯誤（HTML 錯誤頁只顯示精簡訊息）與「↻ 重送」，只重送那一台。全部成功不清空，改按「清空頁面」。
+- **本機送出紀錄**：每次送出存一筆到 localStorage（`snn.records.v1`：粉專、立即／排程、時間、結果、貼文連結），列表介面在下一個 PR。
+
+外掛要升到 0.5.0（白名單加入 `render_text_card`、`ai_caption`、`schedule`、`publish`）；舊外掛按送出會顯示「外掛版本太舊」。測試：`npm test`（payload、時間解析、泡泡狀態等純函式）；瀏覽器端到端：`node test/e2e/app.e2e.js`（需要 Playwright 與 Chromium；送出流程用模擬的外掛與圖床，不會連到網新或 Cloudflare）。
 
 ## 外掛側邊欄與自動更新
 
