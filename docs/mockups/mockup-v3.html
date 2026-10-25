@@ -1,0 +1,201 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>網新快速排程 草圖 v3</title><style>
+:root{--accent:#004aad;--accent-dark:#003a87;--soft:#e8f0fc;--text:#1f2a3d;--muted:#6b7890;--border:rgba(0,74,173,.12);--track:rgba(0,74,173,.07);--ok:#16a34a;--go:#15803d;--warn:#fdf1d8;--danger:#d93636;--pink:#e24b8f}
+*{box-sizing:border-box}body{margin:0;font:15px/1.6 system-ui,"PingFang TC","Noto Sans TC",sans-serif;color:var(--text);background:radial-gradient(900px 500px at 8% -10%,#dce8ff,transparent 60%),#f4f7fd}
+.screen{width:1280px;height:800px;position:relative;overflow:hidden}
+.top{height:64px;display:flex;align-items:center;gap:16px;padding:0 28px;background:rgba(255,255,255,.86);border-bottom:1px solid var(--border)}
+.logo{font-weight:800;font-size:18px}.logo b{color:var(--accent)}
+.seg{display:inline-flex;background:var(--track);border-radius:999px;padding:4px}
+.seg span{padding:7px 18px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted)}
+.seg span.on{background:#fff;color:var(--accent);box-shadow:0 2px 8px -3px rgba(0,43,102,.35)}
+.btn{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:9px 18px;font-weight:600;font-size:14px;background:var(--track)}
+.btn.p{background:var(--accent);color:#fff;box-shadow:0 8px 20px -10px rgba(0,74,173,.7)}.btn.g{background:var(--go);color:#fff}.btn.s{padding:5px 12px;font-size:13px}
+.sp{flex:1}
+.wrap{padding:18px 28px;display:grid;grid-template-columns:1fr 420px;gap:18px;height:calc(100% - 64px)}
+.card{background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:0 24px 60px -30px rgba(0,43,102,.35)}
+.list{padding:8px}
+.row{display:grid;grid-template-columns:72px 1fr auto;gap:14px;align-items:center;padding:12px;border-radius:14px}
+.row+.row{border-top:1px solid var(--border)}.row.sel{background:var(--soft)}
+.th{width:72px;height:72px;border-radius:10px;background:linear-gradient(135deg,#9ab8e8,#4f7cc4);position:relative;overflow:hidden}
+.th.pk{background:linear-gradient(135deg,#f5b6d1,#d9578f)}.th.c{background:#2b3a55}
+.th:after{content:"";position:absolute;inset:0;border:4px solid var(--accent);border-radius:10px}.th.pk:after{border-color:var(--pink)}
+.t{font-weight:700;font-size:15px;line-height:1.35}.m{font-size:13px;color:var(--muted)}
+.chip{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#dbeafe;color:#1e40af}
+.chip.ok{background:#dcfce7;color:#166534}.chip.w{background:var(--warn);color:#6b4a00}.chip.e{background:#fde2e2;color:#9b1c1c}
+.hd{display:flex;align-items:center;gap:10px;padding:10px 12px 6px}
+.pg{display:flex;gap:6px;justify-content:center;padding:10px;font-size:13px;color:var(--muted)}
+.pg span{min-width:30px;text-align:center;padding:4px;border-radius:8px}.pg .on{background:var(--accent);color:#fff}
+.detail{padding:18px;display:flex;flex-direction:column;gap:12px}
+.big{aspect-ratio:1;border-radius:14px;background:linear-gradient(135deg,#9ab8e8,#4f7cc4);position:relative;display:flex;align-items:flex-end}
+.big:after{content:"";position:absolute;inset:0;border:12px solid var(--accent);border-radius:14px}
+.big .cap{position:relative;z-index:1;margin:0 24px 30px;color:#fff;font-weight:800;font-size:24px;text-shadow:0 2px 6px rgba(0,0,0,.4)}
+.txt{background:var(--track);border-radius:12px;padding:10px 12px;font-size:13px;white-space:pre-line}
+.anno{position:absolute;background:#ffef8a;color:#5b4700;font-size:12px;font-weight:700;padding:4px 10px;border-radius:8px;box-shadow:0 4px 10px -4px rgba(0,0,0,.3);z-index:9}
+/* 精靈 */
+.ds{position:absolute;inset:0;background:radial-gradient(1100px 620px at 12% -8%,#dce8ff,transparent 62%),#f4f7fd;padding:0 36px;display:flex;flex-direction:column}
+.dsh{display:flex;align-items:flex-start;padding:22px 0 4px}.dsh h2{margin:0;font-size:24px;font-weight:800}.dsh p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.x{margin-left:auto;width:42px;height:42px;border-radius:50%;border:1px solid var(--border);background:#fff;display:grid;place-items:center;color:var(--muted)}
+.steps{display:flex;align-items:center;margin:16px 0 14px}
+.st{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;color:var(--muted);white-space:nowrap}
+.line{flex:1;height:3px;margin:0 10px;border-radius:3px;background:#d4ddee}.line.d{background:var(--ok)}
+.dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;border:2px solid #cdd7ea;background:#fff;font-size:13px;font-weight:700}
+.st.d .dot{background:var(--ok);border-color:var(--ok);color:#fff}.st.c{color:var(--text)}.st.c .dot{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 0 5px var(--soft)}
+.body{flex:1;display:grid;grid-template-columns:400px 1fr;gap:22px;min-height:0;padding-bottom:12px}
+.pane{padding:18px;display:flex;flex-direction:column;gap:12px}
+label{font-size:13px;font-weight:700;color:var(--muted)}
+.in{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:#fff;font-size:14px}
+.in.ta{height:70px}
+.quick{display:flex;gap:8px}.quick .in{flex:1}
+.sw{display:flex;gap:6px;flex-wrap:wrap}.sw i{width:26px;height:26px;border-radius:50%;display:block}
+.stk{display:flex;gap:8px;align-items:center}.stk span{width:44px;height:44px;border-radius:50%;background:#ffd34d;display:grid;place-items:center;font-size:22px}
+.stk .mz{border-radius:8px;background:repeating-conic-gradient(#999 0 25%,#ccc 0 50%) 0 0/10px 10px}
+.canvas{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.pv{width:470px;height:470px;border-radius:6px;position:relative;background:linear-gradient(160deg,#a9c4ef,#3f6db6);overflow:hidden}
+.pv:after{content:"";position:absolute;inset:0;border:16px solid var(--pink)}
+.pv .ttl{position:absolute;left:34px;right:34px;bottom:46px;color:#fff;font-weight:800;font-size:30px;line-height:1.3;text-shadow:0 2px 8px rgba(0,0,0,.45);border:1.5px dashed rgba(255,255,255,.7);padding:6px}
+.pv .s1{position:absolute;right:60px;top:70px;width:90px;height:90px;border-radius:50%;background:#ffd34d;display:grid;place-items:center;font-size:48px;outline:1.5px dashed #fff;outline-offset:4px}
+.pv .mz{position:absolute;left:90px;top:150px;width:120px;height:60px;background:repeating-conic-gradient(#8a9bb8 0 25%,#b7c5dc 0 50%) 0 0/14px 14px}
+.thumbs{display:flex;gap:8px}.thumbs b{width:56px;height:56px;border-radius:8px;background:linear-gradient(160deg,#a9c4ef,#3f6db6);outline:2px solid transparent}.thumbs b.on{outline-color:var(--accent)}
+.foot{display:flex;align-items:center;gap:10px;padding:12px 0 20px;border-top:1px solid var(--border)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fbprev{width:500px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.fbprev .who{display:flex;gap:10px;align-items:center}.av{width:40px;height:40px;border-radius:50%;background:var(--accent)}
+.fbimg{aspect-ratio:1;border-radius:8px;background:linear-gradient(160deg,#a9c4ef,#3f6db6);position:relative}.fbimg:after{content:"";position:absolute;inset:0;border:12px solid var(--pink);border-radius:8px}
+/* 手機 */
+.phone{width:390px;height:800px;border-radius:36px;border:10px solid #1f2a3d;overflow:hidden;background:#f4f7fd;position:relative}
+.ph-top{height:56px;display:flex;align-items:center;padding:0 16px;background:#fff;border-bottom:1px solid var(--border);font-weight:800}
+.fab{position:absolute;right:18px;bottom:24px;width:58px;height:58px;border-radius:50%;background:var(--accent);color:#fff;font-size:30px;display:grid;place-items:center;box-shadow:0 10px 24px -8px rgba(0,74,173,.8)}
+.gallery{display:flex;gap:40px;align-items:flex-start;padding:30px;background:#e9eef7;width:1280px;height:880px}
+.navy{background:#0d2b6b}
+.ov{position:absolute;inset:64px 0 0 0;background:rgba(15,25,45,.42);backdrop-filter:blur(2px);display:grid;place-items:center;z-index:5}
+.mdl{width:980px;background:#fff;border-radius:22px;box-shadow:0 40px 90px -30px rgba(0,0,0,.6);display:flex;flex-direction:column;max-height:720px}
+.mh{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--border)}
+.mh h2{margin:0;font-size:19px}
+.mb{display:grid;grid-template-columns:400px 1fr;gap:18px;padding:16px 20px}
+.mf{padding:14px 20px 18px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.pv{width:400px;height:400px}.pv .ttl{font-size:26px}
+.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.tools .stk span{width:34px;height:34px;font-size:18px}
+.pbtns{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.pb{position:relative;display:inline-flex;border-radius:999px;box-shadow:0 0 0 1.5px var(--accent) inset;overflow:visible}
+.pb .n{padding:9px 14px 9px 16px;font-weight:800;color:var(--accent);font-size:14px;white-space:nowrap}
+.pb .o{padding:9px 12px;font-size:12px;font-weight:700;color:var(--accent);border-left:1.5px solid rgba(0,74,173,.25);white-space:nowrap}
+.pb.arm{background:#15803d;box-shadow:0 8px 20px -10px rgba(21,128,61,.8)}.pb.arm .n,.pb.arm .o{color:#fff;border-color:rgba(255,255,255,.35)}
+.pb.done{box-shadow:0 0 0 1.5px var(--ok) inset;background:#dcfce7}.pb.done .n,.pb.done .o{color:#166534}
+.pb.fail{box-shadow:0 0 0 1.5px var(--danger) inset;background:#fde2e2}.pb.fail .n,.pb.fail .o{color:#9b1c1c}
+.pb.sch .o{background:var(--soft);border-radius:0 999px 999px 0}
+.bub{position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%);width:290px;background:#1f2a3d;color:#fff;border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.5;box-shadow:0 14px 30px -10px rgba(0,0,0,.5);z-index:3}
+.bub:after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:8px solid transparent;border-top-color:#1f2a3d}
+.bub b.l{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.bub .ck{display:flex;gap:6px;align-items:center;margin-top:6px;color:#ffd7d7}.bub .ck i{width:14px;height:14px;border:2px solid #ffd7d7;border-radius:4px;display:inline-block}
+.pop{position:absolute;bottom:calc(100% + 12px);left:0;width:300px;background:#fff;border-radius:16px;padding:14px;box-shadow:0 20px 50px -14px rgba(0,43,102,.55);border:1px solid var(--border);z-index:3;display:flex;flex-direction:column;gap:10px}
+.menu{position:absolute;bottom:calc(100% + 8px);right:0;background:#fff;border-radius:12px;box-shadow:0 14px 34px -12px rgba(0,43,102,.5);border:1px solid var(--border);padding:6px;z-index:3;width:150px}
+.menu div{padding:8px 10px;border-radius:8px;font-size:14px;font-weight:600}.menu .on{background:var(--soft);color:var(--accent)}
+.tin{display:flex;gap:8px}.tin .in{flex:1;font-size:18px;font-weight:700;text-align:center}
+.tin .in.f{box-shadow:0 0 0 3px var(--soft);border-color:var(--accent)}
+.st2{display:flex;gap:4px;flex-wrap:wrap}.st2 .chip{font-size:11px}
+.guardline{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+</style></head><body>
+
+<!-- W1 列表＋狀態 -->
+<div class="screen" id="w1">
+  <div class="top"><div class="logo">📮 網新<b>快速排程</b></div>
+    <div class="seg"><span class="on">全部</span><span>已排程</span><span>已發布</span><span>失敗 <span class="chip e">1</span></span></div>
+    <div class="sp"></div><span class="m">● 外掛已連線・登入剩 6 天</span><span class="btn p">＋ 新增發文</span></div>
+  <div class="wrap" style="grid-template-columns:1fr">
+    <div class="card list">
+      <div class="hd"><b>送出紀錄</b><span class="m">本機紀錄・游標移到狀態可看細節</span></div>
+      <div class="row"><div class="th"></div><div><div class="t">颱風假最新！北北基桃明天照常上班上課</div><div class="m">今天 17:58 送出・作圖框</div></div>
+        <div class="st2"><span class="chip ok">新聞・已發布 ↗</span><span class="chip">少康・排程 18:40</span><span class="chip e">氣象・失敗 ↻</span></div></div>
+      <div class="row"><div class="th c" style="background:#b00020"></div><div><div class="t">【快訊】北市宣布明天停班停課</div><div class="m">今天 17:40 送出・純文字底圖</div></div>
+        <div class="st2"><span class="chip ok">新聞・已發布 ↗</span><span class="chip ok">氣象・已發布 ↗</span></div></div>
+      <div class="row"><div class="th pk"></div><div><div class="t">金曲歌后現身後台 曝新專輯進度</div><div class="m">今天 16:12 送出・作圖框</div></div>
+        <div class="st2"><span class="chip">娛樂・排程 20:00</span></div></div>
+      <div class="row"><div class="th navy"></div><div><div class="t">美股收盤 道瓊漲 300 點</div><div class="m">今天 08:05 送出・國際＋寬版</div></div>
+        <div class="st2"><span class="chip ok">國際＋・已發布 ↗</span></div></div>
+      <div class="pg"><span>‹</span><span class="on">1</span><span>›</span><span>共 4 則</span></div>
+    </div>
+  </div>
+  <div class="anno" style="left:900px;top:200px">① 每台一顆狀態：已發布可點開貼文、失敗可重送</div>
+</div>
+
+<!-- W2 中間彈窗＋按鈕選單 -->
+<div class="screen" id="w2">
+  <div class="top"><div class="logo">📮 網新<b>快速排程</b></div><div class="sp"></div><span class="btn p">＋ 新增發文</span></div>
+  <div class="ov"><div class="mdl">
+    <div class="mh"><h2>新增發文</h2><div class="seg"><span class="on">作圖框</span><span>純文字底圖</span></div><div class="sp"></div><div class="x">✕</div></div>
+    <div class="mb">
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="pv"><div class="mz"></div><div class="s1">😱</div><div class="ttl">颱風假最新！北北基桃<br>明天照常上班上課</div></div>
+        <div class="tools"><div class="seg"><span class="on">新聞</span><span>娛樂</span><span>少康</span><span>擠看看</span><span>國際＋</span></div></div>
+        <div class="tools"><div class="stk"><span>😄</span><span>😱</span><span>😭</span><span>😡</span><span>😘</span><span>🤣</span><span>😑</span><span class="mz"></span></div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="quick"><div class="in">⚡ https://news.tvbs.com.tw/life/3012345</div></div>
+        <label>標題</label><div class="in" style="display:flex;justify-content:space-between">颱風假最新！北北基桃<span class="m">10/15</span></div><div class="in" style="display:flex;justify-content:space-between">明天照常上班上課<span class="m">8/15</span></div>
+        <div style="display:flex;align-items:center"><label>小編文</label><div class="sp"></div><span class="btn s">✨ AI 產生</span>&nbsp;<span class="btn s">🔍 校錯字</span></div>
+        <div class="in" style="height:150px">北北基桃明天照常上班上課！宜蘭山區部分鄉鎮停班停課，出門前記得再確認最新公告。<br>#颱風 #停班停課</div>
+      </div>
+    </div>
+    <div class="mf">
+      <div class="guardline">🛡 送出時會自動跑守則判讀</div>
+      <div class="pbtns">
+        <div class="pb"><span class="n">新聞</span><span class="o">立即發布 ▾</span><div class="menu"><div class="on">✓ 立即發布</div><div>排程發布…</div></div></div>
+        <div class="pb"><span class="n">娛樂</span><span class="o">立即發布 ▾</span></div>
+        <div class="pb"><span class="n">少康</span><span class="o">立即發布 ▾</span></div>
+        <div class="pb"><span class="n">擠看看</span><span class="o">立即發布 ▾</span></div>
+        <div class="pb"><span class="n">國際＋</span><span class="o">立即發布 ▾</span></div>
+        <div class="pb"><span class="n">氣象</span><span class="o">立即發布 ▾</span></div>
+      </div>
+    </div>
+  </div></div>
+  <div class="anno" style="left:40px;top:120px">② 中間彈窗、一頁完成（沿用 QPT 做圖）</div>
+  <div class="anno" style="left:640px;top:640px">③ 每個粉專一顆按鈕，▾ 切換立即／排程（預設立即）</div>
+</div>
+
+<!-- W3 排程時間選擇 -->
+<div class="screen" id="w3">
+  <div class="top"><div class="logo">📮 網新<b>快速排程</b></div><div class="sp"></div><span class="btn p">＋ 新增發文</span></div>
+  <div class="ov"><div class="mdl">
+    <div class="mh"><h2>新增發文</h2><div class="seg"><span class="on">作圖框</span><span>純文字底圖</span></div><div class="sp"></div><div class="x">✕</div></div>
+    <div class="mb" style="opacity:.35"><div class="pv"><div class="ttl">颱風假最新！北北基桃<br>明天照常上班上課</div></div><div></div></div>
+    <div class="mf">
+      <div class="pbtns">
+        <div class="pb done"><span class="n">新聞</span><span class="o">✓ 已發布 ↗</span></div>
+        <div class="pb"><span class="n">娛樂</span><span class="o">立即發布 ▾</span></div>
+        <div class="pb sch"><span class="n">少康</span><span class="o">排程 21:30 ▾</span>
+          <div class="pop"><b>排程時間</b>
+            <div class="tin"><div class="in">今天 10/25</div><div class="in f">2130 → 21:30</div></div>
+            <div class="m" style="font-size:12px">直接打 4 碼（2130＝21:30）・↑↓ 每次 10 分鐘・最早 18:22（現在＋20 分）</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="btn s">+30 分</span><span class="btn s">+1 小時</span><span class="btn s">明天</span></div>
+          </div></div>
+        <div class="pb"><span class="n">擠看看</span><span class="o">立即發布 ▾</span></div>
+        <div class="pb"><span class="n">國際＋</span><span class="o">立即發布 ▾</span></div>
+        <div class="pb"><span class="n">氣象</span><span class="o">立即發布 ▾</span></div>
+      </div>
+    </div>
+  </div></div>
+  <div class="anno" style="left:560px;top:420px">④ 選「排程發布」才跳出：預設今天、輸入 2130 自動變 21:30</div>
+</div>
+
+<!-- W4 兩段式確認＋自動判讀 -->
+<div class="screen" id="w4">
+  <div class="top"><div class="logo">📮 網新<b>快速排程</b></div><div class="sp"></div><span class="btn p">＋ 新增發文</span></div>
+  <div class="ov"><div class="mdl">
+    <div class="mh"><h2>新增發文</h2><div class="seg"><span class="on">作圖框</span><span>純文字底圖</span></div><div class="sp"></div><div class="x">✕</div></div>
+    <div class="mb" style="opacity:.35"><div class="pv"><div class="ttl">颱風假最新！北北基桃<br>明天照常上班上課</div></div><div></div></div>
+    <div class="mf">
+      <div class="pbtns">
+        <div class="pb done"><span class="n">新聞</span><span class="o">✓ 已發布 ↗</span></div>
+        <div class="pb arm"><span class="n">確認送出</span><span class="o">娛樂・立即</span>
+          <div class="bub"><b>立即發布到「TVBS娛樂」？</b><br><b class="l" style="background:#facc15"></b>守則黃燈：標題用語較聳動<br><span style="opacity:.75">再按一次送出・點其他地方取消</span></div></div>
+        <div class="pb sch"><span class="n">少康</span><span class="o">排程 21:30 ▾</span></div>
+        <div class="pb fail"><span class="n">擠看看</span><span class="o">✗ 失敗・重送</span></div>
+        <div class="pb arm" style="margin-left:40px"><span class="n">確認送出</span><span class="o">氣象・立即</span>
+          <div class="bub" style="left:auto;right:-20px;transform:none"><b>立即發布到「TVBS氣象」？</b><br><b class="l" style="background:#ef4444"></b>守則紅燈：疑似未證實傷亡數字<div class="ck"><i></i>我知道風險，仍要送出</div><span style="opacity:.75">勾選後才能按確認送出</span></div></div>
+      </div>
+    </div>
+  </div></div>
+  <div class="anno" style="left:600px;top:260px">⑤ 第 1 次按：自動判讀＋泡泡；按鈕變「確認送出」→ 第 2 次才送</div>
+  <div class="anno" style="left:600px;top:300px">⑥ 紅燈時泡泡內勾選</div>
+</div>
+</body></html>
