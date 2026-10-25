@@ -1,10 +1,13 @@
+// 點工具列圖示開啟側邊欄；每小時問 GitHub 有沒有新版，有就在圖示顯示「新」（更新要在側邊欄按，見 updater.js）。
+importScripts('updater.js');
+
 // 驗證三種送法：
 //   b1  外掛背景直接 fetch（帶 cookie）
 //   b1o 同 b1，但把 Origin 標頭改成網新網址（防後端檢查來源）
 //   b2  交給網新分頁，在原網域內 fetch（一定是同網域）
-// 只允許唯讀／判讀端點，不允許 /schedule、/publish。
+// 只允許唯讀／判讀／預覽端點，不允許 /schedule、/publish。
 const HOST = 'https://digi-social-post.tvbs.ai';
-const ALLOWED = [/^\/[\w\-/]*page_meta\?url=/, /^\/[\w\-/]*hero\?url=/, /^\/[\w\-/]*guard\/check$/];
+const ALLOWED = [/^\/[\w\-/]*page_meta\?url=/, /^\/[\w\-/]*hero\?url=/, /^\/[\w\-/]*guard\/check$/, /^\/[\w\-/]*render$/];
 const ORIGIN_RULE = 1;
 const SNIPPET = 600;
 
@@ -21,12 +24,21 @@ async function setOriginRule(on) {
   });
 }
 
+async function toDataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return `data:${blob.type || 'image/png'};base64,${btoa(bin)}`;
+}
+
 async function doFetch(url, method, body) {
   const init = { method, credentials: 'include', headers: {} };
   if (body !== undefined) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(body); }
   const r = await fetch(url, init);
-  const text = await r.text();
-  return { status: r.status, contentType: r.headers.get('content-type') || '', redirected: r.redirected, finalUrl: r.url, snippet: text.slice(0, SNIPPET) };
+  const contentType = r.headers.get('content-type') || '';
+  const base = { status: r.status, contentType, redirected: r.redirected, finalUrl: r.url };
+  if (/^image\//i.test(contentType)) return { ...base, snippet: '', image: await toDataUrl(await r.blob()) };
+  return { ...base, snippet: (await r.text()).slice(0, SNIPPET) };
 }
 
 async function viaTab(url, method, body) {
@@ -84,4 +96,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
   handle(msg).then(sendResponse);
   return true;
+});
+
+// ---- 側邊欄與自動檢查更新 ----
+const CHECK_EVERY_MINUTES = 60;
+function ensureCheckAlarm() {
+  chrome.alarms.get('check-update', alarm => {
+    if (!alarm || alarm.periodInMinutes !== CHECK_EVERY_MINUTES) {
+      chrome.alarms.create('check-update', { delayInMinutes: 1, periodInMinutes: CHECK_EVERY_MINUTES });
+    }
+  });
+}
+function setup() {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+  ensureCheckAlarm();
+}
+setup();
+chrome.runtime.onInstalled.addListener(setup);
+chrome.runtime.onStartup.addListener(setup);
+
+chrome.alarms.onAlarm.addListener(async alarm => {
+  if (alarm.name !== 'check-update') return;
+  try {
+    const info = await Updater.checkLatest();
+    await chrome.action.setBadgeText({ text: info.hasUpdate ? '新' : '' });
+    if (info.hasUpdate) await chrome.action.setBadgeBackgroundColor({ color: '#d92d20' });
+  } catch (e) { /* 離線或被限流：下次鬧鐘再試 */ }
 });

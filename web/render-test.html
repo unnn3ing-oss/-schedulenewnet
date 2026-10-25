@@ -1,0 +1,36 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data: blob:">
+<title>自製圖測試</title><link rel="stylesheet" href="verify.css"></head>
+<body><main class="wrap">
+<section class="card">
+  <h1>自製圖測試（data URL）</h1>
+  <p class="muted">測試後端 <code>/render</code> 能不能接受「瀏覽器裡自己做的圖」當主圖。只呼叫產生預覽圖的 <code>/render</code>，<b>不會排程或發文</b>。</p>
+  <div class="status" id="ext">外掛：偵測中…</div>
+</section>
+<section class="card">
+  <h2>步驟 1：複製舊版的 render 請求內容</h2>
+  <ol class="muted">
+    <li>在舊版網新發文台，選「作圖框」，貼一篇文章網址，讓它產生預覽圖。</li>
+    <li>按 F12 → Network，點名稱是 <code>render</code> 的那一筆 → Payload → 「view source」，全選複製。</li>
+    <li>貼到下面。</li>
+  </ol>
+  <label for="payload">render 請求內容（JSON）</label>
+  <textarea id="payload" rows="7" placeholder='{"ip":"newsnet","mode":"single","template":"newsnet_news","image_url":"https://…","crop":{…},"title_lines":["…"]}'></textarea>
+  <div class="hint" id="payloadHint"></div>
+  <label for="prefix">API 路徑前綴（連線驗證時留空能過就留空）</label>
+  <input id="prefix" type="text" placeholder="留空">
+</section>
+<section class="card">
+  <h2>步驟 2：測試圖</h2>
+  <p class="muted">預設是自動產生的測試圖（漸層、馬賽克、貼圖、時間戳記）。也可以換成 QPT 匯出、不含框和標題的圖。</p>
+  <div class="row" style="justify-content:flex-start"><img id="testImg" class="thumb" alt="測試圖"><div><input id="file" type="file" accept="image/*"><p class="muted" id="imgInfo"></p></div></div>
+</section>
+<section class="card">
+  <div class="row"><button class="btn primary" id="runBtn" type="button">開始測試</button></div>
+  <div id="resultWrap" hidden>
+    <div class="verdict" id="verdict"></div>
+    <div class="grid" id="results"></div>
+    <button class="btn" id="copyBtn" type="button">複製文字結果（回報用）</button>
+  </div>
+</section>
+</main><script src="render-test.js"></script></body></html>
