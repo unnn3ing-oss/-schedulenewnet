@@ -1,0 +1,242 @@
+// 作圖框編輯器。照片處理（點選／拖曳／貼上、滾輪與雙指縮放、拖曳平移且不露出空白邊）取自 quickpatterntool/app.js，
+// 改成可變畫布尺寸，並拿掉 TVBS 邊框與標題（後端會畫漸層、標題與 TVBS logo）。
+// 匯出的圖只有「照片＋馬賽克＋貼圖」，不含參考線（標題區／logo 區是蓋在畫布上的 DOM）。
+(function () {
+  const $ = id => document.getElementById(id);
+  const canvas = $('editorCanvas');
+  const ctx = canvas.getContext('2d');
+  const wrap = $('canvasWrap');
+  const MAX_ZOOM = 5;
+  const MAX_FILE = 30 * 1024 * 1024;
+
+  let W = 1080, H = 1080;
+  const bg = { image: null, view: { zoom: 1, x: 0, y: 0 }, name: '' };
+  const items = [];                       // 貼圖與馬賽克（畫布座標）
+  const fx = Stickers.drawFx(items);
+  const listeners = [];
+  const emit = () => listeners.forEach(fn => fn());
+
+  // ---- 照片幾何（QPT：coverGeometry / clampView）----
+  function coverGeometry(image, view) {
+    const s = Math.max(W / image.width, H / image.height) * view.zoom;
+    const dw = image.width * s, dh = image.height * s;
+    return { s, dw, dh, dx: (W - dw) / 2 + view.x, dy: (H - dh) / 2 + view.y };
+  }
+  function clampView(image, view) {
+    view.zoom = Math.min(MAX_ZOOM, Math.max(1, view.zoom));
+    const { dw, dh } = coverGeometry(image, view);
+    const mx = (dw - W) / 2, my = (dh - H) / 2;
+    view.x = Math.min(mx, Math.max(-mx, view.x));
+    view.y = Math.min(my, Math.max(-my, view.y));
+  }
+
+  function render() {
+    ctx.fillStyle = bg.image ? '#fff' : '#d9e2f2';
+    ctx.fillRect(0, 0, W, H);
+    if (bg.image) {
+      const g = coverGeometry(bg.image, bg.view);
+      ctx.drawImage(bg.image, g.dx, g.dy, g.dw, g.dh);
+      fx.mosaic(ctx);
+      fx.stickers(ctx);
+    }
+  }
+  const changed = () => { render(); if (fxEditor) fxEditor.layout(); emit(); };
+
+  // ---- 貼圖／馬賽克 ----
+  let fxTiles = [];
+  var fxEditor = Stickers.createEditor({
+    canvas, wrap,
+    items: () => items,
+    ready: () => !!bg.image,
+    changed,
+    redraw: render,
+    onLayout: () => setFxDisabled()
+  });
+  function setFxDisabled() { fxTiles.forEach(b => { b.disabled = !bg.image; }); }
+  function mountFxBar(slot) {
+    const { row, tiles } = Stickers.buildRow(fxEditor);
+    fxTiles = tiles;
+    const hint = document.createElement('div');
+    hint.className = 'fx-hint';
+    hint.textContent = Stickers.hintText;
+    slot.appendChild(row);
+    slot.appendChild(hint);
+    setFxDisabled();
+  }
+  fxEditor.sync();
+
+  // ---- 載入照片 ----
+  function setImage(img, name) {
+    bg.image = img;
+    bg.name = name || '';
+    bg.view = { zoom: 1, x: 0, y: 0 };
+    wrap.classList.add('has-image');
+    setFxDisabled();
+    fxEditor.sync(true);
+    changed();
+  }
+  function loadSrc(src, name, revoke) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => { if (revoke) URL.revokeObjectURL(src); setImage(img, name); resolve(); };
+      img.onerror = () => { if (revoke) URL.revokeObjectURL(src); reject(new Error('bad_image')); };
+      img.src = src;
+    });
+  }
+  function loadFile(file) {
+    if (!file || !/^image\//.test(file.type)) return Promise.reject(new Error('not_image'));
+    if (file.size > MAX_FILE) return Promise.reject(new Error('too_big'));
+    return loadSrc(URL.createObjectURL(file), file.name, true);
+  }
+  const loadUrl = dataUrl => loadSrc(dataUrl, 'quickfill', false);   // 只收 data:／blob: URL（不載入跨網域圖，免得畫布被污染）
+
+  function clearImage() {
+    bg.image = null; bg.name = '';
+    items.length = 0;
+    wrap.classList.remove('has-image');
+    fxEditor.sync(true);
+    setFxDisabled();
+    changed();
+  }
+
+  // ---- 版型（畫布尺寸）與參考線 ----
+  function setTemplate(template) {
+    const [w, h] = Rules.canvasSizeFor(template);
+    if (w === W && h === H) { return; }
+    W = w; H = h;
+    canvas.width = w; canvas.height = h;
+    Stickers.setSize(w, h);
+    wrap.classList.toggle('wide', w > h);
+    if (bg.image) clampView(bg.image, bg.view);
+    items.forEach(it => {   // 中心點拉回畫布內
+      it.x = Math.min(w - it.w / 2, Math.max(-it.w / 2, it.x));
+      it.y = Math.min(h - it.h / 2, Math.max(-it.h / 2, it.y));
+    });
+    fxEditor.layout();
+    changed();
+  }
+  function setGuideLines(lines) {
+    $('gTitleText').textContent = (lines || []).filter(Boolean).join('\n');
+  }
+  function showGuides(on) { $('guides').hidden = !on; }
+
+  // ---- 匯出：JPEG q0.92，只有畫布內容 ----
+  function exportBlob() {
+    return new Promise((resolve, reject) => {
+      if (!bg.image) { reject(new Error('no_image')); return; }
+      render();
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('export_failed')), 'image/jpeg', 0.92);
+    });
+  }
+
+  // ---- 平移／縮放（QPT wirePreviewPanZoom）----
+  const toCanvas = (cx, cy) => {
+    const r = canvas.getBoundingClientRect();
+    const k = W / r.width;
+    return { x: (cx - r.left) * k, y: (cy - r.top) * k, k };
+  };
+  canvas.addEventListener('wheel', e => {
+    if (!bg.image) return;
+    e.preventDefault();
+    const view = bg.view;
+    const p = toCanvas(e.clientX, e.clientY);
+    const before = coverGeometry(bg.image, view);
+    const u = (p.x - before.dx) / before.s, v = (p.y - before.dy) / before.s;
+    view.zoom = Math.min(MAX_ZOOM, Math.max(1, view.zoom * Math.exp(-e.deltaY * 0.0015)));
+    const after = coverGeometry(bg.image, { zoom: view.zoom, x: 0, y: 0 });
+    view.x = p.x - u * after.s - after.dx;
+    view.y = p.y - v * after.s - after.dy;
+    clampView(bg.image, view);
+    changed();
+  }, { passive: false });
+
+  let drag = null, pinch = null;
+  const touches = new Map();
+  const pinchGeom = () => {
+    const [a, b] = [...touches.values()];
+    return { cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, dist: Math.hypot(a.x - b.x, a.y - b.y) };
+  };
+  canvas.addEventListener('pointerdown', e => {
+    wrap.focus();
+    if (!bg.image || e.button !== 0) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    canvas.setPointerCapture(e.pointerId);
+    if (touches.size === 2) {
+      drag = null;
+      const g = pinchGeom(), p = toCanvas(g.cx, g.cy), before = coverGeometry(bg.image, bg.view);
+      pinch = { dist0: Math.max(g.dist, 1), zoom0: bg.view.zoom, u: (p.x - before.dx) / before.s, v: (p.y - before.dy) / before.s };
+      canvas.classList.add('panning');
+    } else if (touches.size === 1) {
+      drag = { id: e.pointerId, sx: e.clientX, sy: e.clientY, vx: bg.view.x, vy: bg.view.y };
+      canvas.classList.add('panning');
+    }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && touches.size === 2) {
+      const g = pinchGeom(), view = bg.view;
+      view.zoom = Math.min(MAX_ZOOM, Math.max(1, pinch.zoom0 * g.dist / pinch.dist0));
+      const p = toCanvas(g.cx, g.cy), after = coverGeometry(bg.image, { zoom: view.zoom, x: 0, y: 0 });
+      view.x = p.x - pinch.u * after.s - after.dx;
+      view.y = p.y - pinch.v * after.s - after.dy;
+      clampView(bg.image, view);
+      changed();
+      return;
+    }
+    if (!drag || e.pointerId !== drag.id) return;
+    const { k } = toCanvas(e.clientX, e.clientY);
+    bg.view.x = drag.vx + (e.clientX - drag.sx) * k;
+    bg.view.y = drag.vy + (e.clientY - drag.sy) * k;
+    clampView(bg.image, bg.view);
+    changed();
+  });
+  const endDrag = e => {
+    const wasDown = touches.delete(e.pointerId);
+    if (pinch && touches.size < 2) {
+      pinch = null;
+      if (touches.size) { const [[id, pos]] = [...touches.entries()]; drag = { id, sx: pos.x, sy: pos.y, vx: bg.view.x, vy: bg.view.y }; }
+      else { drag = null; canvas.classList.remove('panning'); }
+      return;
+    }
+    if (!wasDown || !drag || e.pointerId !== drag.id) return;
+    drag = null;
+    canvas.classList.remove('panning');
+  };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  // ---- 選檔／拖放／貼上 ----
+  const fileInput = $('fileInput');
+  const fail = err => listeners.forEach(() => {}) || Editor.onError(err);
+  const take = file => loadFile(file).catch(fail);
+  canvas.addEventListener('click', () => { if (!bg.image) fileInput.click(); });
+  $('ph').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => { const f = fileInput.files[0]; fileInput.value = ''; if (f) take(f); });
+  wrap.addEventListener('dragover', e => { e.preventDefault(); wrap.classList.add('drag'); });
+  wrap.addEventListener('dragleave', () => wrap.classList.remove('drag'));
+  wrap.addEventListener('drop', e => {
+    e.preventDefault();
+    wrap.classList.remove('drag');
+    const f = e.dataTransfer.files[0];
+    if (f) take(f);
+  });
+  document.addEventListener('paste', e => {
+    if (!Editor.active()) return;
+    const f = [...(e.clipboardData ? e.clipboardData.files : [])].find(x => /^image\//.test(x.type));
+    if (!f) return;
+    e.preventDefault();
+    take(f);
+  });
+
+  window.Editor = {
+    setTemplate, setGuideLines, showGuides, exportBlob, loadFile, loadUrl, clearImage, mountFxBar,
+    hasImage: () => !!bg.image,
+    hasContent: () => !!bg.image || items.length > 0,
+    size: () => [W, H],
+    onChange: fn => listeners.push(fn),
+    reset: () => { clearImage(); bg.view = { zoom: 1, x: 0, y: 0 }; },
+    active: () => true,          // app.js 依目前模式覆寫：只有「作圖框」模式才吃貼上的圖
+    onError: err => console.warn(err)   // app.js 覆寫成顯示提示
+  };
+  render();
+})();

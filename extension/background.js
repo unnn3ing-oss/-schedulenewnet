@@ -38,7 +38,9 @@ async function doFetch(url, method, body) {
   const contentType = r.headers.get('content-type') || '';
   const base = { status: r.status, contentType, redirected: r.redirected, finalUrl: r.url };
   if (/^image\//i.test(contentType)) return { ...base, snippet: '', image: await toDataUrl(await r.blob()) };
-  return { ...base, snippet: (await r.text()).slice(0, SNIPPET) };
+  const text = await r.text();
+  // snippet 給驗證頁顯示；text 給正式介面解析 JSON（上限 200 KB）
+  return { ...base, snippet: text.slice(0, SNIPPET), text: text.slice(0, 200000) };
 }
 
 async function viaTab(url, method, body) {
@@ -65,6 +67,28 @@ async function viaTab(url, method, body) {
   return { ...res.result, tabOpened: opened };
 }
 
+// 抓文章主圖：只允許 tvbs.com.tw 的 https 圖片（與上面的 ALLOWED 後端白名單無關、互不影響），不帶 cookie
+const IMG_MAX_BYTES = 10 * 1024 * 1024;
+function imageHostOk(u) {
+  try {
+    const x = new URL(u);
+    return x.protocol === 'https:' && (x.hostname === 'tvbs.com.tw' || x.hostname.endsWith('.tvbs.com.tw'));
+  } catch (e) { return false; }
+}
+async function fetchImage(url) {
+  if (!imageHostOk(url)) return { ok: false, error: 'host_not_allowed' };
+  const r = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+  if (!imageHostOk(r.url)) return { ok: false, error: 'host_not_allowed' };
+  if (!r.ok) return { ok: false, error: 'http_' + r.status };
+  const type = r.headers.get('content-type') || '';
+  if (!/^image\//i.test(type)) return { ok: false, error: 'not_image' };
+  const len = Number(r.headers.get('content-length') || 0);
+  if (len > IMG_MAX_BYTES) return { ok: false, error: 'too_big' };
+  const blob = await r.blob();
+  if (blob.size > IMG_MAX_BYTES) return { ok: false, error: 'too_big' };
+  return { ok: true, data: { image: await toDataUrl(blob), contentType: type, bytes: blob.size } };
+}
+
 async function cookieInfo() {
   // 只回報名稱與到期時間，不回傳值。
   const list = await chrome.cookies.getAll({ url: HOST + '/' });
@@ -75,6 +99,9 @@ async function handle(msg) {
   const { op, payload } = msg || {};
   if (op === 'ping') return { ok: true, version: chrome.runtime.getManifest().version };
   if (op === 'cookies') return { ok: true, data: await cookieInfo() };
+  if (op === 'fetchImage') {
+    try { return await fetchImage(String((payload || {}).url || '')); } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+  }
   if (op !== 'call') return { ok: false, error: 'unknown_op' };
   const { mode, path, method = 'GET', body } = payload || {};
   if (!allowed(path)) return { ok: false, error: 'path_not_allowed' };
