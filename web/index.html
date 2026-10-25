@@ -1,4 +1,100 @@
 <!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>網新快速排程</title><link rel="stylesheet" href="verify.css"></head>
-<body><main class="wrap"><section class="card"><h1>網新快速排程</h1><p class="muted">正式介面開發中。目前只有驗證頁。</p>
-<div class="row" style="justify-content:flex-start"><a class="btn primary" href="verify.html">連線驗證</a><a class="btn primary" href="render-test.html">自製圖測試</a></div></section></main></body></html>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https:; connect-src 'self'; style-src 'self'; script-src 'self'">
+<title>網新快速排程</title>
+<link rel="stylesheet" href="verify.css"><link rel="stylesheet" href="segmented.css"><link rel="stylesheet" href="app.css">
+</head><body>
+<header class="topbar">
+  <div class="brand">📮 網新<b>快速排程</b></div>
+  <div class="spacer"></div>
+  <span class="pill" id="extPill" role="status"><i class="dot"></i><span id="extText">偵測外掛中…</span><a id="extHelp" href="https://github.com/unnn3ing-oss/-schedulenewnet#連線驗證目前階段" target="_blank" rel="noopener" hidden>安裝說明</a></span>
+  <button class="btn primary" id="newBtn" type="button">＋ 新增發文</button>
+</header>
+<main class="wrap">
+  <section class="card records">
+    <h2>送出紀錄 <small class="muted">本機紀錄</small></h2>
+    <div class="empty"><div class="empty-ic" aria-hidden="true">📭</div><p><b>還沒有送出紀錄</b></p><p class="muted">按右上角「＋ 新增發文」開始。送出後的紀錄會顯示在這裡（之後的版本串接）。</p>
+      <p class="muted links"><a href="verify.html">連線驗證</a>・<a href="render-test.html">自製圖測試</a></p></div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <header class="m-head">
+      <h2 id="mTitle">新增發文</h2>
+      <div class="mode-switch" id="modeSwitch" role="group" aria-label="發文模式">
+        <button type="button" class="active" data-mode="frame">作圖框</button><button type="button" data-mode="text">純文字底圖</button>
+      </div>
+      <button class="x" id="closeBtn" type="button" aria-label="關閉">✕</button>
+    </header>
+    <div class="m-body">
+      <div class="m-left">
+        <div id="framePane">
+          <div class="canvas-wrap" id="canvasWrap" tabindex="0">
+            <canvas id="editorCanvas" width="1080" height="1080"></canvas>
+            <div class="ph" id="ph"><b>點一下選照片</b><span>也可以拖曳照片進來，或按 Ctrl+V 貼上</span></div>
+            <div class="guides" id="guides" aria-hidden="true">
+              <div class="g-title"><span class="g-text" id="gTitleText"></span><em>標題區（後端會疊上漸層與標題）</em></div>
+              <div class="g-logo"><em>LOGO</em></div>
+            </div>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" hidden>
+          <div class="under">
+            <div class="bg-toggle tpl" id="tplSwitch" role="group" aria-label="版型">
+              <button type="button" class="active" data-tpl="newsnet_news">新聞</button><button type="button" data-tpl="newsnet_ent">娛樂</button><button type="button" data-tpl="newsnet_shaokang">少康</button><button type="button" data-tpl="newsnet_jkk">擠看看</button><button type="button" data-tpl="newsnet_intl">國際＋</button>
+            </div>
+          </div>
+          <div class="tools">
+            <label class="chk"><input type="checkbox" id="guideToggle" checked> 顯示標題區</label>
+            <button class="btn sm" id="pickBtn" type="button">選照片</button>
+            <button class="btn sm" id="clearImgBtn" type="button" disabled>移除照片</button>
+          </div>
+          <div class="fx-bar" id="fxBar"></div>
+        </div>
+        <div id="textPane" hidden>
+          <div class="canvas-wrap text"><canvas id="textCanvas" width="1080" height="1080"></canvas></div>
+          <p class="hint">示意，實際以後端產圖為準</p>
+          <div class="swatches" id="swatches" role="radiogroup" aria-label="底色"></div>
+          <label for="cardText">卡面文字</label>
+          <textarea id="cardText" rows="4" placeholder="例如：【快訊】北市宣布明天停班停課"></textarea>
+        </div>
+      </div>
+      <div class="m-right">
+        <label for="url">⚡ 文章網址</label>
+        <div class="urlrow"><input id="url" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/life/3012345" autocomplete="off"><button class="btn" id="fillBtn" type="button">帶入</button></div>
+        <div class="hint" id="urlHint" role="status"></div>
+        <div id="titleBlock">
+          <label>標題 <small class="muted" id="limitNote"></small></label>
+          <div class="lines" id="lines">
+            <div class="line"><input type="text" class="ln" data-i="0" placeholder="第 1 行" autocomplete="off"><span class="cnt" aria-live="off">0/15</span></div>
+            <div class="line"><input type="text" class="ln" data-i="1" placeholder="第 2 行" autocomplete="off"><span class="cnt">0/15</span></div>
+            <div class="line" hidden><input type="text" class="ln" data-i="2" placeholder="第 3 行" autocomplete="off"><span class="cnt">0/15</span></div>
+          </div>
+          <button class="btn sm ghost" id="addLineBtn" type="button">＋ 第 3 行</button>
+        </div>
+        <div class="cap-head"><label for="caption">小編文</label>
+          <span class="cap-btns"><button class="btn sm" type="button" disabled title="下一個 PR 串接">✨ AI 產生</button><button class="btn sm" type="button" disabled title="下一個 PR 串接">🔍 校錯字</button></span></div>
+        <textarea id="caption" rows="7" placeholder="小編文（含 hashtag）"></textarea>
+      </div>
+    </div>
+    <footer class="m-foot">
+      <div class="pages" id="pages"></div>
+      <div class="send"><span class="muted guard">🛡 送出時自動判讀</span><span class="tip" title="下一個 PR 串接"><button class="btn ok" id="sendBtn" type="button" disabled title="下一個 PR 串接">全部送出</button></span></div>
+    </footer>
+    <div class="menu" id="modeMenu" role="menu" hidden>
+      <button type="button" role="menuitem" data-m="now">立即發布</button><button type="button" role="menuitem" data-m="sched">排程發布…</button>
+    </div>
+    <div class="timepop" id="timePop" role="dialog" aria-label="排程時間" hidden>
+      <h3>排程時間</h3>
+      <div class="tp-row"><span class="tp-date" id="tpDate"></span><input id="tpTime" type="text" inputmode="numeric" maxlength="5" autocomplete="off" aria-label="時間（直接打 4 碼，2130＝21:30）"></div>
+      <p class="hint" id="tpHint"></p>
+      <div class="chips"><button type="button" class="btn sm" data-add="30">+30 分</button><button type="button" class="btn sm" data-add="60">+1 小時</button><button type="button" class="btn sm" data-add="1440">明天</button></div>
+    </div>
+    <div class="confirm" id="confirm" role="alertdialog" aria-modal="true" aria-labelledby="cfTitle" hidden>
+      <div class="cf-box"><h3 id="cfTitle">關閉新增發文？</h3><p class="muted">目前填的內容還沒送出，關閉後會清掉。</p>
+        <div class="row"><button class="btn" id="cfStay" type="button">繼續編輯</button><button class="btn primary" id="cfLeave" type="button">放棄並關閉</button></div></div>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="config.js"></script><script src="rules.js"></script><script src="ext.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="app.js"></script>
+</body></html>
