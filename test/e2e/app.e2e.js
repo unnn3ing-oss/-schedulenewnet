@@ -254,6 +254,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await ctx.close();
 
   await prB(`http://localhost:${server.address().port}`);
+  await prC(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -300,11 +301,8 @@ const MOCK_BRIDGE = () => {
   });
 };
 
-async function prB(origin) {
-  console.log('\n  PR B（模擬外掛與圖床）');
-  const browser = await chromium.launch({ args: ['--no-sandbox'] });
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-  await ctx.addInitScript(MOCK_BRIDGE);
+// 模擬圖床 Worker（/login、/upload），回傳計數
+async function mockWorker(ctx, origin) {
   const worker = { logins: 0, uploads: 0, auths: [] };
   await ctx.route(IMG_BASE + '/**', async route => {
     const req = route.request(), u = new URL(req.url());
@@ -325,6 +323,15 @@ async function prB(origin) {
     }
     return send(404, { ok: false, code: 'not_found' });
   });
+  return worker;
+}
+
+async function prB(origin) {
+  console.log('\n  PR B（模擬外掛與圖床）');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  const worker = await mockWorker(ctx, origin);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -561,5 +568,237 @@ async function prB(origin) {
 
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   ok('PR B 沒有 page error / console error');
+  await browser.close();
+}
+
+// ===== PR C：送出紀錄列表、從列表重送、複製到新增發文、刪除 =====
+async function prC(origin) {
+  console.log('\n  PR C（送出紀錄）');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  const worker = await mockWorker(ctx, origin);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  await page.goto(origin + '/index.html');
+  await page.evaluate(() => localStorage.setItem('snn.imghost.v1', JSON.stringify({ session: 'sess-1', exp: Math.floor(Date.now() / 1000) + 43200 })));
+  await page.reload();
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  assert(await page.isVisible('#recEmpty'));
+  assert(!(await page.isVisible('#recTabs')));
+  ok('沒有紀錄：顯示空狀態、不顯示分頁籤');
+
+  const calls = () => page.evaluate(() => window.__calls);
+  const sends = async () => (await calls()).filter(c => c.path === '/publish' || c.path === '/schedule');
+  const tabs = () => page.$$eval('#recTabs button', bs => bs.map(b => b.textContent.replace(/\s+/g, ' ').trim()));
+  const chips = row => row.locator('.st2 > *').allTextContents();
+  const pg = i => page.locator('.pg').nth(i);
+
+  // 送 3 台（新聞立即、少康排程明天 21:30、氣象立即且失敗），紅燈勾「我知道風險」
+  await page.click('#newBtn');
+  await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
+  await page.waitForFunction(() => Editor.hasImage());
+  await page.fill('#url', 'https://news.tvbs.com.tw/life/3012345');
+  await page.fill('#title', '颱風假最新！北北基桃\n明天照常上班上課');
+  await page.fill('#caption', '北北基桃明天照常上班上課！\n#颱風');
+  for (const i of [0, 2, 5]) await pg(i).locator('button').first().click();
+  await pg(2).locator('.pg-mode').click();
+  await page.click('#modeMenu [data-m="sched"]');
+  const tomorrow = await page.evaluate(() => Sched.fmtDateInput(new Date(Date.now() + 864e5)));
+  await page.fill('#tpDate', tomorrow);
+  await page.fill('#tpTime', ''); await page.type('#tpTime', '2130'); await page.keyboard.press('Enter');
+  await page.click('#sendBtn');
+  await page.waitForSelector('#ackChk');
+  await page.check('#ackChk');
+  await page.click('#sendBtn');
+  await page.waitForFunction(() => App.flow.state === 'done');
+  const first = await sends();
+  assert.deepStrictEqual(first.map(c => c.body.page), ['news', 'shaokang', 'weather']);
+  await page.keyboard.press('Escape');
+  await page.click('#cfLeave');
+  assert(!(await page.isVisible('#modal')));
+
+  const row0 = page.locator('.rec').first();
+  const md = await page.evaluate(t => Records.fmtMD(Sched.combine(t, '21:30')), tomorrow);
+  assert.deepStrictEqual(await chips(row0), ['新聞・已發布 ↗', `少康・排程 ${md}`, '氣象・失敗 ↻ 重送']);
+  assert.strictEqual(await row0.locator('a.chip').getAttribute('href'), 'https://www.facebook.com/123_news');
+  assert.strictEqual(await row0.locator('a.chip').getAttribute('target'), '_blank');
+  assert.match(await row0.locator('.rec-t').textContent(), /^颱風假最新！北北基桃 明天照常上班上課$/);
+  assert.strictEqual(await row0.locator('.rec-t .muted').textContent(), '明天照常上班上課', '第一行之外淡色');
+  assert.match(await row0.locator('.rec-m').textContent(), /^今天 \d\d:\d\d 送出・作圖框・藍框/);
+  const thumbSrc = await row0.locator('.rec-th img').getAttribute('src');
+  assert(/^data:image\/jpeg;base64,/.test(thumbSrc) && thumbSrc.length <= 28000, '縮圖 JPEG ≤ 約 20 KB：' + thumbSrc.length);
+  assert.deepStrictEqual(await tabs(), ['全部 1', '已排程 1', '已發布 1', '失敗 1']);
+  const stored = await page.evaluate(() => Records.list()[0]);
+  assert.deepStrictEqual(stored.pages.map(p => [p.code, !!p.body]), [['news', false], ['shaokang', false], ['weather', true]], '只有失敗的台留著 body');
+  assert.deepStrictEqual(stored.pages[2].body, first[2].body, '存的 body 和送出的完全一樣');
+  assert.deepStrictEqual(stored.guard, { checkId: 'chk-1', level: 'red', reasons: ['標題用語較聳動'] });
+  assert.strictEqual(stored.frame, 'news');
+  ok('送 3 台、1 台失敗 → 列表顯示縮圖、標題、模式、版型與各台狀態；分頁籤數量正確');
+
+  // 從列表重送氣象：沿用紀錄裡的紅燈，要再勾「我知道風險」
+  const guards = (await calls()).filter(c => c.path === '/guard/check').length;
+  await row0.locator('[data-rs]').click();
+  await page.waitForSelector('#rsDlg:not([hidden])');
+  assert.match(await page.textContent('#rsGuard'), /沿用上次判讀・守則紅燈：標題用語較聳動/);
+  assert(await page.isVisible('#rsAckRow'));
+  assert(!(await page.isVisible('#rsTime')), '立即發布的台不用選時間');
+  assert(await page.locator('#rsGo').isDisabled(), '紅燈沒勾不能重送');
+  await page.check('#rsAck');
+  assert(!(await page.locator('#rsGo').isDisabled()));
+  await page.click('#rsGo');
+  await page.waitForFunction(() => /氣象・已發布 ↗/.test(document.querySelector('.rec').textContent));
+  const re = (await sends()).slice(first.length);
+  assert.strictEqual(re.length, 1);
+  assert.strictEqual(re[0].path, '/publish');
+  assert.deepStrictEqual(re[0].body, first[2].body, '重送的 body 和原本的完全一樣（含紅燈 ack:true、圖床網址）');
+  assert.strictEqual((await calls()).filter(c => c.path === '/guard/check').length, guards, '沿用燈號，不重判');
+  assert.strictEqual(worker.uploads, 1, '不重傳圖');
+  assert.deepStrictEqual(await tabs(), ['全部 1', '已排程 1', '已發布 1', '失敗']);
+  assert.strictEqual(await page.evaluate(() => Records.list().length), 1, '原地更新同一筆');
+  ok('從列表重送失敗的台：紅燈要再勾、送出內容與原本相同、狀態更新為已發布');
+
+  // 塞入更多紀錄：排程時間已過（推測已發布）、排程失敗且時間已過、22 筆 PR B 舊格式
+  await page.evaluate(() => {
+    const now = Date.now(), all = JSON.parse(localStorage.getItem(Records.KEY));
+    const at = new Date(now + 5 * 60000);   // 原本排程只剩 5 分鐘：重送要選新時間
+    const input = { mode: 'single', frame: 'ent', imageUrl: 'https://snn-images.19jpz-3.workers.dev/i/' + '9'.repeat(32) + '.jpg', lines: ['金鐘61／《飢餓》10週年大禮！', '峮峮驚喜合體遭催回歸'],
+      caption: '金鐘 61 #金鐘61', url: 'https://news.tvbs.com.tw/entertainment/3012399', guard: { checkId: 'g-ent', level: 'green' } };
+    const rq = Payload.buildRequests(input, [{ code: 'ent', at }])[0];
+    all.push({ id: 'seed-fail', at: new Date(now - 30 * 60000).toISOString(), imgExp: new Date(now + 3 * 864e5 - 30 * 60000).toISOString(), mode: 'single', frame: 'ent',
+      title: input.lines.join(' '), lines: input.lines, caption: input.caption, url: input.url, guard: { checkId: 'g-ent', level: 'green', reasons: [] },
+      pages: [{ code: 'ent', label: '娛樂', kind: 'sched', schedule: rq.body.schedule, status: 'fail', error: 'HTTP 500：排程時間太近', path: rq.path, body: rq.body }] });
+    all.push({ id: 'seed-due', at: new Date(now - 3 * 3600e3).toISOString(), mode: 'text_card', title: '【快訊】北市宣布\n明天停班停課', lines: ['【快訊】北市宣布', '明天停班停課'],
+      caption: '停班停課 #颱風', url: '', cardStyle: NEWSNET_CONFIG.textCardStyles[2].key,
+      pages: [{ code: 'news', label: '新聞', kind: 'sched', schedule: Sched.toScheduleString(new Date(now - 3600e3)), status: 'ok' }] });
+    for (let i = 0; i < 22; i++) all.push({ id: 'old' + i, at: new Date(now - (2 + i) * 864e5).toISOString(), mode: 'single', title: `舊紀錄 ${i + 1}`, articleId: '', url: '',
+      pages: [{ code: 'news', label: '新聞', kind: 'now', schedule: '', status: 'ok', link: 'https://www.facebook.com/old' + i, error: '' }] });
+    localStorage.setItem(Records.KEY, JSON.stringify(all));
+    RecList.render();
+  });
+  assert.deepStrictEqual(await tabs(), ['全部 25', '已排程 1', '已發布 24', '失敗 1']);
+  assert.strictEqual(await page.locator('.rec').count(), 20, '每頁 20 筆');
+  assert.strictEqual(await page.textContent('#recCnt'), '共 25 則');
+  const dueRow = page.locator('.rec', { hasText: '【快訊】北市宣布' });
+  assert.deepStrictEqual(await chips(dueRow), ['新聞・應已發布（推測）']);
+  assert.match(await dueRow.locator('.chip.due').getAttribute('title'), /無法確認/);
+  assert.match(await dueRow.locator('.rec-m').textContent(), /純文字底圖/);
+  assert.deepStrictEqual(await page.locator('.rec').nth(0).locator('.rec-t b').textContent(), '颱風假最新！北北基桃', '新的在前');
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({ path: path.join(SHOTS, 'prC-list.png') });
+  await page.click('#recPager [aria-label="第 2 頁"]');
+  assert.strictEqual(await page.locator('.rec').count(), 5);
+  assert.strictEqual(await page.getAttribute('#recPager [aria-current=page]', 'data-page'), '2');
+  assert(await page.locator('#recPager [aria-label="下一頁"]').isDisabled());
+  await page.click('#recPager [aria-label="上一頁"]');
+  assert.strictEqual(await page.locator('.rec').count(), 20);
+  ok('多筆紀錄：新的在前、每頁 20 筆、頁碼列；排程時間已過顯示「應已發布（推測）」；已截圖 prC-list.png');
+
+  // 失敗分頁籤
+  await page.click('#recTabs [data-tab="fail"]');
+  assert.strictEqual(await page.locator('.rec').count(), 1);
+  assert(!(await page.isVisible('#recPager')));
+  const failRow = page.locator('.rec').first();
+  assert.deepStrictEqual(await chips(failRow), ['娛樂・失敗 ↻ 重送']);
+  assert.match(await failRow.locator('.chip.e').getAttribute('title'), /排程時間太近/);
+  await page.waitForTimeout(500);   // 分頁籤的滑塊動畫
+  await page.screenshot({ path: path.join(SHOTS, 'prC-failed.png') });
+  ok('失敗分頁籤只列有失敗的紀錄；已截圖 prC-failed.png');
+
+  // 排程時間已過的失敗台：要先選新時間才能重送
+  const before = (await sends()).length;
+  await failRow.locator('[data-rs]').click();
+  await page.waitForSelector('#rsDlg:not([hidden])');
+  assert(await page.isVisible('#rsTime'));
+  assert.match(await page.textContent('#rsTimeNote'), /已過或離現在不到 20 分鐘，請選新的時間/);
+  assert.strictEqual(await page.inputValue('#rsClock'), '', '不預填，一定要自己選');
+  assert(await page.locator('#rsGo').isDisabled());
+  assert(!(await page.isVisible('#rsAckRow')), '綠燈不用勾');
+  assert.match(await page.textContent('#rsGuard'), /沿用上次判讀・守則綠燈/);
+  await page.fill('#rsDate', await page.evaluate(() => Sched.fmtDateInput(new Date())));
+  await page.type('#rsClock', '0000');
+  assert.match(await page.textContent('#rsHint'), /至少要比現在晚 20 分鐘/);
+  assert(await page.locator('#rsGo').isDisabled());
+  await page.fill('#rsDate', tomorrow);
+  await page.fill('#rsClock', ''); await page.type('#rsClock', '2130');
+  assert.strictEqual(await page.inputValue('#rsClock'), '21:30');
+  await page.keyboard.press('ArrowUp');
+  assert.strictEqual(await page.inputValue('#rsClock'), '21:40');
+  await page.keyboard.press('ArrowDown');
+  assert(!(await page.locator('#rsGo').isDisabled()));
+  await page.screenshot({ path: path.join(SHOTS, 'prC-resend-time.png') });
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => !document.querySelector('[data-rs="seed-fail|ent"]') && !document.querySelector('.chip.busy'));
+  const rs2 = (await sends()).slice(before);
+  assert.deepStrictEqual(rs2.map(c => [c.path, c.body.page, c.body.schedule, c.body.template]), [['/schedule', 'ent', tomorrow + 'T21:30', 'newsnet_ent']]);
+  assert.deepStrictEqual(rs2[0].body.guard, { check_id: 'g-ent', level: 'green', ack: false });
+  assert.deepStrictEqual(await tabs(), ['全部 25', '已排程 2', '已發布 24', '失敗']);
+  assert(await page.isVisible('#recNone'), '失敗分頁籤已沒有紀錄');
+  await page.click('#recTabs [data-tab="sched"]');
+  assert.deepStrictEqual(await chips(page.locator('.rec', { hasText: '金鐘61' })), [`娛樂・排程 ${md}`]);
+  ok('排程時間已過的失敗台：要選新時間（同時間視窗規則）才能重送；送 /schedule 帶新時間、狀態更新');
+
+  // 複製到新增發文：帶標題、小編文、網址、版型、模式；不帶圖
+  await page.click('#recTabs [data-tab="all"]');
+  await page.locator('.rec', { hasText: '金鐘61' }).locator('[data-copy]').click();
+  assert(await page.isVisible('#modal'));
+  assert.strictEqual(await page.inputValue('#url'), 'https://news.tvbs.com.tw/entertainment/3012399');
+  assert.strictEqual(await page.inputValue('#title'), '金鐘61／《飢餓》10週年大禮！\n峮峮驚喜合體遭催回歸');
+  assert.strictEqual(await page.inputValue('#caption'), '金鐘 61 #金鐘61');
+  assert.strictEqual(await page.textContent('#frameSwitch .active'), '娛樂（粉框）');
+  assert.strictEqual(await page.textContent('#modeSwitch .active'), '作圖框');
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), false, '圖不帶');
+  assert.match(await page.textContent('#urlHint'), /照片請重新選/);
+  await page.keyboard.press('Escape');
+  await page.click('#cfLeave');
+  await page.locator('.rec', { hasText: '【快訊】北市宣布' }).locator('[data-copy]').click();
+  assert.strictEqual(await page.textContent('#modeSwitch .active'), '純文字底圖');
+  assert.strictEqual(await page.inputValue('#title'), '【快訊】北市宣布\n明天停班停課');
+  assert.strictEqual(await page.evaluate(() => App.state.cardStyle), await page.evaluate(() => NEWSNET_CONFIG.textCardStyles[2].key));
+  await page.keyboard.press('Escape');
+  await page.click('#cfLeave');
+  ok('複製到新增發文：帶入標題、小編文、網址、版型與模式，不帶圖');
+
+  // 刪除紀錄：先確認；取消不刪
+  const dueDel = page.locator('.rec', { hasText: '【快訊】北市宣布' }).locator('[data-del]');
+  await dueDel.click();
+  assert(await page.isVisible('#rcDlg'));
+  await page.keyboard.press('Escape');
+  assert(!(await page.isVisible('#rcDlg')));
+  assert.strictEqual(await page.locator('.rec', { hasText: '【快訊】北市宣布' }).count(), 1, '取消不刪');
+  await dueDel.click();
+  await page.click('#rcGo');
+  assert.strictEqual(await page.locator('.rec', { hasText: '【快訊】北市宣布' }).count(), 0);
+  assert.deepStrictEqual(await tabs(), ['全部 24', '已排程 2', '已發布 23', '失敗']);
+  assert.strictEqual(await page.evaluate(() => Records.list().length), 24);
+  ok('刪除紀錄：確認後只刪本機這一筆');
+
+  // 手機 390：列表、彈窗底列
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(() => scrollTo(0, 0));
+  const mg = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth,
+    out: [...document.querySelectorAll('.rec, .rec .chip, .rec-tabs, .pager')].filter(e => { const r = e.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth + 0.5; }).length }));
+  assert.deepStrictEqual(mg, { sw: 390, out: 0 }, '列表沒有橫向捲動、元素都在畫面內');
+  await page.screenshot({ path: path.join(SHOTS, 'prC-mobile.png') });
+  await page.click('#newBtn');
+  for (const i of [0, 2, 5]) await pg(i).locator('button').first().click();
+  const foot = await page.evaluate(() => {
+    const iw = innerWidth, ih = innerHeight;
+    const r = e => e.getBoundingClientRect();
+    const btn = r(document.getElementById('sendBtn'));
+    const pgs = [...document.querySelectorAll('.pg')].map(r);
+    return { sw: document.documentElement.scrollWidth, btn: [btn.left >= 0, btn.right <= iw, btn.bottom <= ih, btn.height >= 40],
+      pages: pgs.every(b => b.left >= 0 && b.right <= iw && b.bottom <= ih) };
+  });
+  assert.deepStrictEqual(foot, { sw: 390, btn: [true, true, true, true], pages: true }, '底列粉專按鈕與全部送出在畫面內');
+  await page.screenshot({ path: path.join(SHOTS, 'prC-mobile-modal.png') });
+  await page.keyboard.press('Escape');
+  await page.click('#cfLeave').catch(() => {});
+  ok('手機 390：列表與彈窗底列不橫向捲動、按鈕在畫面內；已截圖 prC-mobile.png');
+
+  assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
+  ok('PR C 沒有 page error / console error');
   await browser.close();
 }
