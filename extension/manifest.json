@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "網新快速排程 連線驗證",
+  "version": "0.1.0",
+  "description": "驗證 GitHub Pages 介面能否透過外掛帶著網新後台的登入 cookie 呼叫 API（只呼叫唯讀／判讀端點，不會發文）。",
+  "permissions": ["cookies", "scripting", "declarativeNetRequest"],
+  "host_permissions": ["https://digi-social-post.tvbs.ai/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["https://unnn3ing-oss.github.io/-schedulenewnet/*", "http://localhost/*", "http://127.0.0.1/*"],
+    "js": ["bridge.js"],
+    "run_at": "document_start"
+  }]
+}

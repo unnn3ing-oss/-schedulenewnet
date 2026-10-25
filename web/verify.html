@@ -1,0 +1,29 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+<title>連線驗證</title><link rel="stylesheet" href="verify.css"></head>
+<body><main class="wrap">
+<section class="card">
+  <h1>連線驗證</h1>
+  <p class="muted">確認這個網頁能不能透過外掛，帶著網新後台的登入狀態呼叫 API。只會呼叫 <code>page_meta</code>（讀取）與 <code>guard/check</code>（判讀），<b>不會排程或發文</b>。</p>
+  <ol class="muted">
+    <li>先在同一個 Chrome 登入 <a href="https://digi-social-post.tvbs.ai/ip/newsnet/" target="_blank" rel="noopener">網新發文台</a>。</li>
+    <li>到 <code>chrome://extensions</code> 開「開發人員模式」→「載入未封裝項目」→ 選專案的 <code>extension</code> 資料夾，再重新整理本頁。</li>
+    <li>按「開始驗證」。</li>
+  </ol>
+  <div class="status" id="ext">外掛：偵測中…</div>
+</section>
+<section class="card">
+  <label for="article">文章網址（給 page_meta 用）</label>
+  <input id="article" type="url" placeholder="https://news.tvbs.com.tw/politics/1234567">
+  <label for="prefix">API 路徑前綴（端點在根目錄就留空；如果在 /ip/newsnet 底下就填 /ip/newsnet）</label>
+  <input id="prefix" type="text" placeholder="留空">
+  <div class="row"><button class="btn" id="cookieBtn" type="button">檢查登入 cookie</button><button class="btn primary" id="runBtn" type="button">開始驗證</button></div>
+</section>
+<section class="card" id="cookieCard" hidden><h2>登入 cookie（只顯示名稱與到期時間）</h2><div id="cookies"></div></section>
+<section class="card" id="resultCard" hidden>
+  <h2>結果</h2>
+  <div class="verdict" id="verdict"></div>
+  <div class="tablewrap"><table><thead><tr><th>送法</th><th>端點</th><th>狀態</th><th>判斷</th><th>回應摘要</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <button class="btn" id="copyBtn" type="button">複製完整結果（回報用）</button>
+</section>
+</main><script src="verify.js"></script></body></html>
