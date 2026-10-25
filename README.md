@@ -34,3 +34,49 @@ GitHub Pages 介面 ──postMessage──▶ 外掛 bridge.js ──▶ 外掛
 ## 部署
 
 `main` 有推送時，`.github/workflows/pages.yml` 會把 `web/` 發布到 GitHub Pages（不跑測試）。第一次需要到 repo 的 Settings → Pages，把 Source 設成「GitHub Actions」。
+
+## 圖床（Cloudflare Worker＋R2）部署
+
+網頁在瀏覽器內產生 1080×1080（或 1200×675）的 JPEG／PNG，上傳到這個圖床取得公開、無法猜到的網址，再把網址當作 `image_url` 交給後端抓取。圖片 3 天後自動失效。程式在 `worker/index.js`（單一檔案，無相依套件），測試用 `npm test`（只需要 Node 22，不必安裝任何套件）。
+
+端點：`POST /login`（密碼換 12 小時憑證）、`POST /upload`（`Authorization: Bearer 憑證`，內容為圖片原始位元組，檢查檔頭與大小）、`GET /i/<key>`（公開讀取，過期即刪除並回 404）。
+
+### 部署步驟（約 10 分鐘，一次性）
+
+下列儀表板選單名稱都是依記憶寫的，**未查證**；實際畫面若不同，請以 Cloudflare 當時的介面為準。
+
+1. **R2 與生命週期規則**
+   - Cloudflare 儀表板 → R2 → 啟用。啟用時 Cloudflare 可能要求綁定付款方式（**未查證**）；免費額度為 10 GB（**未查證**）。
+   - 建立 bucket，名稱 `snn-images`。
+   - 進入 bucket → Settings → Object lifecycle rules → 新增規則：物件上傳後 3 天刪除（Delete objects 3 days after upload）（**未查證**）。這是主要的清理機制；Worker 讀取時也會自行刪除超過 `MAX_AGE_DAYS` 的物件，當作備援。
+2. **建立 Worker**：Workers & Pages → Create → Worker，名稱 `snn-images` → Deploy → Edit code，把 `worker/index.js` 整份貼上 → Deploy。
+3. **綁定 R2**：Worker → Settings → Bindings → Add → R2 bucket，變數名稱 `IMAGES`，選 `snn-images` → Deploy。
+4. **設定變數與機密**：Worker → Settings → Variables and Secrets：
+
+   | 名稱 | 類型 | 內容 |
+   |---|---|---|
+   | `APP_PASSWORD` | Secret | 網頁登入密碼（建議 12 字元以上，自己決定） |
+   | `SESSION_SECRET` | Secret | 隨機 32 字元以上（產生方式見下） |
+   | `ALLOWED_ORIGIN` | Text | `https://unnn3ing-oss.github.io` |
+   | `MAX_AGE_DAYS` | Text（選用） | `3`（預設就是 3） |
+   | `MAX_BYTES` | Text（選用） | 預設 8388608（8 MB） |
+
+   產生 `SESSION_SECRET`：在任一網頁的 Console 執行 `crypto.randomUUID()+crypto.randomUUID()`，複製結果（不含引號）。
+
+   選用的 `LOGIN_LIMITER`（Rate Limiting 綁定）有綁定才會啟用，登入以 IP、上傳以憑證為 key；免費方案是否可用、能否在儀表板設定都**未查證**。
+5. **自我檢查**：開啟 `https://snn-images.19jpz-3.workers.dev/i/00000000000000000000000000000000.jpg`，應看到 404 的 JSON（`{"ok":false,"code":"not_found",…}`），代表 Worker 已部署。
+
+   進一步可用 `curl` 試登入（把密碼換成自己的）：
+
+   ```bash
+   curl -s -X POST https://snn-images.19jpz-3.workers.dev/login -H 'Content-Type: text/plain' -d '{"password":"你的登入密碼"}'
+   # 預期：{"ok":true,"data":{"session":"…","exp":…,"ttl":43200}}
+   ```
+
+   回 `misconfigured`（HTTP 500）代表 Secret、綁定或名稱有漏設或打錯。
+
+### 注意
+
+- 圖片 3 天後失效，所以網頁只允許排程在 3 天內的貼文；排程時間超過 3 天的，後端抓圖時圖片已不存在。
+- 已發布的 FB 貼文不受影響：FB 抓圖後有自己的副本，圖床刪除圖片不會讓已發布的貼文失去圖片（這點依 Facebook 一般行為判斷，**未查證**）。
+- 換登入密碼：只改 `APP_PASSWORD`。要讓所有人立刻登出：更換 `SESSION_SECRET`。`worker/index.js` 改版後，重新貼上並 Deploy。
