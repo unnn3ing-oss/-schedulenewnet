@@ -4,6 +4,8 @@
   const $ = id => document.getElementById(id);
   const pending = new Map();
   let seq = 0, extReady = false, testDataUrl = '', lastReport = null;
+  // 放在 GitHub Pages 的測試圖：看後端肯不肯抓外部網站的圖（自建暫存圖床的前提）
+  const PUBLIC_IMG = new URL('test-image.jpg', location.href).href;
 
   window.addEventListener('message', e => {
     if (e.source !== window || e.origin !== ORIGIN) return;
@@ -87,7 +89,9 @@
     const cases = [
       { name: 'A 原始請求（對照組）', body: base },
       { name: 'B 自製圖＋原本的取景框', body: { ...base, image_url: testDataUrl } },
-      { name: 'C 自製圖＋取景框清空', body: { ...base, image_url: testDataUrl, crop: null } }
+      { name: 'C 自製圖＋取景框清空', body: { ...base, image_url: testDataUrl, crop: null } },
+      { name: 'D 公開網址圖＋原本的取景框', body: { ...base, image_url: PUBLIC_IMG } },
+      { name: 'E 公開網址圖＋取景框清空', body: { ...base, image_url: PUBLIC_IMG, crop: null } }
     ];
     $('runBtn').disabled = true;
     $('resultWrap').hidden = false;
@@ -108,11 +112,12 @@
       $('results').appendChild(box);
     }
     lastReport = { at: new Date().toISOString(), prefix, testImageKB: Math.round(testDataUrl.length * 0.75 / 1024), report };
-    const [a, b, cc] = report;
+    const [a, b, cc, d, e] = report;
     let v, ok = false;
     if (!a.image) v = '對照組 A 就沒有回圖：請確認貼上的是 render 請求、API 前綴正確，再試一次。';
-    else if (b.image || cc.image) { v = `B 或 C 有回圖 → 請看圖：如果圖裡是「DATA URL TEST」測試圖（或你選的圖）加上網新的框和標題，代表後端收 data URL，折衷做法可行。`; ok = true; }
-    else v = 'A 有回圖、B 和 C 都沒有 → 後端不收 data URL，請按「複製文字結果」貼給我。';
+    else if (b.image || cc.image) { v = 'B 或 C 有回圖 → 請看圖：如果是測試圖加上網新的框和標題，代表後端收 data URL。'; ok = true; }
+    else if (d.image || e.image) { v = 'D 或 E 有回圖 → 請看圖：如果是綠色「PUBLIC URL TEST」測試圖加上網新的框和標題，代表後端會抓外部網址，自建暫存圖床可行。'; ok = true; }
+    else v = 'A 有回圖、B～E 都沒有 → 後端不收 data URL，也不抓外部網址，請按「複製文字結果」貼給我。';
     $('verdict').className = 'verdict' + (ok ? ' ok' : '');
     $('verdict').textContent = v;
     $('runBtn').disabled = false;
