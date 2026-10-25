@@ -1,4 +1,5 @@
-// 正式介面。PR A：外殼＋新增發文彈窗＋作圖框＋快速帶入；PR B：圖床上傳、後端預覽、AI 小編文、守則判讀、兩段式送出、本機紀錄。
+// 正式介面。PR A：外殼＋新增發文彈窗＋作圖框＋快速帶入；PR B：圖床上傳、後端預覽、AI 小編文、守則判讀、兩段式送出、本機紀錄；
+// PR C：送出紀錄列表（web/reclist.js）、從紀錄複製到新增發文。
 (function () {
   const $ = id => document.getElementById(id);
   const C = window.NEWSNET_CONFIG;
@@ -68,24 +69,22 @@
   // ---- 版型 / 模式 ----
   function setActive(container, btn) { [...container.children].forEach(b => { if (b.tagName === 'BUTTON') b.classList.toggle('active', b === btn); }); }
   // 新聞（藍框）／娛樂（粉框）：只決定預覽的疊圖與送給後端的 template（所有勾選的粉專都用同一個）
-  $('frameSwitch').addEventListener('click', e => {
-    const b = e.target.closest('button[data-frame]');
-    if (!b) return;
-    state.frame = b.dataset.frame;
-    setActive($('frameSwitch'), b);
+  function setFrame(frame) {
+    state.frame = frame === 'ent' ? 'ent' : 'news';
+    setActive($('frameSwitch'), $('frameSwitch').querySelector(`[data-frame="${state.frame}"]`));
     Editor.setFrame(state.frame);
     updateCounters(); flowEdit();
-  });
-  $('modeSwitch').addEventListener('click', e => {
-    const b = e.target.closest('button[data-mode]');
-    if (!b) return;
-    state.mode = b.dataset.mode;
-    setActive($('modeSwitch'), b);
+  }
+  function setMode(mode) {
+    state.mode = mode === 'text' ? 'text' : 'frame';
+    setActive($('modeSwitch'), $('modeSwitch').querySelector(`[data-mode="${state.mode}"]`));
     const text = state.mode === 'text';
     $('framePane').hidden = text; $('textPane').hidden = !text;   // 右欄（網址、標題、小編文）兩種模式共用，內容不清
     if (text) drawTextCard();
     flowEdit();
-  });
+  }
+  $('frameSwitch').addEventListener('click', e => { const b = e.target.closest('button[data-frame]'); if (b) setFrame(b.dataset.frame); });
+  $('modeSwitch').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) setMode(b.dataset.mode); });
   $('pickBtn').addEventListener('click', () => $('fileInput').click());
   $('clearImgBtn').addEventListener('click', () => Editor.clearImage());
   Editor.onChange(() => { $('clearImgBtn').disabled = !Editor.hasImage(); });
@@ -118,9 +117,15 @@
     b.type = 'button'; b.className = 'sw'; b.dataset.key = s.key; b.title = s.label; b.setAttribute('role', 'radio'); b.setAttribute('aria-label', s.label);
     b.style.background = s.bg;
     b.setAttribute('aria-checked', String(s.key === state.cardStyle));
-    b.addEventListener('click', () => { state.cardStyle = s.key; sw.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-checked', String(x === b))); drawTextCard(); flowEdit(); });
+    b.addEventListener('click', () => setCardStyle(s.key));
     sw.appendChild(b);
   });
+  function setCardStyle(key) {
+    if (!C.textCardStyles.some(s => s.key === key)) return;
+    state.cardStyle = key;
+    sw.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-checked', String(x.dataset.key === key)));
+    drawTextCard(); flowEdit();
+  }
   function drawTextCard() {
     const cv = $('textCanvas'), c = cv.getContext('2d'), st = C.textCardStyles.find(s => s.key === state.cardStyle);
     c.fillStyle = st.bg; c.fillRect(0, 0, cv.width, cv.height);
@@ -328,7 +333,7 @@
     const ver = editorVer;
     const blob = await Editor.exportBlob();
     const d = await ImgHost.ensureUpload(blob);
-    upCache = { ver, url: d.url };
+    upCache = { ver, url: d.url, exp: d.expiresAt || '' };
     return d.url;
   }
   function renderImgPill() {
@@ -508,6 +513,17 @@
     sendMsg(stale ? '判讀期間內容有改，燈號作廢，請再按一次' : '請看泡泡確認各台與時間', stale ? 'bad' : '');
   }
 
+  // 紀錄縮圖：預覽畫布（含框與標題）縮成 144×144 的 JPEG dataURL，約 20 KB 以內；做不出來就不存
+  function makeThumb() {
+    try {
+      const src = state.mode === 'text' ? $('textCanvas') : $('editorCanvas');
+      const c = document.createElement('canvas'); c.width = c.height = 144;
+      c.getContext('2d').drawImage(src, 0, 0, 144, 144);
+      for (const q of [0.75, 0.6, 0.45, 0.3]) { const u = c.toDataURL('image/jpeg', q); if (Records.okThumb(u)) return u; }
+    } catch (e) { /* 畫布被污染等：不存縮圖 */ }
+    return '';
+  }
+
   // 第 2 步：上傳圖（作圖框）→ 每台各送一次 /publish 或 /schedule
   async function send(codes, direct) {
     const input = currentInput();
@@ -528,17 +544,21 @@
     }
     input.guard = { checkId: flow.guard.checkId, level: flow.guard.level, ack: flow.ack };
     const reqs = Payload.buildRequests(input, codes.map(targetOf));
-    if (!flow.recordId) {
-      flow.recordId = Records.add({ mode: input.mode, title: input.mode === 'single' ? getLines().filter(Boolean).join(' ') : input.cardText.trim().slice(0, 60),
-        articleId: Rules.articleId(input.url), url: input.url, pages: [] });
-    }
+    // 本機紀錄：同一篇（直到清空頁面）只有一筆；每次送出都把內容、縮圖、燈號更新成這次送出的版本
+    const recInfo = { mode: input.mode, frame: state.frame, title: input.mode === 'single' ? getLines().filter(Boolean).join(' ') : input.cardText.trim().slice(0, 60),
+      lines: getLines(), caption: input.caption, cardStyle: state.cardStyle, articleId: Rules.articleId(input.url), url: input.url,
+      imgExp: input.mode === 'single' && upCache ? upCache.exp : '', thumb: makeThumb(),
+      guard: { checkId: flow.guard.checkId, level: flow.guard.level, reasons: flow.guard.reasons || [] } };
+    if (!flow.recordId) flow.recordId = Records.add(Object.assign(recInfo, { pages: [] }));
+    else Records.update(flow.recordId, recInfo);
+    if (Records.error() === 'quota') toast('瀏覽器儲存空間不足，已刪掉舊紀錄或縮圖');
     for (const rq of reqs) {
       const st = state.pages[rq.code];
       sendMsg(`送出${labelOf(rq.code)}…`);
       const out = SendFlow.sendOutcome(SendFlow.apiResult(await Ext.call(rq.path, 'POST', rq.body)));
       st.status = out.ok ? 'ok' : 'fail'; st.result = out;
       Records.updatePage(flow.recordId, rq.code, { label: labelOf(rq.code), kind: rq.body.schedule ? 'sched' : 'now', schedule: rq.body.schedule,
-        status: st.status, link: out.link || '', postId: out.postId || '', error: out.error || '', sentAt: new Date().toISOString() });
+        status: st.status, link: out.link || '', postId: out.postId || '', error: out.error || '', sentAt: new Date().toISOString(), path: rq.path, body: rq.body });
       renderPage(rq.code);
     }
     setFlow({ type: 'sent' });
@@ -602,6 +622,18 @@
     askConfirm('清空頁面？', '還有沒送出或失敗的粉專，清空後要重新填。', '清空', () => { $('confirm').hidden = true; resetAll(); $('url').focus(); });
   });
   $('newBtn').addEventListener('click', openModal);
+  // 送出紀錄「複製到新增發文」：帶入標題、小編文、網址、版型、模式（圖不帶，要重新選）
+  function openWith(inp) {
+    if (!overlay.hidden) return;
+    resetAll();
+    setMode(inp.mode); setFrame(inp.frame);
+    if (inp.cardStyle) setCardStyle(inp.cardStyle);
+    $('url').value = inp.url || ''; state.articleId = Rules.articleId(inp.url);
+    titleEl.value = (inp.lines || []).join('\n'); $('caption').value = inp.caption || '';
+    openModal();
+    hint(inp.mode === 'frame' ? '已從紀錄帶入文字，照片請重新選' : '已從紀錄帶入文字', 'ok');
+  }
+  RecList.mount({ toast, onCopy: openWith });
   $('closeBtn').addEventListener('click', requestClose);
   $('cfStay').addEventListener('click', () => { $('confirm').hidden = true; $('closeBtn').focus(); });
   $('cfLeave').addEventListener('click', () => (confirmFn || closeModal)());
@@ -633,7 +665,7 @@
 
   Editor.setFrame(state.frame);
   updateCounters(); drawTextCard(); renderFlow();
-  window.App = { state, flow, getLines, setLines, currentInput };   // 後續 PR 與測試用
+  window.App = { state, flow, getLines, setLines, currentInput, openWith };   // 後續 PR 與測試用
   refreshExt();
   setTimeout(() => { if ($('extPill').className === 'pill') refreshExt(); }, 2500);
 })();

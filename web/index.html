@@ -11,10 +11,19 @@
   <button class="btn primary" id="newBtn" type="button">＋ 新增發文</button>
 </header>
 <main class="wrap">
-  <section class="card records">
-    <h2>送出紀錄 <small class="muted">本機紀錄</small></h2>
-    <div class="empty"><div class="empty-ic" aria-hidden="true">📭</div><p><b>還沒有送出紀錄</b></p><p class="muted">按右上角「＋ 新增發文」開始。送出後的紀錄會顯示在這裡（之後的版本串接）。</p>
+  <section class="card records" aria-labelledby="recTitle">
+    <div class="rec-head">
+      <h2 id="recTitle">送出紀錄</h2><small class="muted" title="後端沒有列表功能，這裡只列出在這台瀏覽器送出的貼文">紀錄只存在這台瀏覽器</small>
+      <div class="spacer"></div>
+      <div class="mode-switch rec-tabs" id="recTabs" role="tablist" aria-label="篩選送出紀錄">
+        <button type="button" role="tab" data-tab="all" class="active" aria-selected="true">全部 <span class="n"></span></button><button type="button" role="tab" data-tab="sched" aria-selected="false">已排程 <span class="n"></span></button><button type="button" role="tab" data-tab="pub" aria-selected="false">已發布 <span class="n"></span></button><button type="button" role="tab" data-tab="fail" aria-selected="false">失敗 <span class="n"></span></button>
+      </div>
+    </div>
+    <div class="rec-list" id="recList" role="tabpanel" aria-labelledby="recTitle"></div>
+    <p class="muted rec-none" id="recNone" hidden>這個分類沒有紀錄</p>
+    <div class="empty" id="recEmpty"><div class="empty-ic" aria-hidden="true">📭</div><p><b>還沒有送出紀錄</b></p><p class="muted">按右上角「＋ 新增發文」開始。送出後的紀錄會顯示在這裡（只存在這台瀏覽器）。</p>
       <p class="muted links"><a href="verify.html">連線驗證</a>・<a href="render-test.html">自製圖測試</a></p></div>
+    <div class="rec-foot" id="recFoot" hidden><nav class="pager" id="recPager" aria-label="分頁"></nav><span class="muted" id="recCnt" aria-live="polite"></span></div>
   </section>
 </main>
 
@@ -107,6 +116,23 @@
     <p class="hint" id="ilHint" role="status"></p>
     <div class="row"><button class="btn ghost" id="ilLogout" type="button" hidden>登出</button><button class="btn" id="ilCancel" type="button">取消</button><button class="btn primary" id="ilGo" type="submit">登入</button></div></form>
 </div>
+<div class="dlg" id="rsDlg" role="dialog" aria-modal="true" aria-labelledby="rsTitle" hidden>
+  <div class="cf-box rs-box"><h3 id="rsTitle">重送</h3><p class="muted rs-what" id="rsWhat"></p>
+    <div id="rsTime" hidden>
+      <p class="hint bad" id="rsTimeNote"></p>
+      <div class="tp-row"><input class="tp-date" id="rsDate" type="date" aria-label="日期"><input id="rsClock" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="2130" aria-label="時間（直接打 4 碼，2130＝21:30）"></div>
+      <p class="hint" id="rsHint"></p>
+      <div class="chips"><button type="button" class="btn sm" data-add="30">+30 分</button><button type="button" class="btn sm" data-add="60">+1 小時</button><button type="button" class="btn sm" data-add="1440">明天</button></div>
+    </div>
+    <p class="g-line" id="rsGuard"><i class="l"></i><span></span></p>
+    <label class="ck" id="rsAckRow" hidden><input type="checkbox" id="rsAck"><span>我知道風險</span></label>
+    <div id="rsErr"></div>
+    <div class="row"><button class="btn" id="rsCancel" type="button">取消</button><button class="btn ok" id="rsGo" type="button">確認重送</button></div></div>
+</div>
+<div class="dlg" id="rcDlg" role="alertdialog" aria-modal="true" aria-labelledby="rcTitle" hidden>
+  <div class="cf-box"><h3 id="rcTitle">刪除這筆紀錄？</h3><p class="muted" id="rcBody">只會刪掉這台瀏覽器裡的紀錄，不會影響已發布或已排程的貼文。</p>
+    <div class="row"><button class="btn" id="rcCancel" type="button">取消</button><button class="btn danger" id="rcGo" type="button">刪除紀錄</button></div></div>
+</div>
 <div class="toast" id="toast" role="status" hidden></div>
-<script src="config.js"></script><script src="rules.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="rules.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="app.js"></script>
 </body></html>
