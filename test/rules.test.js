@@ -53,14 +53,11 @@ test('buildLink：氣象大寫 Facebook 原樣帶出、不重複', () => {
   assert.equal(link.split('utm_source').length - 1, 1);
 });
 
-test('templateFor / canvasSizeFor / limitsFor', () => {
-  assert.equal(R.templateFor('news'), 'newsnet_news');
-  assert.equal(R.templateFor('intl'), 'newsnet_intl');
-  assert.equal(R.templateFor('weather'), null);
-  assert.deepEqual(R.canvasSizeFor('newsnet_news'), [1080, 1080]);
-  assert.deepEqual(R.canvasSizeFor('newsnet_jkk'), [1080, 1080]);
-  assert.deepEqual(R.canvasSizeFor('newsnet_intl'), [1200, 675]);
-  assert.deepEqual(R.limitsFor('newsnet_intl'), [10, 16, 16]);
+test('frameTemplate / limitsFor', () => {
+  assert.equal(R.frameTemplate('news'), 'newsnet_news');
+  assert.equal(R.frameTemplate('ent'), 'newsnet_ent');
+  assert.equal(R.frameTemplate(undefined), 'newsnet_news', '預設藍框');
+  assert.deepEqual(R.limitsFor('newsnet_news'), [15, 15, 15]);
   assert.deepEqual(R.limitsFor('newsnet_ent'), [15, 15, 15]);
 });
 

@@ -1,6 +1,6 @@
-// 作圖框編輯器。照片處理（點選／拖曳／貼上、滾輪與雙指縮放、拖曳平移且不露出空白邊）取自 quickpatterntool/app.js，
-// 改成可變畫布尺寸，並拿掉 TVBS 邊框與標題（後端會畫漸層、標題與 TVBS logo）。
-// 匯出的圖只有「照片＋馬賽克＋貼圖」，不含參考線（標題區／logo 區是蓋在畫布上的 DOM）。
+// 作圖框編輯器。照片處理（點選／拖曳／貼上、滾輪與雙指縮放、拖曳平移且不露出空白邊）取自 quickpatterntool/app.js。
+// 畫面上的預覽 = 照片＋馬賽克＋貼圖＋邊框疊圖（frames/news.png、ent.png）＋標題（QPT 的 WHZ-Heavy 標題畫法），讓小編看到套版後的樣子；
+// 但 exportBlob（上傳圖床、交給後端）只畫「照片＋馬賽克＋貼圖」，**不含**疊圖與標題：後端會自己疊漸層、邊框與標題。
 (function () {
   const $ = id => document.getElementById(id);
   const canvas = $('editorCanvas');
@@ -9,7 +9,7 @@
   const MAX_ZOOM = 5;
   const MAX_FILE = 30 * 1024 * 1024;
 
-  let W = 1080, H = 1080;
+  const W = 1080, H = 1080;                 // 網新各版型都是 1080×1080
   const bg = { image: null, view: { zoom: 1, x: 0, y: 0 }, name: '' };
   const items = [];                       // 貼圖與馬賽克（畫布座標）
   const fx = Stickers.drawFx(items);
@@ -30,15 +30,76 @@
     view.y = Math.min(my, Math.max(-my, view.y));
   }
 
-  function render() {
-    ctx.fillStyle = bg.image ? '#fff' : '#d9e2f2';
-    ctx.fillRect(0, 0, W, H);
+  // 要上傳的那張：照片＋馬賽克＋貼圖
+  function drawBase(c) {
+    c.fillStyle = bg.image ? '#fff' : '#d9e2f2';
+    c.fillRect(0, 0, W, H);
     if (bg.image) {
       const g = coverGeometry(bg.image, bg.view);
-      ctx.drawImage(bg.image, g.dx, g.dy, g.dw, g.dh);
-      fx.mosaic(ctx);
-      fx.stickers(ctx);
+      c.drawImage(bg.image, g.dx, g.dy, g.dw, g.dh);
+      fx.mosaic(c);
+      fx.stickers(c);
     }
+  }
+
+  // ---- 預覽用的邊框疊圖與標題（只畫在畫面上，不輸出）----
+  const frames = {};
+  ['news', 'ent'].forEach(k => {
+    const im = new Image();
+    im.onload = () => render();
+    im.src = `frames/${k}.png`;
+    frames[k] = im;
+  });
+  let frame = 'news', titleLines = [];
+
+  // ===== 以下標題畫法複製自 quickpatterntool/app.js（圖片背景的新聞／娛樂框：字級 50＝67px、置中、區塊中心 y=880）=====
+  const SIZE = W;
+  const FONT_STACK = `"WHZ-Heavy", "Microsoft JhengHei", "PMingLiU", sans-serif`;
+  const whzFontReady = document.fonts ? document.fonts.load(`67px "WHZ-Heavy"`).catch(() => {}) : Promise.resolve();
+  const BOX_CENTER = 880;      // fixed vertical center of the headline block (measured from real TVBS exports — 1/2/3-line titles all anchor here)
+  const LINE_HEIGHT_RATIO = 93 / 67; // measured line-height : font-size ratio
+  const CANVA_TO_PX = 67 / 50;
+  const DEFAULT_CANVA_SIZE_IMAGE = 50; // Canva 字級 50 — image/ribbon frame
+  const TITLE_LIGHT = '#ffffff';
+  function canvaToPx(canvaSize) {
+    return canvaSize * CANVA_TO_PX;
+  }
+  function fitFontSize(targetCtx, lines, maxWidth, baseSize) {
+    let size = baseSize;
+    targetCtx.font = `${size}px ${FONT_STACK}`;
+    const widest = Math.max(...lines.map(l => targetCtx.measureText(l).width));
+    if (widest > maxWidth) {
+      size = Math.max(24, Math.floor(size * maxWidth / widest));
+    }
+    return size;
+  }
+  function drawTitle(targetCtx, lines, baseSize, centerY, color = TITLE_LIGHT) {
+    if (lines.length === 0) return;
+
+    const paddingX = 60;
+    const maxWidth = SIZE - paddingX * 2;
+    const fontSize = fitFontSize(targetCtx, lines, maxWidth, baseSize);
+    const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+    const n = lines.length;
+
+    targetCtx.textAlign = 'center';
+    targetCtx.textBaseline = 'middle';
+    targetCtx.font = `${fontSize}px ${FONT_STACK}`;
+
+    lines.forEach((line, i) => {
+      const y = centerY - (n - 1) * lineHeight / 2 + i * lineHeight;
+      targetCtx.fillStyle = color;
+      targetCtx.fillText(line, SIZE / 2, y);
+    });
+  }
+  // ===== 複製結束 =====
+  whzFontReady.then(() => render());
+
+  function render() {
+    drawBase(ctx);
+    const ov = frames[frame];
+    if (ov && ov.complete && ov.naturalWidth) ctx.drawImage(ov, 0, 0, W, H);
+    drawTitle(ctx, titleLines, canvaToPx(DEFAULT_CANVA_SIZE_IMAGE), BOX_CENTER);
   }
   const changed = () => { render(); if (fxEditor) fxEditor.layout(); emit(); };
 
@@ -99,33 +160,18 @@
     changed();
   }
 
-  // ---- 版型（畫布尺寸）與參考線 ----
-  function setTemplate(template) {
-    const [w, h] = Rules.canvasSizeFor(template);
-    if (w === W && h === H) { return; }
-    W = w; H = h;
-    canvas.width = w; canvas.height = h;
-    Stickers.setSize(w, h);
-    wrap.classList.toggle('wide', w > h);
-    if (bg.image) clampView(bg.image, bg.view);
-    items.forEach(it => {   // 中心點拉回畫布內
-      it.x = Math.min(w - it.w / 2, Math.max(-it.w / 2, it.x));
-      it.y = Math.min(h - it.h / 2, Math.max(-it.h / 2, it.y));
-    });
-    fxEditor.layout();
-    changed();
-  }
-  function setGuideLines(lines) {
-    $('gTitleText').textContent = (lines || []).filter(Boolean).join('\n');
-  }
-  function showGuides(on) { $('guides').hidden = !on; }
+  // ---- 預覽的框（news 藍框／ent 粉框）與標題：只重畫畫面，不算「改了照片」（不觸發重新上傳）----
+  function setFrame(f) { frame = f === 'ent' ? 'ent' : 'news'; render(); }
+  function setTitleLines(lines) { titleLines = (lines || []).map(l => String(l).trim()).filter(Boolean); render(); }
 
-  // ---- 匯出：JPEG q0.92，只有畫布內容 ----
+  // ---- 匯出：JPEG q0.92，只有照片＋馬賽克＋貼圖（另開一張畫布畫，不含預覽的疊圖與標題）----
   function exportBlob() {
     return new Promise((resolve, reject) => {
       if (!bg.image) { reject(new Error('no_image')); return; }
-      render();
-      canvas.toBlob(b => b ? resolve(b) : reject(new Error('export_failed')), 'image/jpeg', 0.92);
+      const out = document.createElement('canvas');
+      out.width = W; out.height = H;
+      drawBase(out.getContext('2d'));
+      out.toBlob(b => b ? resolve(b) : reject(new Error('export_failed')), 'image/jpeg', 0.92);
     });
   }
 
@@ -229,10 +275,11 @@
   });
 
   window.Editor = {
-    setTemplate, setGuideLines, showGuides, exportBlob, loadFile, loadUrl, clearImage, mountFxBar,
+    setFrame, setTitleLines, exportBlob, loadFile, loadUrl, clearImage, mountFxBar,
     hasImage: () => !!bg.image,
     hasContent: () => !!bg.image || items.length > 0,
     size: () => [W, H],
+    frame: () => frame,
     onChange: fn => listeners.push(fn),
     reset: () => { clearImage(); bg.view = { zoom: 1, x: 0, y: 0 }; },
     active: () => true,          // app.js 依目前模式覆寫：只有「作圖框」模式才吃貼上的圖

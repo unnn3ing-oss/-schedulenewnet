@@ -1,4 +1,11 @@
 {
+  "0.5.0": {
+    "summary": "正式介面：送出、預覽與 AI 小編文",
+    "items": [
+      "白名單新增 /render_text_card、/ai_caption、/schedule、/publish，正式介面可以預覽純文字底圖、產生與校對小編文、排程與立即發布",
+      "新增的端點只比對完整名稱（例如不會放行 /unpublish）；fetchImage 限制不變"
+    ]
+  },
   "0.4.0": {
     "summary": "正式介面：帶入文章主圖",
     "items": [

@@ -37,13 +37,9 @@
     return base + (q >= 0 ? (/[?&]$/.test(base) ? '' : '&') : '?') + utm + hash;
   }
 
-  // 粉專代碼 → 版型 key；氣象等沒有版型的回 null
-  function templateFor(code) {
-    const key = 'newsnet_' + code;
-    return Object.prototype.hasOwnProperty.call(cfg.layouts, key) ? key : null;
-  }
+  // 版型只有兩種（同 QPT 的新聞藍框／娛樂粉框）：所有勾選的粉專都送同一個 template
+  const frameTemplate = frame => (frame === 'ent' ? 'newsnet_ent' : 'newsnet_news');
   const layoutOf = template => cfg.layouts[template] || cfg.layouts.newsnet_news;
-  const canvasSizeFor = template => layoutOf(template).canvas.slice();
   const limitsFor = template => layoutOf(template).limits.slice();
   const pageByCode = code => cfg.pages.find(p => p.code === code) || null;
 
@@ -144,5 +140,5 @@
   }
   // ===== 複製結束 =====
 
-  return { charWidth, articleId, shortTitle, buildLink, templateFor, canvasSizeFor, limitsFor, pageByCode, lineWidth, breakTitle, overrideLines, config: cfg };
+  return { charWidth, articleId, shortTitle, buildLink, frameTemplate, limitsFor, pageByCode, lineWidth, breakTitle, overrideLines, config: cfg };
 });

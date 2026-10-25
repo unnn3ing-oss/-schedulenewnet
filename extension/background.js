@@ -5,9 +5,12 @@ importScripts('updater.js');
 //   b1  外掛背景直接 fetch（帶 cookie）
 //   b1o 同 b1，但把 Origin 標頭改成網新網址（防後端檢查來源）
 //   b2  交給網新分頁，在原網域內 fetch（一定是同網域）
-// 只允許唯讀／判讀／預覽端點，不允許 /schedule、/publish。
+// 白名單（docs/newsnet_handoff.md §3）：唯讀／判讀／預覽端點，加上正式介面要用的 AI 小編文、排程與立即發布。
+// 新增的端點要求名稱前是「/」，免得 /unpublish 之類的路徑也被放行。
 const HOST = 'https://digi-social-post.tvbs.ai';
-const ALLOWED = [/^\/[\w\-/]*page_meta\?url=/, /^\/[\w\-/]*hero\?url=/, /^\/[\w\-/]*guard\/check$/, /^\/[\w\-/]*render$/];
+const endpoint = name => new RegExp('^/(?:[\\w-]+/)*' + name + '$');
+const ALLOWED = [/^\/[\w\-/]*page_meta\?url=/, /^\/[\w\-/]*hero\?url=/, /^\/[\w\-/]*guard\/check$/, /^\/[\w\-/]*render$/,
+  endpoint('render_text_card'), endpoint('ai_caption'), endpoint('schedule'), endpoint('publish')];
 const ORIGIN_RULE = 1;
 const SNIPPET = 600;
 
