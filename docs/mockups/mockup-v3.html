@@ -94,6 +94,16 @@ label{font-size:13px;font-weight:700;color:var(--muted)}
 .tin .in.f{box-shadow:0 0 0 3px var(--soft);border-color:var(--accent)}
 .st2{display:flex;gap:4px;flex-wrap:wrap}.st2 .chip{font-size:11px}
 .guardline{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.pb.sel{background:var(--accent)}.pb.sel .n,.pb.sel .o{color:#fff;border-color:rgba(255,255,255,.35)}
+.pb.off .n:before{content:"";display:inline-block;width:12px;height:12px;border-radius:4px;border:2px solid var(--accent);margin-right:6px;vertical-align:-1px}
+.pb.sel .n:before{content:"✓ "}
+.sendbar{display:flex;align-items:center;gap:12px}.sendbar .sp{flex:1}
+.send{position:relative;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:12px 26px;font-weight:800;font-size:15px;background:var(--go);color:#fff;box-shadow:0 8px 20px -10px rgba(21,128,61,.8)}
+.send.arm{background:#b45309;box-shadow:0 0 0 4px #fde68a}
+.bub.wide{width:330px;left:auto;right:0;transform:none}.bub.wide:after{left:auto;right:40px;transform:none}
+.bub table{width:100%;border-collapse:collapse;margin:6px 0;font-size:13px}.bub td{padding:3px 0;border-top:1px solid rgba(255,255,255,.12)}
+.pb.off .o{display:none}.send,.sendbar .m{white-space:nowrap}.sendbar .pbtns{gap:8px}.sendbar .pb .n{padding:8px 12px}.sendbar .pb .o{padding:8px 10px}
+.retry{font-size:11px;font-weight:800;background:#fff;color:#9b1c1c;border-radius:999px;padding:2px 8px;margin-left:6px}
 </style></head><body>
 
 <!-- W1 列表＋狀態 -->
@@ -105,7 +115,7 @@ label{font-size:13px;font-weight:700;color:var(--muted)}
     <div class="card list">
       <div class="hd"><b>送出紀錄</b><span class="m">本機紀錄・游標移到狀態可看細節</span></div>
       <div class="row"><div class="th"></div><div><div class="t">颱風假最新！北北基桃明天照常上班上課</div><div class="m">今天 17:58 送出・作圖框</div></div>
-        <div class="st2"><span class="chip ok">新聞・已發布 ↗</span><span class="chip">少康・排程 18:40</span><span class="chip e">氣象・失敗 ↻</span></div></div>
+        <div class="st2"><span class="chip ok">新聞・已發布 ↗</span><span class="chip">少康・排程 18:40</span><span class="chip e">氣象・失敗 ↻ 重送</span></div></div>
       <div class="row"><div class="th c" style="background:#b00020"></div><div><div class="t">【快訊】北市宣布明天停班停課</div><div class="m">今天 17:40 送出・純文字底圖</div></div>
         <div class="st2"><span class="chip ok">新聞・已發布 ↗</span><span class="chip ok">氣象・已發布 ↗</span></div></div>
       <div class="row"><div class="th pk"></div><div><div class="t">金曲歌后現身後台 曝新專輯進度</div><div class="m">今天 16:12 送出・作圖框</div></div>
@@ -137,19 +147,18 @@ label{font-size:13px;font-weight:700;color:var(--muted)}
       </div>
     </div>
     <div class="mf">
-      <div class="guardline">🛡 送出時會自動跑守則判讀</div>
-      <div class="pbtns">
-        <div class="pb"><span class="n">新聞</span><span class="o">立即發布 ▾</span><div class="menu"><div class="on">✓ 立即發布</div><div>排程發布…</div></div></div>
-        <div class="pb"><span class="n">娛樂</span><span class="o">立即發布 ▾</span></div>
-        <div class="pb"><span class="n">少康</span><span class="o">立即發布 ▾</span></div>
-        <div class="pb"><span class="n">擠看看</span><span class="o">立即發布 ▾</span></div>
-        <div class="pb"><span class="n">國際＋</span><span class="o">立即發布 ▾</span></div>
-        <div class="pb"><span class="n">氣象</span><span class="o">立即發布 ▾</span></div>
-      </div>
+      <div class="sendbar"><div class="pbtns">
+        <div class="pb sel"><span class="n">新聞</span><span class="o">立即 ▾</span><div class="menu"><div class="on">✓ 立即發布</div><div>排程發布…</div></div></div>
+        <div class="pb off"><span class="n">娛樂</span><span class="o"></span></div>
+        <div class="pb sel"><span class="n">少康</span><span class="o">排程 21:30 ▾</span></div>
+        <div class="pb off"><span class="n">擠看看</span><span class="o"></span></div>
+        <div class="pb off"><span class="n">國際＋</span><span class="o"></span></div>
+        <div class="pb sel"><span class="n">氣象</span><span class="o">立即 ▾</span></div>
+      </div><div class="sp"></div><span class="m">🛡 送出時自動判讀</span><span class="send">全部送出（3 台）</span></div>
     </div>
   </div></div>
   <div class="anno" style="left:40px;top:120px">② 中間彈窗、一頁完成（沿用 QPT 做圖）</div>
-  <div class="anno" style="left:640px;top:640px">③ 每個粉專一顆按鈕，▾ 切換立即／排程（預設立即）</div>
+  <div class="anno" style="left:640px;top:640px">③ 粉專按鈕＝勾選；▾ 切換立即／排程（預設立即）</div>
 </div>
 
 <!-- W3 排程時間選擇 -->
@@ -159,19 +168,18 @@ label{font-size:13px;font-weight:700;color:var(--muted)}
     <div class="mh"><h2>新增發文</h2><div class="seg"><span class="on">作圖框</span><span>純文字底圖</span></div><div class="sp"></div><div class="x">✕</div></div>
     <div class="mb" style="opacity:.35"><div class="pv"><div class="ttl">颱風假最新！北北基桃<br>明天照常上班上課</div></div><div></div></div>
     <div class="mf">
-      <div class="pbtns">
-        <div class="pb done"><span class="n">新聞</span><span class="o">✓ 已發布 ↗</span></div>
-        <div class="pb"><span class="n">娛樂</span><span class="o">立即發布 ▾</span></div>
-        <div class="pb sch"><span class="n">少康</span><span class="o">排程 21:30 ▾</span>
-          <div class="pop"><b>排程時間</b>
+      <div class="sendbar"><div class="pbtns">
+        <div class="pb sel"><span class="n">新聞</span><span class="o">立即 ▾</span></div>
+        <div class="pb off"><span class="n">娛樂</span><span class="o"></span></div>
+        <div class="pb sel"><span class="n">少康</span><span class="o">排程 21:30 ▾</span><div class="pop"><b>排程時間</b>
             <div class="tin"><div class="in">今天 10/25</div><div class="in f">2130 → 21:30</div></div>
             <div class="m" style="font-size:12px">直接打 4 碼（2130＝21:30）・↑↓ 每次 10 分鐘・最早 18:22（現在＋20 分）</div>
             <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="btn s">+30 分</span><span class="btn s">+1 小時</span><span class="btn s">明天</span></div>
           </div></div>
-        <div class="pb"><span class="n">擠看看</span><span class="o">立即發布 ▾</span></div>
-        <div class="pb"><span class="n">國際＋</span><span class="o">立即發布 ▾</span></div>
-        <div class="pb"><span class="n">氣象</span><span class="o">立即發布 ▾</span></div>
-      </div>
+        <div class="pb off"><span class="n">擠看看</span><span class="o"></span></div>
+        <div class="pb off"><span class="n">國際＋</span><span class="o"></span></div>
+        <div class="pb sel"><span class="n">氣象</span><span class="o">立即 ▾</span></div>
+      </div><div class="sp"></div><span class="send">全部送出（3 台）</span></div>
     </div>
   </div></div>
   <div class="anno" style="left:560px;top:420px">④ 選「排程發布」才跳出：預設今天、輸入 2130 自動變 21:30</div>
@@ -184,18 +192,37 @@ label{font-size:13px;font-weight:700;color:var(--muted)}
     <div class="mh"><h2>新增發文</h2><div class="seg"><span class="on">作圖框</span><span>純文字底圖</span></div><div class="sp"></div><div class="x">✕</div></div>
     <div class="mb" style="opacity:.35"><div class="pv"><div class="ttl">颱風假最新！北北基桃<br>明天照常上班上課</div></div><div></div></div>
     <div class="mf">
-      <div class="pbtns">
-        <div class="pb done"><span class="n">新聞</span><span class="o">✓ 已發布 ↗</span></div>
-        <div class="pb arm"><span class="n">確認送出</span><span class="o">娛樂・立即</span>
-          <div class="bub"><b>立即發布到「TVBS娛樂」？</b><br><b class="l" style="background:#facc15"></b>守則黃燈：標題用語較聳動<br><span style="opacity:.75">再按一次送出・點其他地方取消</span></div></div>
-        <div class="pb sch"><span class="n">少康</span><span class="o">排程 21:30 ▾</span></div>
-        <div class="pb fail"><span class="n">擠看看</span><span class="o">✗ 失敗・重送</span></div>
-        <div class="pb arm" style="margin-left:40px"><span class="n">確認送出</span><span class="o">氣象・立即</span>
-          <div class="bub" style="left:auto;right:-20px;transform:none"><b>立即發布到「TVBS氣象」？</b><br><b class="l" style="background:#ef4444"></b>守則紅燈：疑似未證實傷亡數字<div class="ck"><i></i>我知道風險，仍要送出</div><span style="opacity:.75">勾選後才能按確認送出</span></div></div>
-      </div>
+      <div class="sendbar"><div class="pbtns">
+        <div class="pb sel"><span class="n">新聞</span><span class="o">立即 ▾</span></div>
+        <div class="pb off"><span class="n">娛樂</span><span class="o"></span></div>
+        <div class="pb sel"><span class="n">少康</span><span class="o">排程 21:30 ▾</span></div>
+        <div class="pb off"><span class="n">擠看看</span><span class="o"></span></div>
+        <div class="pb off"><span class="n">國際＋</span><span class="o"></span></div>
+        <div class="pb sel"><span class="n">氣象</span><span class="o">立即 ▾</span></div>
+      </div><div class="sp"></div><span class="send arm">確認送出<div class="bub wide"><b>確定送出 3 台？</b>
+            <table><tr><td>新聞</td><td>立即發布</td></tr><tr><td>少康</td><td>排程 今天 21:30</td></tr><tr><td>氣象</td><td>立即發布</td></tr></table>
+            <b class="l" style="background:#facc15"></b>守則黃燈：標題用語較聳動<br>
+            <span style="opacity:.75">（紅燈時這裡會多一個「我知道風險」勾選框）</span><br><span style="opacity:.75">再按一次送出・點其他地方取消</span></div></span></div>
     </div>
   </div></div>
-  <div class="anno" style="left:600px;top:260px">⑤ 第 1 次按：自動判讀＋泡泡；按鈕變「確認送出」→ 第 2 次才送</div>
-  <div class="anno" style="left:600px;top:300px">⑥ 紅燈時泡泡內勾選</div>
-</div>
+  <div class="anno" style="left:600px;top:260px">⑤ 只有一顆「全部送出」：第 1 次自動判讀＋泡泡列出各台，第 2 次才送</div>
+  </div>
+<!-- W5 送出結果 -->
+<div class="screen" id="w5">
+  <div class="top"><div class="logo">📮 網新<b>快速排程</b></div><div class="sp"></div><span class="btn p">＋ 新增發文</span></div>
+  <div class="ov"><div class="mdl">
+    <div class="mh"><h2>新增發文</h2><div class="seg"><span class="on">作圖框</span><span>純文字底圖</span></div><div class="sp"></div><div class="x">✕</div></div>
+    <div class="mb" style="opacity:.35"><div class="pv"><div class="ttl">颱風假最新！北北基桃<br>明天照常上班上課</div></div><div></div></div>
+    <div class="mf">
+      <div class="sendbar"><div class="pbtns">
+        <div class="pb done"><span class="n">新聞</span><span class="o">✓ 已發布 ↗</span></div>
+        <div class="pb off"><span class="n">娛樂</span><span class="o"></span></div>
+        <div class="pb done"><span class="n">少康</span><span class="o">✓ 排程 21:30</span></div>
+        <div class="pb off"><span class="n">擠看看</span><span class="o"></span></div>
+        <div class="pb off"><span class="n">國際＋</span><span class="o"></span></div>
+        <div class="pb fail"><span class="n">氣象</span><span class="o">✗ 失敗<span class="retry">↻ 重送</span></span></div>
+      </div><div class="sp"></div><span class="m">2 台成功・1 台失敗</span><span class="btn">清空頁面</span></div>
+    </div>
+  </div></div>
+    </div>
 </body></html>

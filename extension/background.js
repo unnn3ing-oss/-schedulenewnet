@@ -2,9 +2,9 @@
 //   b1  外掛背景直接 fetch（帶 cookie）
 //   b1o 同 b1，但把 Origin 標頭改成網新網址（防後端檢查來源）
 //   b2  交給網新分頁，在原網域內 fetch（一定是同網域）
-// 只允許唯讀／判讀端點，不允許 /schedule、/publish。
+// 只允許唯讀／判讀／預覽端點，不允許 /schedule、/publish。
 const HOST = 'https://digi-social-post.tvbs.ai';
-const ALLOWED = [/^\/[\w\-/]*page_meta\?url=/, /^\/[\w\-/]*hero\?url=/, /^\/[\w\-/]*guard\/check$/];
+const ALLOWED = [/^\/[\w\-/]*page_meta\?url=/, /^\/[\w\-/]*hero\?url=/, /^\/[\w\-/]*guard\/check$/, /^\/[\w\-/]*render$/];
 const ORIGIN_RULE = 1;
 const SNIPPET = 600;
 
@@ -21,12 +21,21 @@ async function setOriginRule(on) {
   });
 }
 
+async function toDataUrl(blob) {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return `data:${blob.type || 'image/png'};base64,${btoa(bin)}`;
+}
+
 async function doFetch(url, method, body) {
   const init = { method, credentials: 'include', headers: {} };
   if (body !== undefined) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(body); }
   const r = await fetch(url, init);
-  const text = await r.text();
-  return { status: r.status, contentType: r.headers.get('content-type') || '', redirected: r.redirected, finalUrl: r.url, snippet: text.slice(0, SNIPPET) };
+  const contentType = r.headers.get('content-type') || '';
+  const base = { status: r.status, contentType, redirected: r.redirected, finalUrl: r.url };
+  if (/^image\//i.test(contentType)) return { ...base, snippet: '', image: await toDataUrl(await r.blob()) };
+  return { ...base, snippet: (await r.text()).slice(0, SNIPPET) };
 }
 
 async function viaTab(url, method, body) {
