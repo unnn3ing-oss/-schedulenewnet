@@ -1,3 +1,6 @@
+// 點工具列圖示開啟側邊欄；每小時問 GitHub 有沒有新版，有就在圖示顯示「新」（更新要在側邊欄按，見 updater.js）。
+importScripts('updater.js');
+
 // 驗證三種送法：
 //   b1  外掛背景直接 fetch（帶 cookie）
 //   b1o 同 b1，但把 Origin 標頭改成網新網址（防後端檢查來源）
@@ -93,4 +96,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id) return false;
   handle(msg).then(sendResponse);
   return true;
+});
+
+// ---- 側邊欄與自動檢查更新 ----
+const CHECK_EVERY_MINUTES = 60;
+function ensureCheckAlarm() {
+  chrome.alarms.get('check-update', alarm => {
+    if (!alarm || alarm.periodInMinutes !== CHECK_EVERY_MINUTES) {
+      chrome.alarms.create('check-update', { delayInMinutes: 1, periodInMinutes: CHECK_EVERY_MINUTES });
+    }
+  });
+}
+function setup() {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+  ensureCheckAlarm();
+}
+setup();
+chrome.runtime.onInstalled.addListener(setup);
+chrome.runtime.onStartup.addListener(setup);
+
+chrome.alarms.onAlarm.addListener(async alarm => {
+  if (alarm.name !== 'check-update') return;
+  try {
+    const info = await Updater.checkLatest();
+    await chrome.action.setBadgeText({ text: info.hasUpdate ? '新' : '' });
+    if (info.hasUpdate) await chrome.action.setBadgeBackgroundColor({ color: '#d92d20' });
+  } catch (e) { /* 離線或被限流：下次鬧鐘再試 */ }
 });

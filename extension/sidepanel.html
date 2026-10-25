@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>網新快速排程</title>
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="extName">網新快速排程</h1>
+    <span class="muted" id="extVer"></span>
+  </header>
+
+  <section class="card" id="loginCard">
+    <h2>登入狀態</h2>
+    <div class="status" id="loginStatus">檢查中…</div>
+    <div class="row"><a class="btn" href="https://digi-social-post.tvbs.ai/ip/newsnet/" target="_blank" rel="noopener">開啟網新發文台</a></div>
+  </section>
+
+  <section class="card">
+    <h2>工具</h2>
+    <div class="links">
+      <a class="btn" href="https://unnn3ing-oss.github.io/-schedulenewnet/" target="_blank" rel="noopener">網新快速排程</a>
+      <a class="btn" href="https://unnn3ing-oss.github.io/-schedulenewnet/verify.html" target="_blank" rel="noopener">連線驗證</a>
+      <a class="btn" href="https://unnn3ing-oss.github.io/-schedulenewnet/render-test.html" target="_blank" rel="noopener">自製圖測試</a>
+    </div>
+  </section>
+
+  <section class="card" id="updateCard">
+    <h2>版本更新</h2>
+    <div class="up-status" id="upStatus">尚未檢查更新</div>
+    <div class="up-notes" id="upNotes" hidden></div>
+    <details class="up-files" id="upFiles" hidden>
+      <summary id="upFilesSummary">要更新的檔案</summary>
+      <ul id="upFileList"></ul>
+    </details>
+    <div class="row">
+      <button type="button" class="btn" id="upCheckBtn">檢查更新</button>
+      <button type="button" class="btn primary" id="upApplyBtn" hidden>更新到最新版</button>
+    </div>
+    <div class="hint" id="upHint"></div>
+  </section>
+</div>
+<script src="updater.js"></script>
+<script src="sidepanel.js"></script>
+</body>
+</html>
