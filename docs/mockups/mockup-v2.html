@@ -1,0 +1,230 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><title>網新快速排程 草圖 v2</title><style>
+:root{--accent:#004aad;--accent-dark:#003a87;--soft:#e8f0fc;--text:#1f2a3d;--muted:#6b7890;--border:rgba(0,74,173,.12);--track:rgba(0,74,173,.07);--ok:#16a34a;--go:#15803d;--warn:#fdf1d8;--danger:#d93636;--pink:#e24b8f}
+*{box-sizing:border-box}body{margin:0;font:15px/1.6 system-ui,"PingFang TC","Noto Sans TC",sans-serif;color:var(--text);background:radial-gradient(900px 500px at 8% -10%,#dce8ff,transparent 60%),#f4f7fd}
+.screen{width:1280px;height:800px;position:relative;overflow:hidden}
+.top{height:64px;display:flex;align-items:center;gap:16px;padding:0 28px;background:rgba(255,255,255,.86);border-bottom:1px solid var(--border)}
+.logo{font-weight:800;font-size:18px}.logo b{color:var(--accent)}
+.seg{display:inline-flex;background:var(--track);border-radius:999px;padding:4px}
+.seg span{padding:7px 18px;border-radius:999px;font-weight:600;font-size:14px;color:var(--muted)}
+.seg span.on{background:#fff;color:var(--accent);box-shadow:0 2px 8px -3px rgba(0,43,102,.35)}
+.btn{white-space:nowrap;display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:9px 18px;font-weight:600;font-size:14px;background:var(--track)}
+.btn.p{background:var(--accent);color:#fff;box-shadow:0 8px 20px -10px rgba(0,74,173,.7)}.btn.g{background:var(--go);color:#fff}.btn.s{padding:5px 12px;font-size:13px}
+.sp{flex:1}
+.wrap{padding:18px 28px;display:grid;grid-template-columns:1fr 420px;gap:18px;height:calc(100% - 64px)}
+.card{background:#fff;border:1px solid var(--border);border-radius:18px;box-shadow:0 24px 60px -30px rgba(0,43,102,.35)}
+.list{padding:8px}
+.row{display:grid;grid-template-columns:72px 1fr auto;gap:14px;align-items:center;padding:12px;border-radius:14px}
+.row+.row{border-top:1px solid var(--border)}.row.sel{background:var(--soft)}
+.th{width:72px;height:72px;border-radius:10px;background:linear-gradient(135deg,#9ab8e8,#4f7cc4);position:relative;overflow:hidden}
+.th.pk{background:linear-gradient(135deg,#f5b6d1,#d9578f)}.th.c{background:#2b3a55}
+.th:after{content:"";position:absolute;inset:0;border:4px solid var(--accent);border-radius:10px}.th.pk:after{border-color:var(--pink)}
+.t{font-weight:700;font-size:15px;line-height:1.35}.m{font-size:13px;color:var(--muted)}
+.chip{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:700;background:#dbeafe;color:#1e40af}
+.chip.ok{background:#dcfce7;color:#166534}.chip.w{background:var(--warn);color:#6b4a00}.chip.e{background:#fde2e2;color:#9b1c1c}
+.hd{display:flex;align-items:center;gap:10px;padding:10px 12px 6px}
+.pg{display:flex;gap:6px;justify-content:center;padding:10px;font-size:13px;color:var(--muted)}
+.pg span{min-width:30px;text-align:center;padding:4px;border-radius:8px}.pg .on{background:var(--accent);color:#fff}
+.detail{padding:18px;display:flex;flex-direction:column;gap:12px}
+.big{aspect-ratio:1;border-radius:14px;background:linear-gradient(135deg,#9ab8e8,#4f7cc4);position:relative;display:flex;align-items:flex-end}
+.big:after{content:"";position:absolute;inset:0;border:12px solid var(--accent);border-radius:14px}
+.big .cap{position:relative;z-index:1;margin:0 24px 30px;color:#fff;font-weight:800;font-size:24px;text-shadow:0 2px 6px rgba(0,0,0,.4)}
+.txt{background:var(--track);border-radius:12px;padding:10px 12px;font-size:13px;white-space:pre-line}
+.anno{position:absolute;background:#ffef8a;color:#5b4700;font-size:12px;font-weight:700;padding:4px 10px;border-radius:8px;box-shadow:0 4px 10px -4px rgba(0,0,0,.3);z-index:9}
+/* 精靈 */
+.ds{position:absolute;inset:0;background:radial-gradient(1100px 620px at 12% -8%,#dce8ff,transparent 62%),#f4f7fd;padding:0 36px;display:flex;flex-direction:column}
+.dsh{display:flex;align-items:flex-start;padding:22px 0 4px}.dsh h2{margin:0;font-size:24px;font-weight:800}.dsh p{margin:4px 0 0;color:var(--muted);font-size:14px}
+.x{margin-left:auto;width:42px;height:42px;border-radius:50%;border:1px solid var(--border);background:#fff;display:grid;place-items:center;color:var(--muted)}
+.steps{display:flex;align-items:center;margin:16px 0 14px}
+.st{display:flex;align-items:center;gap:9px;font-weight:600;font-size:14px;color:var(--muted);white-space:nowrap}
+.line{flex:1;height:3px;margin:0 10px;border-radius:3px;background:#d4ddee}.line.d{background:var(--ok)}
+.dot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;border:2px solid #cdd7ea;background:#fff;font-size:13px;font-weight:700}
+.st.d .dot{background:var(--ok);border-color:var(--ok);color:#fff}.st.c{color:var(--text)}.st.c .dot{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 0 0 5px var(--soft)}
+.body{flex:1;display:grid;grid-template-columns:400px 1fr;gap:22px;min-height:0;padding-bottom:12px}
+.pane{padding:18px;display:flex;flex-direction:column;gap:12px}
+label{font-size:13px;font-weight:700;color:var(--muted)}
+.in{border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:#fff;font-size:14px}
+.in.ta{height:70px}
+.quick{display:flex;gap:8px}.quick .in{flex:1}
+.sw{display:flex;gap:6px;flex-wrap:wrap}.sw i{width:26px;height:26px;border-radius:50%;display:block}
+.stk{display:flex;gap:8px;align-items:center}.stk span{width:44px;height:44px;border-radius:50%;background:#ffd34d;display:grid;place-items:center;font-size:22px}
+.stk .mz{border-radius:8px;background:repeating-conic-gradient(#999 0 25%,#ccc 0 50%) 0 0/10px 10px}
+.canvas{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.pv{width:470px;height:470px;border-radius:6px;position:relative;background:linear-gradient(160deg,#a9c4ef,#3f6db6);overflow:hidden}
+.pv:after{content:"";position:absolute;inset:0;border:16px solid var(--pink)}
+.pv .ttl{position:absolute;left:34px;right:34px;bottom:46px;color:#fff;font-weight:800;font-size:30px;line-height:1.3;text-shadow:0 2px 8px rgba(0,0,0,.45);border:1.5px dashed rgba(255,255,255,.7);padding:6px}
+.pv .s1{position:absolute;right:60px;top:70px;width:90px;height:90px;border-radius:50%;background:#ffd34d;display:grid;place-items:center;font-size:48px;outline:1.5px dashed #fff;outline-offset:4px}
+.pv .mz{position:absolute;left:90px;top:150px;width:120px;height:60px;background:repeating-conic-gradient(#8a9bb8 0 25%,#b7c5dc 0 50%) 0 0/14px 14px}
+.thumbs{display:flex;gap:8px}.thumbs b{width:56px;height:56px;border-radius:8px;background:linear-gradient(160deg,#a9c4ef,#3f6db6);outline:2px solid transparent}.thumbs b.on{outline-color:var(--accent)}
+.foot{display:flex;align-items:center;gap:10px;padding:12px 0 20px;border-top:1px solid var(--border)}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fbprev{width:500px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.fbprev .who{display:flex;gap:10px;align-items:center}.av{width:40px;height:40px;border-radius:50%;background:var(--accent)}
+.fbimg{aspect-ratio:1;border-radius:8px;background:linear-gradient(160deg,#a9c4ef,#3f6db6);position:relative}.fbimg:after{content:"";position:absolute;inset:0;border:12px solid var(--pink);border-radius:8px}
+/* 手機 */
+.phone{width:390px;height:800px;border-radius:36px;border:10px solid #1f2a3d;overflow:hidden;background:#f4f7fd;position:relative}
+.ph-top{height:56px;display:flex;align-items:center;padding:0 16px;background:#fff;border-bottom:1px solid var(--border);font-weight:800}
+.fab{position:absolute;right:18px;bottom:24px;width:58px;height:58px;border-radius:50%;background:var(--accent);color:#fff;font-size:30px;display:grid;place-items:center;box-shadow:0 10px 24px -8px rgba(0,74,173,.8)}
+.gallery{display:flex;gap:40px;align-items:flex-start;padding:30px;background:#e9eef7;width:1280px;height:880px}
+.navy{background:#0d2b6b}
+.tag{font-size:11px;font-weight:700;color:var(--muted);background:var(--track);border-radius:6px;padding:1px 6px;margin-left:6px}
+.lines .in{display:flex;justify-content:space-between}.lines .cnt{color:var(--muted);font-size:12px}.lines .cnt.over{color:var(--danger);font-weight:700}
+.crop{position:relative;width:300px;height:300px;margin:0 auto;border-radius:6px;overflow:hidden;background:linear-gradient(160deg,#a9c4ef,#3f6db6)}
+.crop .box{position:absolute;inset:0;border:2px dashed #fff;box-shadow:inset 0 0 0 9999px rgba(0,0,0,.0)}
+.srv{position:relative;width:440px;height:440px;border-radius:6px;background:linear-gradient(160deg,#a9c4ef,#3f6db6);overflow:hidden}
+.srv:after{content:"";position:absolute;inset:0;border:14px solid var(--accent)}
+.srv .ttl{position:absolute;left:30px;right:30px;bottom:40px;color:#fff;font-weight:800;font-size:28px;line-height:1.3;text-shadow:0 2px 8px rgba(0,0,0,.45)}
+.badge{position:absolute;top:10px;left:10px;z-index:2;background:rgba(0,0,0,.55);color:#fff;font-size:12px;padding:2px 8px;border-radius:999px}
+.tc{width:440px;height:440px;border-radius:6px;background:#b00020;color:#fff;display:grid;place-items:center;text-align:center;font-weight:900;font-size:34px;line-height:1.45;text-shadow:0 3px 8px rgba(0,0,0,.45);position:relative}
+.tc .wm{position:absolute;bottom:18px;right:22px;font-size:13px;font-weight:700;opacity:.85}
+.sw2{display:flex;gap:8px;flex-wrap:wrap}.sw2 span{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px 4px 4px;border-radius:999px;background:var(--track)}
+.sw2 i{width:22px;height:22px;border-radius:50%;display:block}.sw2 .on{outline:2px solid var(--accent)}
+.light{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;font-weight:700}
+.light.g{background:#dcfce7;color:#166534}.light.y{background:#fdf1d8;color:#6b4a00}.light.r{background:#fde2e2;color:#9b1c1c}
+.light .lamp{width:16px;height:16px;border-radius:50%;background:currentColor;box-shadow:0 0 0 4px rgba(255,255,255,.6)}
+.ai{display:flex;gap:8px}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px}.chk b{width:18px;height:18px;border-radius:5px;border:2px solid var(--accent);display:inline-grid;place-items:center;font-size:12px;color:#fff;background:var(--accent)}
+.chk b.off{background:#fff}
+.pages{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pc{background:#fff;border:1.5px solid var(--border);border-radius:16px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.pc.on{border-color:var(--accent);box-shadow:0 0 0 4px var(--soft)}.pc.off{opacity:.55}
+.pc .h{display:flex;align-items:center;gap:8px;font-weight:800}
+.pc .u{font-size:11px;color:var(--muted);word-break:break-all;font-family:ui-monospace,Menlo,monospace}
+.res{font-size:12px;font-weight:700}.res.ok{color:var(--ok)}.res.e{color:var(--danger)}
+.modal{position:absolute;inset:0;background:rgba(15,25,45,.45);display:grid;place-items:center;z-index:5}
+.dlg{width:520px;background:#fff;border-radius:20px;padding:22px;box-shadow:0 30px 80px -20px rgba(0,0,0,.5)}
+.dlg table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}.dlg td{padding:8px 6px;border-top:1px solid var(--border)}
+</style></head><body>
+
+<!-- 1：本機送出紀錄 -->
+<div class="screen" id="v1">
+  <div class="top"><div class="logo">📮 網新<b>快速排程</b></div>
+    <div class="seg"><span class="on">已排程 <span class="chip">4</span></span><span>已發布</span><span>失敗 <span class="chip e">1</span></span></div>
+    <div class="sp"></div><span class="m">● 外掛已連線・已登入（剩 6 天）</span><span class="btn p">＋ 新增發文</span></div>
+  <div class="wrap">
+    <div class="card list">
+      <div class="hd"><b>已排程</b><span class="m">本機送出紀錄・只含這台電腦送出的</span><div class="sp"></div><span class="btn s">每頁 20 ▾</span></div>
+      <div class="row sel"><div class="th"></div><div><div class="t">颱風假最新！北北基桃明天照常上班上課</div><div class="m">作圖框・新聞版型　|　<span class="chip">新聞 18:30</span> <span class="chip">少康 18:40</span></div></div><span class="chip ok">2 台成功</span></div>
+      <div class="row"><div class="th c" style="background:#b00020"></div><div><div class="t">【快訊】北市停班停課 最新公告</div><div class="m">純文字底圖・快訊紅　|　<span class="chip">新聞 19:00</span> <span class="chip">氣象 19:00</span></div></div><span class="chip ok">2 台成功</span></div>
+      <div class="row"><div class="th pk"></div><div><div class="t">金曲歌后現身後台 曝新專輯進度</div><div class="m">作圖框・娛樂版型　|　<span class="chip">娛樂 20:00</span></div></div><span class="chip ok">1 台成功</span></div>
+      <div class="row"><div class="th navy"></div><div><div class="t">美股收盤 道瓊漲 300 點</div><div class="m">作圖框・國際＋寬版　|　<span class="chip">國際＋ 21:00</span></div></div><span class="chip ok">1 台成功</span></div>
+      <div class="pg"><span>‹</span><span class="on">1</span><span>›</span><span>共 4 則</span></div>
+    </div>
+    <div class="card detail">
+      <div class="big"><div class="cap">颱風假最新！北北基桃<br>明天照常上班上課</div></div>
+      <div class="txt">北北基桃明天照常上班上課，但宜蘭山區…</div>
+      <table style="font-size:13px;border-collapse:collapse"><tr><td>新聞</td><td>10/25 18:30</td><td class="res ok">✓ 已排程</td><td><a>開啟貼文</a></td></tr><tr><td>少康</td><td>10/25 18:40</td><td class="res ok">✓ 已排程</td><td><a>開啟貼文</a></td></tr></table>
+      <div style="display:flex;gap:8px"><span class="btn s">📋 以此為範本新增</span><div class="sp"></div><span class="btn s">從紀錄移除</span></div>
+      <div class="m">⚠ 只是本機紀錄；要改時間或刪除排程請到 FB 後台。</div>
+    </div>
+  </div>
+  <div class="anno" style="left:560px;top:66px">① 狀態列：外掛連線＋queen_session 剩幾天</div>
+  <div class="anno" style="left:870px;top:470px">② 後端沒有查詢端點 → 只存本機紀錄</div>
+</div>
+
+<!-- 2：Step1 作圖框 -->
+<div class="screen" id="v2">
+  <div class="ds">
+    <div class="dsh"><div><h2>新增發文</h2><p>貼文章網址自動帶入標題與主圖</p></div><div class="x">✕</div></div>
+    <div class="steps"><div class="st c"><span class="dot">1</span>圖卡</div><div class="line"></div><div class="st"><span class="dot">2</span>小編文與判讀</div><div class="line"></div><div class="st"><span class="dot">3</span>粉專與時間</div></div>
+    <div class="body">
+      <div class="card pane">
+        <div class="seg"><span class="on">作圖框</span><span>純文字底圖</span></div>
+        <label>⚡ 文章網址（貼上自動帶入）</label>
+        <div class="quick"><div class="in">https://news.tvbs.com.tw/life/3012345</div><span class="btn p">帶入</span></div>
+        <label>版型</label><div class="seg"><span class="on">新聞</span><span>娛樂</span><span>少康</span><span>擠看看</span><span>國際＋</span></div>
+        <label>標題（每行上限 15 字・半形算 0.5）</label>
+        <div class="lines" style="display:flex;flex-direction:column;gap:6px">
+          <div class="in">颱風假最新！北北基桃<span class="cnt">10 / 15</span></div>
+          <div class="in">明天照常上班上課<span class="cnt">8 / 15</span></div>
+          <div class="in" style="color:var(--muted)">第 3 行（選填）<span class="cnt">0 / 15</span></div>
+        </div>
+      </div>
+      <div class="canvas" style="flex-direction:row;gap:24px;align-items:center">
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:center"><label>取景框（拖曳／縮放）</label><div class="crop"><div class="box"></div></div><span class="m">主圖來自 og:image</span></div>
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:center"><label>成品預覽（後端產圖）</label><div class="srv"><div class="badge">/render</div><div class="ttl">颱風假最新！北北基桃<br>明天照常上班上課</div></div><span class="btn s">↻ 重新產生預覽</span></div>
+      </div>
+    </div>
+    <div class="foot"><span class="btn" style="color:var(--danger)">清空頁面</span><div class="sp"></div><span class="m">預覽圖＝實際發出的圖</span><span class="btn p">下一步：小編文 ›</span></div>
+  </div>
+  <div class="anno" style="left:40px;top:150px">③ 影片模式隱藏，只剩兩種</div>
+  <div class="anno" style="left:230px;top:404px">④ 每行字數即時計數，超過變紅</div>
+  <div class="anno" style="left:900px;top:150px">⑤ 預覽一律由後端產生</div>
+</div>
+
+<!-- 3：Step1 純文字底圖 -->
+<div class="screen" id="v3">
+  <div class="ds">
+    <div class="dsh"><div><h2>新增發文</h2><p>純文字底圖：字級固定，太長會自動折行</p></div><div class="x">✕</div></div>
+    <div class="steps"><div class="st c"><span class="dot">1</span>圖卡</div><div class="line"></div><div class="st"><span class="dot">2</span>小編文與判讀</div><div class="line"></div><div class="st"><span class="dot">3</span>粉專與時間</div></div>
+    <div class="body">
+      <div class="card pane">
+        <div class="seg"><span>作圖框</span><span class="on">純文字底圖</span></div>
+        <label>文字內容</label><div class="in" style="height:120px">【快訊】<br>北市宣布明天<br>停班停課</div>
+        <label>底色</label>
+        <div class="sw2"><span class="on"><i style="background:#b00020"></i>快訊紅</span><span><i style="background:#0d2b6b"></i>國際藍</span><span><i style="background:#0a6e7c"></i>氣象青</span><span><i style="background:#c46a1a"></i>生活橘</span><span><i style="background:#111"></i>深夜黑</span><span><i style="background:#0f5132"></i>財經綠</span><span><i style="background:#5a5448"></i>咖啡灰</span></div>
+        <label>文章網址（選填，沒有就不帶連結）</label><div class="in" style="color:var(--muted)">https://…</div>
+      </div>
+      <div class="canvas"><label>成品預覽（後端產圖）</label><div class="tc"><div class="badge">/render_text_card</div>【快訊】<br>北市宣布明天<br>停班停課<div class="wm">TVBS NEWS</div></div></div>
+    </div>
+    <div class="foot"><span class="btn" style="color:var(--danger)">清空頁面</span><div class="sp"></div><span class="btn p">下一步：小編文 ›</span></div>
+  </div>
+  <div class="anno" style="left:60px;top:410px">⑥ 7 種底色取自設定檔</div>
+</div>
+
+<!-- 4：Step2 小編文＋判讀 -->
+<div class="screen" id="v4">
+  <div class="ds">
+    <div class="dsh"><div><h2>新增發文</h2><p>撰寫小編文，送出前會先跑社群守則判讀</p></div><div class="x">✕</div></div>
+    <div class="steps"><div class="st d"><span class="dot">✓</span>圖卡</div><div class="line d"></div><div class="st c"><span class="dot">2</span>小編文與判讀</div><div class="line"></div><div class="st"><span class="dot">3</span>粉專與時間</div></div>
+    <div class="body" style="grid-template-columns:1fr 420px">
+      <div class="card pane">
+        <div style="display:flex;align-items:center"><label>小編文</label><div class="sp"></div><div class="ai"><span class="btn s">✨ AI 產生</span><span class="btn s">🔍 AI 校錯字</span></div></div>
+        <div class="in" style="height:200px">北北基桃明天照常上班上課！宜蘭山區部分鄉鎮停班停課，出門前記得再確認最新公告。<br><br>#颱風 #停班停課</div>
+        <div class="row2"><div><label>短標（RD 用，留空自動取前 5 字）</label><div class="in" style="color:var(--muted)">颱風假最新</div></div>
+        <div><label>RD 回填</label><div class="chk"><b>✓</b>寫入 RD（擠看看、氣象一律不寫）</div></div></div>
+      </div>
+      <div class="card pane">
+        <label>社群守則判讀</label>
+        <div class="light y"><span class="lamp"></span>黃燈：標題用語較聳動，建議再確認</div>
+        <div class="light r" style="opacity:.45"><span class="lamp"></span>紅燈範例：須勾選才能送</div>
+        <div class="chk"><b class="off"></b>我知道風險，仍要送出（紅燈時才出現）</div>
+        <div class="m">✎ 判讀後如果改了文字，燈號會作廢並要求重判。</div>
+        <span class="btn">↻ 重新判讀</span>
+      </div>
+    </div>
+    <div class="foot"><span class="btn">‹ 上一步</span><div class="sp"></div><span class="btn p">下一步：粉專與時間 ›</span></div>
+  </div>
+  <div class="anno" style="left:820px;top:150px">⑦ 判讀燈號＋紅燈勾選</div>
+</div>
+
+<!-- 5：Step3 粉專與時間＋確認 -->
+<div class="screen" id="v5">
+  <div class="ds">
+    <div class="dsh"><div><h2>新增發文</h2><p>勾選粉專，各自選立即或排程</p></div><div class="x">✕</div></div>
+    <div class="steps"><div class="st d"><span class="dot">✓</span>圖卡</div><div class="line d"></div><div class="st d"><span class="dot">✓</span>小編文與判讀</div><div class="line d"></div><div class="st c"><span class="dot">3</span>粉專與時間</div></div>
+    <div class="pages" style="flex:1;align-content:start">
+      <div class="pc on"><div class="h"><span class="chk"><b>✓</b></span>新聞<span class="tag">TVBS新聞</span></div><div class="seg"><span>立即</span><span class="on">排程</span></div><div class="in">10/25 18:30</div><div class="u">…/3012345?utm_source=facebook&amp;utm_medium=fbarticlepic</div><div class="res ok">✓ 已排程・開啟貼文</div></div>
+      <div class="pc on"><div class="h"><span class="chk"><b>✓</b></span>少康<span class="tag">少康戰情室</span></div><div class="seg"><span>立即</span><span class="on">排程</span></div><div class="in">10/25 18:40</div><div class="u">…?utm_source=facebook&amp;utm_medium=2100roompic</div><div class="res e">✗ 失敗：時間需晚於現在 20 分鐘 → 改完只重送這台</div></div>
+      <div class="pc on"><div class="h"><span class="chk"><b>✓</b></span>氣象<span class="tag">TVBS氣象</span></div><div class="seg"><span class="on">立即</span><span>排程</span></div><div class="in" style="color:var(--muted)">送出後立即發布</div><div class="u">…?utm_source=Facebook&amp;utm_medium=18weather</div><div class="m">不寫 RD</div></div>
+      <div class="pc off"><div class="h"><span class="chk"><b class="off"></b></span>娛樂<span class="tag">TVBS娛樂</span></div><div class="m">勾選後預填 現在＋30 分</div></div>
+      <div class="pc off"><div class="h"><span class="chk"><b class="off"></b></span>擠看看<span class="tag">擠看看</span></div><div class="m">不寫 RD</div></div>
+      <div class="pc off"><div class="h"><span class="chk"><b class="off"></b></span>國際＋<span class="tag">TVBS國際+</span></div><div class="m">國際＋版型為寬版 1200×675</div></div>
+    </div>
+    <div class="foot"><span class="btn">‹ 上一步</span><div class="sp"></div><span class="m">1 台成功・1 台失敗</span><span class="btn g">↻ 重送失敗的 1 台</span></div>
+  </div>
+  <div class="modal" style="display:none"></div>
+  <div class="anno" style="left:420px;top:62px">⑧ 每台各送一次；失敗只重送失敗的</div>
+  <div class="anno" style="left:960px;top:360px">⑨ 追蹤碼自動附加（氣象大寫 Facebook）</div>
+</div>
+
+<!-- 6：確認視窗 -->
+<div class="screen" id="v6">
+  <div class="ds" style="filter:blur(1px)"><div class="dsh"><div><h2>新增發文</h2></div></div></div>
+  <div class="modal"><div class="dlg">
+    <h2 style="margin:0">確認送出</h2><p class="m" style="margin:4px 0 0">黃燈：標題用語較聳動（已提醒）</p>
+    <table><tr><td><b>新聞</b></td><td>排程 10/25 18:30</td></tr><tr><td><b>少康</b></td><td>排程 10/25 18:40</td></tr><tr><td><b>氣象</b></td><td>立即發布</td></tr></table>
+    <div style="display:flex;gap:10px;justify-content:flex-end"><span class="btn">取消</span><span class="btn g">確定送出 3 台</span></div>
+  </div></div>
+  <div class="anno" style="left:390px;top:200px">⑩ 送出前列出每台與時間</div>
+</div>
+</body></html>
