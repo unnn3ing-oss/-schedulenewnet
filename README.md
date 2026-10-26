@@ -17,6 +17,8 @@
 | Worker 設定（Variables and Secrets） | https://dash.cloudflare.com/?to=/:account/workers/services/view/snn-images/production/settings |
 | R2 儲存桶 | https://dash.cloudflare.com/?to=/:account/r2/overview |
 | GitHub 儲存庫 | https://github.com/unnn3ing-oss/-schedulenewnet |
+| FB RUNDOWN 試算表 | https://docs.google.com/spreadsheets/d/1OZOcobchhiFU6rf9jTJW00YNSHQXxNjurpudQdVl4Lo/edit |
+| Apps Script 專案管理 | https://script.google.com/home |
 
 ## 架構（B 方案）
 
@@ -79,6 +81,26 @@ PR C（送出紀錄）：
 外掛 0.6.0 新增 `fetchArticle`（只下載 tvbs.com.tw 的 https 文章網頁：不帶 cookie、轉址後的網址也要在 tvbs.com.tw、只收 `text/html`、5 MB、15 秒以內；只回網頁原文，不呼叫後端），帶入時才能預填圖說與 hashtag。
 
 外掛要升到 0.5.0（白名單加入 `render_text_card`、`ai_caption`、`schedule`、`publish`）；舊外掛按送出會顯示「外掛版本太舊」。測試：`npm test`（payload、時間解析、泡泡狀態、送出紀錄的篩選／分頁／上限／重送條件等純函式）；瀏覽器端到端：`node test/e2e/app.e2e.js`（需要 Playwright 與 Chromium；送出流程用模擬的外掛與圖床，不會連到網新或 Cloudflare）。
+
+## Rundown 自動排入（Google Apps Script）
+
+送出成功（排程或立即）後，把 `文章ID/圖文/SLUG` 寫進 FB RUNDOWN。新增發文底列的「排入 Rundown」可開關（存在各自的瀏覽器），⚙ 是設定。
+
+- **對應**：新聞＝主粉、娛樂＝娛樂粉、少康＝少康粉、國際＋＝國際＋粉；擠看看、氣象沒有區段，略過。
+- **位置**：分頁 `YYYY/MM` → 第 1～5 列的 `MMDD` 日期欄 → 該粉專區段 → 時段（A 欄 4 碼）→ 分鐘看右邊一欄的碼（`0`＝:00、`-5`＝:05、`1`＝:10、`15`＝:15…`55`＝:55）。右邊那欄已被隔天內容蓋掉時，改用同時段其他欄還留著的分鐘碼；都沒有就只看 A 欄時段。
+- **照時間順序排進去**：目標＝時間 ≤ 目標時間的最後一筆稿子的下一格，但不早於最接近的分鐘格（08:07 → :05 那格）。目標格可填就直接填；已有稿子就插在這格，只把這個日期欄往下推到第一個可填的格子（例：10/26 09:07 → 插在 AA124，原本 AA124～133 移到 AA125～134）。可填＝空白、前一天留下的分鐘碼、沒有 ID 與 SLUG 的 `/文字/`、`/圖文/`。
+- **不重複**：同一天同區段已有同一個 `文章ID/圖文/` 就不再寫。
+- **SLUG**：小編文下面的欄位；空白就用標題第一行前 4 字。
+
+### 安裝（一次性，約 5 分鐘）
+
+1. 用有 FB RUNDOWN 編輯權限的 Google 帳號，到 https://script.google.com/home 新增專案，把 `gas/rundown.gs` 整份貼進 `程式碼.gs`。
+2. 專案設定（齒輪）→ 時區選「(GMT+08:00) 台北」→ 指令碼屬性新增 `TOKEN`：自訂一串至少 12 字的金鑰（只給網新小編）。試算表換年份時再加 `SHEET_ID`（網址 `/d/` 後面那段）。
+3. 部署 → 新增部署作業 → 類型「網頁應用程式」：執行身分「我」、誰可以存取「所有人」→ 部署，授權存取試算表。
+4. 複製「網頁應用程式網址」（`https://script.google.com/macros/s/…/exec`）。
+5. 網站新增發文 → 底列 ⚙ → 貼上網址與 TOKEN → 測試連線（會列出分頁名稱）→ 勾「開啟自動排入」→ 儲存。
+
+改了 `gas/rundown.gs` 要到「管理部署作業」編輯同一個部署、版本選「新版本」，網址才不會變。
 
 ## 外掛側邊欄與自動更新
 

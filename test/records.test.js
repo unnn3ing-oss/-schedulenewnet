@@ -125,7 +125,7 @@ test('相容 PR B 舊紀錄：沒有 lines／frame／thumb／body 也能顯示�
   assert.equal(R.frameLabel({ mode: 'single', frame: 'ent' }), '粉框');
   assert.deepEqual(R.counts(list, NOW), { all: 2, sched: 0, pub: 1, fail: 1 });
   assert.match(R.resendCheck(oldRec, 'weather', NOW).reason, /舊版紀錄/);
-  assert.deepEqual(R.copyInput(oldRec), { mode: 'frame', frame: 'news', lines: ['颱風假最新！北北基桃 明天照常上班上課'], caption: '', url: oldRec.url, cardStyle: '' });
+  assert.deepEqual(R.copyInput(oldRec), { mode: 'frame', frame: 'news', lines: ['颱風假最新！北北基桃 明天照常上班上課'], caption: '', url: oldRec.url, cardStyle: '', slug: '' });
   assert.deepEqual(R.copyInput(oldCard).lines, ['【快訊】北市', '明天停班停課']);
   assert.equal(R.copyInput(oldCard).mode, 'text');
   // 舊紀錄可以照常更新（PR B 的 updatePage）
@@ -133,11 +133,11 @@ test('相容 PR B 舊紀錄：沒有 lines／frame／thumb／body 也能顯示�
   assert.equal(rec.get('r1').pages[1].status, 'ok');
 });
 
-test('copyInput：新紀錄帶標題、小編文、網址、版型、模式（不帶圖）', () => {
-  const r = { mode: 'single', frame: 'ent', lines: ['金鐘61', '峮峮合體'], caption: '#金鐘', url: 'https://news.tvbs.com.tw/entertainment/3012399', cardStyle: 'red',
+test('copyInput：新紀錄帶標題、小編文、網址、版型、模式、SLUG（不帶圖）', () => {
+  const r = { mode: 'single', frame: 'ent', lines: ['金鐘61', '峮峮合體'], caption: '#金鐘', url: 'https://news.tvbs.com.tw/entertainment/3012399', cardStyle: 'red', slug: '峮峮',
     thumb: THUMB, pages: [{ code: 'ent', body: body('ent') }] };
   const c = R.copyInput(r);
-  assert.deepEqual(c, { mode: 'frame', frame: 'ent', lines: ['金鐘61', '峮峮合體'], caption: '#金鐘', url: r.url, cardStyle: 'red' });
+  assert.deepEqual(c, { mode: 'frame', frame: 'ent', lines: ['金鐘61', '峮峮合體'], caption: '#金鐘', url: r.url, cardStyle: 'red', slug: '峮峮' });
   assert.equal('image' in c || 'imageUrl' in c || 'thumb' in c, false);
   // 沒有 lines 時從存的 body 還原分行
   assert.deepEqual(R.copyInput({ mode: 'single', title: 'x y', pages: [{ code: 'news', body: body('news') }] }).lines, ['第一行', '第二行']);

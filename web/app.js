@@ -62,6 +62,8 @@
     titleEl.setAttribute('aria-invalid', String(bad));
     Editor.setTitleLines(getLines());
     if (state.mode === 'text') drawTextCard();
+    const ds = Rundown.defaultSlug(getLines());
+    $('slug').placeholder = ds ? `空白＝${ds}（標題前 4 字）` : '空白＝標題前 4 字';
   }
   function setLines(lines) { titleEl.value = lines.join('\n'); updateCounters(); }
   titleEl.addEventListener('input', updateCounters);
@@ -136,10 +138,20 @@
     b.addEventListener('click', () => setCardStyle(s.key));
     sw.appendChild(b);
   });
+  // 色票一行排不下就左右滑：觸控板／手機原生可滑，滑鼠滾輪轉成水平捲動
+  sw.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || sw.scrollWidth <= sw.clientWidth) return;
+    e.preventDefault(); sw.scrollLeft += e.deltaY;
+  }, { passive: false });
   function setCardStyle(key) {
     if (!C.textCardStyles.some(s => s.key === key)) return;
     state.cardStyle = key;
     sw.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-checked', String(x.dataset.key === key)));
+    const cur = sw.querySelector(`.sw[data-key="${key}"]`);
+    if (cur && sw.clientWidth) {   // 只捲色票列本身，不動到整頁
+      const l = cur.offsetLeft - sw.offsetLeft, r = l + cur.offsetWidth;
+      if (l < sw.scrollLeft) sw.scrollLeft = l - 8; else if (r > sw.scrollLeft + sw.clientWidth) sw.scrollLeft = r - sw.clientWidth + 8;
+    }
     drawTextCard(); flowEdit();
   }
   // 後端 /render_text_card 實測（font: hanwang＝WHZ-Heavy）：76px、行距 110（76×1.45）、一行最多 11 個全形字、
@@ -612,7 +624,7 @@
     const reqs = Payload.buildRequests(input, codes.map(targetOf));
     // 本機紀錄：同一篇（直到清空頁面）只有一筆；每次送出都把內容、縮圖、燈號更新成這次送出的版本
     const recInfo = { mode: input.mode, frame: state.frame, title: input.mode === 'single' ? getLines().filter(Boolean).join(' ') : input.cardText.trim().slice(0, 60),
-      lines: getLines(), caption: input.caption, cardStyle: state.cardStyle, articleId: Rules.articleId(input.url), url: input.url,
+      lines: getLines(), caption: input.caption, cardStyle: state.cardStyle, slug: Rundown.cleanSlug($('slug').value), articleId: Rules.articleId(input.url), url: input.url,
       imgExp: input.mode === 'single' && upCache ? upCache.exp : '', thumb: makeThumb(),
       render: Payload.previewRequest(input),   // 列表「複製圖片」用同一個請求重新產成品圖（只存網址與文字）
       guard: { checkId: flow.guard.checkId, level: flow.guard.level, reasons: flow.guard.reasons || [] } };
@@ -628,11 +640,31 @@
         status: st.status, link: out.link || '', postId: out.postId || '', error: out.error || '', sentAt: new Date().toISOString(), path: rq.path, body: rq.body });
       renderPage(rq.code);
     }
+    const rd = await toRundown(reqs, recInfo);
     setFlow({ type: 'sent' });
     const sent = C.pages.map(p => p.code).filter(c => /^(ok|fail)$/.test(state.pages[c].status));
     const failed = sent.filter(c => state.pages[c].status === 'fail');
     const sum = SendFlow.summary(sent.map(c => state.pages[c].status));
-    sendMsg(failed.length ? sum + '：' + failed.map(c => `${labelOf(c)} ${state.pages[c].result.error}`).join('；') : sum + '・要發下一篇請按「清空頁面」', failed.length ? 'bad' : 'ok');
+    const base = failed.length ? sum + '：' + failed.map(c => `${labelOf(c)} ${state.pages[c].result.error}`).join('；') : sum + '・要發下一篇請按「清空頁面」';
+    sendMsg(base + (rd.msg ? '｜' + rd.msg : ''), failed.length || rd.bad ? 'bad' : 'ok');
+  }
+
+  // 這次送成功的台寫進 FB RUNDOWN（設定裡開啟才做）；排程用排程時間、立即用送出當下。擠看看、氣象沒有區段，略過
+  async function toRundown(reqs, info) {
+    if (!Rundown.enabled()) return { msg: '' };
+    const sent = reqs.filter(rq => state.pages[rq.code].status === 'ok').map(rq => ({ code: rq.code, at: rq.body.schedule || new Date() }));
+    const { entries } = Rundown.entries({ articleId: info.articleId, slug: info.slug, lines: info.lines }, sent);
+    if (!entries.length) return { msg: '' };
+    sendMsg('寫入 Rundown…');
+    let j;
+    try { j = await Rundown.add(entries); } catch (e) {
+      entries.forEach(en => Records.updatePage(flow.recordId, en.page, { rundown: { ok: false, error: e.message } }));
+      return { msg: 'Rundown 沒寫入：' + e.message, bad: true };
+    }
+    const res = Array.isArray(j.results) ? j.results : [];
+    entries.forEach((en, i) => { const r = res[i] || { ok: false, error: '沒有回應' };
+      Records.updatePage(flow.recordId, en.page, { rundown: { ok: !!r.ok, status: r.status || '', cell: r.cell || '', time: r.time || '', error: r.error || '' } }); });
+    return { msg: 'Rundown：' + entries.map((en, i) => Rundown.describe(res[i], labelOf(en.page))).join('；'), bad: entries.some((en, i) => !(res[i] && res[i].ok)) };
   }
 
   // 失敗的台各自重送：內容沒改、燈號仍有效就直接送；否則先重新判讀（泡泡只列這一台）
@@ -656,7 +688,7 @@
   }
   const allSent = () => C.pages.some(p => state.pages[p.code].status === 'ok') && !pending().length;
   function resetAll() {
-    $('url').value = ''; $('caption').value = ''; titleEl.value = ''; hint(''); capHint('');
+    $('url').value = ''; $('caption').value = ''; titleEl.value = ''; $('slug').value = ''; hint(''); capHint('');
     state.articleId = ''; state.summary = '';
     cap.auto = cap.ai = ''; cap.title = null; Article.learnSeps('', []);
     Editor.reset();
@@ -697,22 +729,35 @@
     setMode(inp.mode); setFrame(inp.frame);
     if (inp.cardStyle) setCardStyle(inp.cardStyle);
     $('url').value = inp.url || ''; state.articleId = Rules.articleId(inp.url);
-    titleEl.value = (inp.lines || []).join('\n'); $('caption').value = inp.caption || '';
+    titleEl.value = (inp.lines || []).join('\n'); $('caption').value = inp.caption || ''; $('slug').value = inp.slug || '';
     openModal();
     hint(inp.mode === 'frame' ? '已從紀錄帶入文字，照片請重新選' : '已從紀錄帶入文字', 'ok');
   }
   RecList.mount({ toast, onCopy: openWith });
+
+  // Rundown 開關（存在這台瀏覽器）：還沒設定網址與金鑰就先開設定視窗
+  const rdOn = $('rdOn');
+  const syncRd = v => { rdOn.checked = !!v.on && Rundown.ready(v); };
+  syncRd(Rundown.settings()); Rundown.onChange(syncRd);
+  rdOn.addEventListener('change', () => {
+    const v = Rundown.settings();
+    if (rdOn.checked && !Rundown.ready(v)) { rdOn.checked = false; Rundown.open(); toast('先設定 Rundown 的 Apps Script 網址與金鑰'); return; }
+    Rundown.save({ on: rdOn.checked });
+    toast(rdOn.checked ? '送出成功後會自動排入 Rundown' : '已關閉 Rundown 自動排入');
+  });
+  $('rdSetBtn').addEventListener('click', () => Rundown.open());
   $('closeBtn').addEventListener('click', requestClose);
   $('cfStay').addEventListener('click', () => { $('confirm').hidden = true; $('closeBtn').focus(); });
   $('cfLeave').addEventListener('click', () => (confirmFn || closeModal)());
   overlay.addEventListener('mousedown', e => { if (e.target === overlay) requestClose(); });
 
   document.addEventListener('keydown', e => {
-    const login = ImgHost.isOpen();
-    if (overlay.hidden && !login) return;
+    const login = ImgHost.isOpen(), rdSet = Rundown.isOpen();
+    if (overlay.hidden && !login && !rdSet) return;
     if (e.key === 'Escape') {
       e.preventDefault();
       if (login) { ImgHost.cancel(); return; }
+      if (rdSet) { Rundown.close(); $('rdSetBtn').focus(); return; }
       if (!$('confirm').hidden) { $('confirm').hidden = true; return; }
       if (!menu.hidden || !pop.hidden) { const c = popFor; closePops(); if (c) pgEls[c].mode.focus(); return; }
       if (flow.state === 'armed') { flow.seq++; setFlow({ type: 'outside' }); sendMsg('已取消，要送出請再按一次'); sendBtn.focus(); return; }
@@ -721,7 +766,7 @@
     }
     if (e.key !== 'Tab') return;
     // 焦點鎖在最上層：圖床登入 > 確認視窗 > 彈窗
-    const scope = login ? $('imgLogin') : !$('confirm').hidden ? $('confirm') : modal;
+    const scope = login ? $('imgLogin') : rdSet ? $('rdDlg') : !$('confirm').hidden ? $('confirm') : modal;
     const f = [...scope.querySelectorAll('a[href],button,input,textarea,select,[tabindex]:not([tabindex="-1"])')]
       .filter(el => !el.disabled && !el.closest('[hidden]') && el.offsetParent !== null && el.type !== 'file');
     if (!f.length) return;
