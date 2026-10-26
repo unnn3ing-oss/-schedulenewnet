@@ -1,4 +1,11 @@
 {
+  "0.6.0": {
+    "summary": "正式介面：帶入時預填小編文",
+    "items": [
+      "新增 fetchArticle：只允許下載 tvbs.com.tw 的 https 文章網頁（5 MB、15 秒以內，不帶 cookie，轉址後也要在 tvbs.com.tw），讓網頁解析圖說與 hashtag",
+      "fetchArticle 只回傳網頁原文，不會呼叫網新後台；後端白名單與 fetchImage 限制不變"
+    ]
+  },
   "0.5.0": {
     "summary": "正式介面：送出、預覽與 AI 小編文",
     "items": [

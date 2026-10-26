@@ -27,6 +27,8 @@
     // 走外掛 B1（背景直接 fetch，帶登入 cookie）；回 { ok, data:{status, contentType, snippet, text} } 或 { ok:false, error }
     call(path, method, body) { return send('call', { mode: 'b1', path: Ext.prefix + path, method: method || 'GET', body }, 45000); },
     // 下載 tvbs.com.tw 的圖片，回 { ok, data:{ image: dataURL } }（避免跨網域圖污染畫布）
-    fetchImage: url => send('fetchImage', { url }, 45000)
+    fetchImage: url => send('fetchImage', { url }, 45000),
+    // 下載 tvbs.com.tw 的文章網頁（外掛 0.6.0 起），回 { ok, data:{ html, url: 轉址後的最終網址 } }；舊外掛回 unknown_op
+    fetchArticle: url => send('fetchArticle', { url }, 20000)
   };
 })();

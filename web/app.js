@@ -66,6 +66,22 @@
   function setLines(lines) { titleEl.value = lines.join('\n'); updateCounters(); }
   titleEl.addEventListener('input', updateCounters);
 
+  // ---- 小編文的【標題】那一行跟著標題框走（QPT 的 learnSeps／titleAsOneLine：沒改過的相鄰兩行照文章原本的接法，新的用空格接）----
+  // auto：上次自動填進去的小編文（之後自動改【標題】、AI 產生也會跟著更新）；小編自己改過就對不上，帶入時不覆蓋
+  // ai：上次 AI 產生、放在最上面的文字（再按一次 AI 產生就換掉它，不會疊兩份）；title：上次同步進【】的標題
+  const cap = { auto: '', ai: '', title: null };
+  Article.bindTitle(titleEl);
+  function syncCaptionTitle() {
+    const el = $('caption'), t = Article.titleAsOneLine();
+    const r = Article.replaceTitleLine(el.value, t, cap.title);
+    if (r.index < 0) return;   // 小編把【…】那一行刪掉了：不再補回來
+    cap.title = t;
+    if (r.text === el.value) return;
+    if (el.value === cap.auto) cap.auto = r.text;
+    el.value = r.text;
+  }
+  titleEl.addEventListener('input', syncCaptionTitle);
+
   // ---- 版型 / 模式 ----
   function setActive(container, btn) { [...container.children].forEach(b => { if (b.tagName === 'BUTTON') b.classList.toggle('active', b === btn); }); }
   // 新聞（藍框）／娛樂（粉框）：只決定預覽的疊圖與送給後端的 template（所有勾選的粉專都用同一個）
@@ -176,6 +192,7 @@
     if (!url) { hint('請先貼文章網址', 'bad'); return; }
     filling = true; $('fillBtn').disabled = true; hint('帶入中…');
     try {
+      const artP = Ext.fetchArticle(url);   // 和 page_meta 同時抓：小編文的圖說與 hashtag 從文章網頁解析（同 QPT）
       const r = await Ext.call('/page_meta?url=' + encodeURIComponent(url));
       const err = metaError(r);
       if (err) { hint(err, 'bad'); return; }
@@ -189,16 +206,50 @@
         return;
       }
       state.summary = meta.summary || '';
-      if (meta.title) setLines(Rules.overrideLines(meta.title));   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle；兩種模式共用
+      if (meta.title) {   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle；兩種模式共用
+        const lines = Rules.overrideLines(meta.title);
+        Article.learnSeps(Article.overrideOneLine(meta.title), lines);   // 小編文的【標題】接回原標題的樣子
+        setLines(lines);
+        syncCaptionTitle();
+      }
       let msg = '已帶入' + (meta.title ? '標題' : '') + (state.articleId ? `（文章 ${state.articleId}）` : ''), cls = 'ok';
+      const imP = meta.image ? Ext.fetchImage(meta.image) : null;
       if (meta.image) {   // 不論目前是作圖框或純文字底圖都先載入主圖，之後切到作圖框不用再按一次帶入
-        const im = await Ext.fetchImage(meta.image);
+        const im = await imP;
         if (im.ok && im.data && im.data.image) { try { await Editor.loadUrl(im.data.image); msg += state.mode === 'frame' ? '與主圖' : '與主圖（切到作圖框即可使用）'; } catch (e) { msg += '，但主圖讀不出來'; cls = 'bad'; } }
         else { msg += '；主圖沒抓到（' + (im.error === 'host_not_allowed' ? '圖片網域不在允許範圍' : im.error === 'no_extension' ? '外掛沒回應，請更新外掛到 0.4.0 以上' : im.error) + '），請手動上傳'; cls = 'bad'; }
       }
-      hint(msg, cls);
+      const c = await fillCaption(artP, url);
+      hint(msg + '；' + c.msg, c.bad ? 'bad' : cls);
       flowEdit();
     } finally { filling = false; $('fillBtn').disabled = false; }
+  }
+
+  // 帶入的小編文＝QPT 的圖文格式：【標題】／圖說（例：（圖／TVBS））／#標籤 #標籤 #標籤。
+  // 圖說與 hashtag 從文章網頁解析（外掛 fetchArticle 下載、Article.parseArticle 解析）；小編改過就不覆蓋，只更新【標題】那一行。
+  async function fillCaption(artP, url) {
+    const res = await artP;
+    let art = null, old = false, fail = '';
+    if (res.ok && res.data && typeof res.data.html === 'string') {
+      try { art = Article.parseArticle(res.data.html, res.data.url || url); } catch (e) { fail = '文章網頁讀不懂'; }
+    } else if (/^(unknown_op|no_extension|empty_response)$/.test(res.error)) old = true;
+    else fail = `文章網頁沒抓到（${({ host_not_allowed: '網址不是 tvbs.com.tw', not_html: '不是網頁', too_big: '網頁太大', timeout: '逾時' })[res.error] || res.error}）`;
+    const caption = art ? Article.mainCaption(art) : '', tags = art ? art.tags : [];
+    const notes = [];
+    if (art && !caption) notes.push('沒抓到圖說');
+    if (art && !Article.pickTags(tags).length) notes.push('沒抓到 2～3 字的 hashtag');
+    const el = $('caption'), cur = el.value;
+    const fill = !cur.trim() || cur === cap.auto;
+    if (fill) {
+      const t = Article.titleAsOneLine();
+      el.value = cap.auto = Article.formatCopy({ title: t, caption, tags });
+      cap.ai = ''; cap.title = t;
+    } else syncCaptionTitle();
+    let msg = fill ? (art ? '小編文已帶入' + (notes.length ? `，但${notes.join('、')}` : '標題、圖說、hashtag') : '小編文只帶入標題')
+      : '小編文已改過，沒有覆蓋（只更新【標題】那一行）';
+    if (old) msg += '・外掛版本太舊，請更新到 0.6.0 才能帶入圖說與 hashtag';
+    else if (fail) msg += '・' + fail;
+    return { msg, bad: old || !!fail };
   }
 
   // ---- 粉專按鈕：點名稱勾選；▾ 選立即／排程（排程才開時間視窗）----
@@ -408,9 +459,15 @@
       if (!text) { capHint('AI 回應格式不認得，請手動撰寫', 'bad'); return; }
       if ($('caption').value !== before) { capHint('等待期間小編文被改過，沒有套用 AI 結果', 'bad'); return; }
       if (kind === 'proofread' && text === before.trim()) { capHint('沒有找到錯字', 'ok'); return; }
-      $('caption').value = text;
+      if (kind === 'generate') {   // AI 文字放最上面：上次 AI 產生的還在最上面就換掉，否則加在最前面；下面的【標題】、圖說、hashtag 不動
+        const rest = cap.ai && (before === cap.ai || before.startsWith(cap.ai + '\n')) ? before.slice(cap.ai.length + 1) : before;
+        const next = rest ? text + '\n' + rest : text;
+        if (before === cap.auto) cap.auto = next;
+        cap.ai = text;
+        $('caption').value = next;
+      } else $('caption').value = text;
       flowEdit();
-      capHint(kind === 'generate' ? '已產生，可以直接修改' : '已套用校對結果，請再看一次', 'ok');
+      capHint(kind === 'generate' ? '已產生（放在最上面），可以直接修改' : '已套用校對結果，請再看一次', 'ok');
     } finally { $('aiGenBtn').disabled = $('aiFixBtn').disabled = false; }
   }
   $('aiGenBtn').addEventListener('click', () => aiCaption('generate'));
@@ -594,6 +651,7 @@
   function resetAll() {
     $('url').value = ''; $('caption').value = ''; titleEl.value = ''; hint(''); capHint('');
     state.articleId = ''; state.summary = '';
+    cap.auto = cap.ai = ''; cap.title = null; Article.learnSeps('', []);
     Editor.reset();
     Object.values(state.pages).forEach(s => { s.on = false; s.sched = false; s.at = null; s.status = ''; s.result = null; });
     C.pages.forEach(p => renderPage(p.code));
