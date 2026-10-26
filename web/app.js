@@ -550,6 +550,7 @@
     const recInfo = { mode: input.mode, frame: state.frame, title: input.mode === 'single' ? getLines().filter(Boolean).join(' ') : input.cardText.trim().slice(0, 60),
       lines: getLines(), caption: input.caption, cardStyle: state.cardStyle, articleId: Rules.articleId(input.url), url: input.url,
       imgExp: input.mode === 'single' && upCache ? upCache.exp : '', thumb: makeThumb(),
+      render: Payload.previewRequest(input),   // 列表「複製圖片」用同一個請求重新產成品圖（只存網址與文字）
       guard: { checkId: flow.guard.checkId, level: flow.guard.level, reasons: flow.guard.reasons || [] } };
     if (!flow.recordId) flow.recordId = Records.add(Object.assign(recInfo, { pages: [] }));
     else Records.update(flow.recordId, recInfo);

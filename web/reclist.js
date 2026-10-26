@@ -1,5 +1,5 @@
 // 主畫面「送出紀錄」：分頁籤（全部／已排程／已發布／失敗）、分頁（每頁 20 筆，同 hottopic 的頁碼列）、各台狀態、
-// 從列表重送失敗的台、複製到新增發文、刪除紀錄。後端沒有列表端點，資料只來自這台瀏覽器的 Records（localStorage）。
+// 從列表重送失敗的台、複製標題、複製圖片（重新請後端產成品圖）、複製到新增發文、刪除紀錄。後端沒有列表端點，資料只來自這台瀏覽器的 Records（localStorage）。
 // 排程時間過了只能「推測」已發布：本機無法確認後端真的有發出。
 (function () {
   const $ = id => document.getElementById(id);
@@ -57,9 +57,13 @@
     const meta = make('div', 'rec-m muted');
     meta.append([sentWhen(rec.at, n) + ' 送出', Records.modeLabel(rec), Records.frameLabel(rec)].filter(Boolean).join('・'));
     const act = make('span', 'rec-act');
-    const cp = make('button', 'linkish', '複製到新增發文'); cp.type = 'button'; cp.dataset.copy = rec.id;
-    const del = make('button', 'linkish', '刪除紀錄'); del.type = 'button'; del.dataset.del = rec.id;
-    act.append(cp, del);
+    const btn = (text, key) => { const b = make('button', 'linkish', text); b.type = 'button'; b.dataset[key] = rec.id; return b; };
+    const ct = btn('複製標題', 'ctitle');
+    const ci = btn('複製圖片', 'cimg'), chk = Records.copyImageCheck(rec, n);
+    if (view.busy.has('img|' + rec.id)) { ci.textContent = '產圖中…'; ci.disabled = true; ci.setAttribute('aria-busy', 'true'); }
+    else if (!chk.ok) { ci.setAttribute('aria-disabled', 'true'); ci.title = chk.reason; }   // 不用 disabled：手機點了也能看到原因
+    else ci.title = '複製 FB 上看到的成品圖（含框與標題）';
+    act.append(ct, ci, btn('複製到新增發文', 'copy'), btn('刪除紀錄', 'del'));
     meta.append(act);
     main.append(title, meta);
     const chips = make('div', 'st2');
@@ -119,10 +123,83 @@
   });
   $('recList').addEventListener('click', e => {
     const rs = e.target.closest('[data-rs]'), cp = e.target.closest('[data-copy]'), del = e.target.closest('[data-del]');
-    if (rs) { const [id, code] = rs.dataset.rs.split('|'); openResend(id, code, rs); }
+    const ct = e.target.closest('[data-ctitle]'), ci = e.target.closest('[data-cimg]');
+    if (ct) copyTitle(ct.dataset.ctitle);
+    else if (ci) copyImage(ci.dataset.cimg);
+    else if (rs) { const [id, code] = rs.dataset.rs.split('|'); openResend(id, code, rs); }
     else if (cp) { const rec = Records.get(cp.dataset.copy); if (rec) opts.onCopy(Records.copyInput(rec)); }
     else if (del) askDelete(del.dataset.del, del);
   });
+
+  // ---- 複製標題、複製圖片 ----
+  function copyTitle(id) {
+    const rec = Records.get(id); if (!rec) return;
+    const text = Records.titleText(rec);
+    if (!text) { opts.toast('這筆紀錄沒有標題'); return; }
+    const done = () => opts.toast('已複製標題');
+    const legacy = () => {   // 沒有 Clipboard API（非 https 等）：用隱藏的 textarea 複製
+      const ta = make('textarea'); ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.append(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch (e) { /* 不支援 */ }
+      ta.remove();
+      opts.toast(ok ? '已複製標題' : '複製失敗，瀏覽器不允許存取剪貼簿');
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, legacy); else legacy();
+  }
+  // 後端回的 dataURL → PNG Blob（不是 PNG 就畫到畫布再轉）。CSP 不允許 fetch(data:)，自己解 base64
+  function dataUrlBlob(url) {
+    const m = /^data:([^;,]+)(;base64)?,(.*)$/s.exec(url || '');
+    if (!m) throw new Error('後端回的圖格式不認得');
+    const raw = m[2] ? atob(m[3]) : decodeURIComponent(m[3]), bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return new Blob([bytes], { type: m[1] });
+  }
+  function toPng(url) {
+    const blob = dataUrlBlob(url);
+    if (blob.type === 'image/png') return Promise.resolve(blob);
+    return new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => {
+        const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+        c.getContext('2d').drawImage(im, 0, 0);
+        c.toBlob(b => (b ? resolve(b) : reject(new Error('轉成 PNG 失敗'))), 'image/png');
+      };
+      im.onerror = () => reject(new Error('讀不到後端回的圖'));
+      im.src = url;
+    });
+  }
+  // 重新打 /render 或 /render_text_card（同後端預覽，經外掛）→ PNG Blob；錯誤訊息沿用 SendFlow.apiResult
+  async function renderPng(rq) {
+    const res = SendFlow.apiResult(await Ext.call(rq.path, 'POST', rq.body));
+    if (!res.ok || !res.image) throw new Error(res.error || '後端沒有回圖');
+    return toPng(res.image);
+  }
+  function download(blob, name) {
+    const a = make('a'), u = URL.createObjectURL(blob);
+    a.href = u; a.download = name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 10000);
+  }
+  // 要在點擊當下就呼叫 clipboard.write，並把「之後才拿到的圖」以 Promise 交給 ClipboardItem，Safari／Chrome 才認得是使用者操作
+  function copyImage(id) {
+    const rec = Records.get(id), key = 'img|' + id;
+    if (!rec || view.busy.has(key)) return;
+    const chk = Records.copyImageCheck(rec, now());
+    if (!chk.ok) { opts.toast(chk.reason); return; }
+    view.busy.add(key); render();
+    const png = renderPng(chk.request);
+    png.catch(() => {});   // 錯誤在下面統一處理
+    const name = Records.imageFileName(rec);
+    const canWrite = typeof ClipboardItem === 'function' && navigator.clipboard && typeof navigator.clipboard.write === 'function';
+    const viaDownload = why => png.then(b => { download(b, name); opts.toast(`${why}，已下載 ${name}`); });
+    const job = canWrite
+      ? navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]).then(() => opts.toast('已複製圖片，可直接貼上'),
+        e => png.then(() => viaDownload('瀏覽器不允許複製圖片' + (e && e.name === 'NotAllowedError' ? '' : '（' + ((e && e.message) || e) + '）'))))
+      : viaDownload('這個瀏覽器不支援複製圖片');
+    job.catch(e => opts.toast('複製圖片失敗：' + ((e && e.message) || e))).finally(() => {
+      view.busy.delete(key); render();
+      const again = document.querySelector(`[data-cimg="${id}"]`); if (again && document.activeElement === document.body) again.focus();
+    });
+  }
 
   // ---- 對話框共用：Esc 關、焦點鎖、關了焦點回原處 ----
   let openDlg = null, returnTo = null;
