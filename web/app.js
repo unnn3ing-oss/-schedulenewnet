@@ -142,23 +142,30 @@
     sw.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-checked', String(x.dataset.key === key)));
     drawTextCard(); flowEdit();
   }
+  // 後端 /render_text_card 實測（font: hanwang＝WHZ-Heavy）：76px、行距 110（76×1.45）、一行最多 11 個全形字、
+  // 整塊置中在 y≈524（不論幾行）、深色陰影右下偏移約 5px、底部白色 wordmark（從後端圖裁下，位置 476,955）
+  const TC = { px: 76, lineH: 110, maxW: 880, centerY: 524, baseOff: 23, shadow: 'rgba(0,0,0,.85)', blur: 5, off: 5, wordmarkAt: [476, 955] };
+  const wordmark = new Image();
+  wordmark.onload = () => drawTextCard();
+  wordmark.src = 'frames/wordmark_newsnet.png';
+  if (document.fonts) document.fonts.load(`${TC.px}px "WHZ-Heavy"`).then(() => drawTextCard(), () => {});
   function drawTextCard() {
     const cv = $('textCanvas'), c = cv.getContext('2d'), st = C.textCardStyles.find(s => s.key === state.cardStyle);
     c.fillStyle = st.bg; c.fillRect(0, 0, cv.width, cv.height);
     const text = getLines().join('\n') || '在右邊輸入標題';   // 卡面文字＝標題（照輸入框的分行）
-    const size = 84, maxW = 900;
-    c.font = `700 ${size}px "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif`;
-    c.fillStyle = st.fg; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.shadowColor = 'rgba(0,0,0,.45)'; c.shadowBlur = 12; c.shadowOffsetY = 4;
+    c.font = `${TC.px}px "WHZ-Heavy","Microsoft JhengHei",sans-serif`;
+    c.fillStyle = st.fg; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+    c.shadowColor = TC.shadow; c.shadowBlur = TC.blur; c.shadowOffsetX = TC.off; c.shadowOffsetY = TC.off;
     const rows = [];
     text.split('\n').forEach(para => {
       let cur = '';
-      for (const ch of para) { if (cur && c.measureText(cur + ch).width > maxW) { rows.push(cur); cur = ''; } cur += ch; }
+      for (const ch of para) { if (cur && c.measureText(cur + ch).width > TC.maxW) { rows.push(cur); cur = ''; } cur += ch; }
       rows.push(cur);
     });
-    const lh = size * 1.45, y0 = cv.height / 2 - (rows.length - 1) * lh / 2;
-    rows.forEach((r, i) => c.fillText(r, cv.width / 2, y0 + i * lh));
-    c.shadowColor = 'transparent';
+    const y0 = TC.centerY - (rows.length - 1) * TC.lineH / 2 + TC.baseOff;
+    rows.forEach((r, i) => c.fillText(r, cv.width / 2, y0 + i * TC.lineH));
+    c.shadowColor = 'transparent'; c.shadowOffsetX = c.shadowOffsetY = 0;
+    if (wordmark.complete && wordmark.naturalWidth) c.drawImage(wordmark, TC.wordmarkAt[0], TC.wordmarkAt[1]);
   }
 
   // ---- 快速帶入 ----
