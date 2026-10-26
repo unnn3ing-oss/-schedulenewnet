@@ -58,7 +58,7 @@ test('版型只看藍框／粉框：每台都送同一個 template（newsnet_new
   assert.ok(P.buildRequests(frame({ frame: 'ent' }), all).every(r => r.body.template === 'newsnet_ent'));
   assert.equal(P.buildBase(frame({ frame: undefined })).template, 'newsnet_news', '沒指定＝預設藍框');
   assert.equal(P.buildBase(card({ frame: 'ent' })).template, '', '純文字底圖 template 空字串');
-  assert.equal(P.previewRequest(frame({ frame: 'ent' })).body.template, 'newsnet_ent');
+  assert.equal(P.previewRequest(frame({ frame: 'ent' })).body.layout, 'newsnet_ent');
 });
 
 test('純文字底圖：卡面文字＝共用的標題（各行以 \\n 接起），title_lines／line1／line2 照交接文件為空', () => {
@@ -127,7 +127,10 @@ test('guardBody／guardKey（§5）', () => {
 test('previewRequest：作圖框 /render、純文字 /render_text_card', () => {
   const f = P.previewRequest(frame());
   assert.equal(f.path, '/render');
-  assert.deepEqual(Object.keys(f.body), ['ip', 'mode', 'template', 'image_url', 'crop', 'line1', 'line2', 'title_lines']);
+  // 照舊版實際格式：image_url、lines、layout、crop（沒有 template／title_lines）
+  assert.deepEqual(Object.keys(f.body), ['image_url', 'lines', 'layout', 'crop']);
+  assert.deepEqual(f.body.lines, ['颱風假 最新！北北基桃', '明天照常上班上課']);
+  assert.equal(f.body.layout, 'newsnet_news');
   assert.equal(f.body.crop, null);
   const c = P.previewRequest(card());
   assert.equal(c.path, '/render_text_card');

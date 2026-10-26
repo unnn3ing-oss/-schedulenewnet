@@ -86,12 +86,13 @@
     return targets.map(t => ({ code: t.code, path: endpointFor(t.at), body: forPage(base, t.code, t.at || null, input.url) }));
   }
 
-  // 後端預覽：作圖框打 /render、純文字打 /render_text_card（只帶產圖需要的欄位）
+  // 後端預覽：作圖框打 /render、純文字打 /render_text_card
+  // /render 的 body 照舊版發文台實際送出的格式（2026-10-26 由 DevTools 抓到）：{ image_url, lines, layout, crop }
+  // 沒帶 layout 時後端會套預設 IP 的版型（女人我最大），所以欄位名稱不能改成 template／title_lines
   function previewRequest(input) {
     const base = buildBase(input);
     if (base.mode === 'text_card') return { path: '/render_text_card', body: Object.assign({ ip: IP }, textCardFields(base.text, input.cardStyle)) };
-    const keys = ['ip', 'mode', 'template', 'image_url', 'crop', 'line1', 'line2', 'title_lines'];
-    return { path: '/render', body: Object.fromEntries(keys.map(k => [k, base[k]])) };
+    return { path: '/render', body: { image_url: base.image_url, lines: base.title_lines.slice(), layout: base.template, crop: base.crop } };
   }
 
   // AI 小編文（§3）：generate 帶 title、summary；proofread 帶 text、titles

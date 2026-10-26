@@ -426,7 +426,8 @@ async function prB(origin) {
   const render = (await calls()).find(c => c.path === '/render').body;
   assert.strictEqual(render.image_url, `${IMG_BASE}/i/${'1'.repeat(32)}.jpg`);
   assert.strictEqual(render.crop, null);
-  assert.strictEqual(render.template, 'newsnet_news');
+  assert.strictEqual(render.layout, 'newsnet_news');
+  assert.deepStrictEqual(Object.keys(render), ['image_url', 'lines', 'layout', 'crop']);
   assert.strictEqual(await page.textContent('#bePrevCap'), '後端產圖・新聞（藍框）');
   ok('後端預覽：跳圖床登入、錯密碼提示、上傳後 /render 帶圖床網址與 crop:null');
 
