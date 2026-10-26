@@ -84,7 +84,7 @@ PR C（送出紀錄）：
 
 ## Rundown 自動排入（Google Apps Script）
 
-送出成功（排程或立即）後，把 `文章ID/圖文/SLUG` 寫進 FB RUNDOWN。新增發文底列的「排入 Rundown」可開關（存在各自的瀏覽器），⚙ 是設定。
+送出成功（排程或立即）後，把 `文章ID/圖文/SLUG` 寫進 FB RUNDOWN。新增發文底列的「排入 Rundown」可開關（存在各自的瀏覽器），⚙ 可測試連線。網站經圖床 Worker 的 `POST /rundown` 轉送（用圖床登入），Apps Script 網址與金鑰只放在 Worker Secrets，網頁端不存。
 
 - **對應**：新聞＝主粉、娛樂＝娛樂粉、少康＝少康粉、國際＋＝國際＋粉；擠看看、氣象沒有區段，略過。
 - **位置**：分頁 `YYYY/MM` → 第 1～5 列的 `MMDD` 日期欄 → 該粉專區段 → 時段（A 欄 4 碼）→ 分鐘看右邊一欄的碼（`0`＝:00、`-5`＝:05、`1`＝:10、`15`＝:15…`55`＝:55）。右邊那欄已被隔天內容蓋掉時，改用同時段其他欄還留著的分鐘碼；都沒有就只看 A 欄時段。
@@ -98,7 +98,8 @@ PR C（送出紀錄）：
 2. 專案設定（齒輪）→ 時區選「(GMT+08:00) 台北」→ 指令碼屬性新增 `TOKEN`：自訂一串至少 12 字的金鑰（只給網新小編）。試算表換年份時再加 `SHEET_ID`（網址 `/d/` 後面那段）。
 3. 部署 → 新增部署作業 → 類型「網頁應用程式」：執行身分「我」、誰可以存取「所有人」→ 部署，授權存取試算表。
 4. 複製「網頁應用程式網址」（`https://script.google.com/macros/s/…/exec`）。
-5. 網站新增發文 → 底列 ⚙ → 貼上網址與 TOKEN → 測試連線（會列出分頁名稱）→ 勾「開啟自動排入」→ 儲存。
+5. Cloudflare → 圖床 Worker → Settings → Variables and Secrets 新增兩個 **Secret**：`RUNDOWN_URL`＝上一步的網址、`RUNDOWN_TOKEN`＝第 2 步的 TOKEN（完全相同）。`worker/index.js` 有更新時，重新貼上並 Deploy。
+6. 網站新增發文 → 勾底列「排入 Rundown」→ ⚙ → 測試連線（會列出分頁名稱）。
 
 改了 `gas/rundown.gs` 要到「管理部署作業」編輯同一個部署、版本選「新版本」，網址才不會變。
 
@@ -137,6 +138,8 @@ PR C（送出紀錄）：
    | `APP_PASSWORD` | Secret | 網頁登入密碼（建議 12 字元以上，自己決定） |
    | `SESSION_SECRET` | Secret | 隨機 32 字元以上（產生方式見下） |
    | `ALLOWED_ORIGIN` | Text | `https://unnn3ing-oss.github.io` |
+   | `RUNDOWN_URL` | Secret（選用） | Rundown 的 Apps Script `/exec` 網址（見「Rundown 自動排入」） |
+   | `RUNDOWN_TOKEN` | Secret（選用） | 與 Apps Script 指令碼屬性 `TOKEN` 相同（至少 12 字） |
    | `MAX_AGE_DAYS` | Text（選用） | `3`（預設就是 3） |
    | `MAX_BYTES` | Text（選用） | 預設 8388608（8 MB） |
 
