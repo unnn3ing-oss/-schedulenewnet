@@ -213,7 +213,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await page.click('[data-mode="text"]');
   assert(await page.isVisible('#textCanvas') && !(await page.isVisible('#editorCanvas')));
   assert.deepStrictEqual(await order(), frameOrder, '右欄順序相同');
-  assert.deepStrictEqual(frameOrder, ['url', 'title', 'caption']);
+  assert.deepStrictEqual(frameOrder, ['url', 'title', 'caption', 'slug']);
   assert.strictEqual(await page.inputValue('#title'), TITLE3);
   assert.strictEqual(await page.inputValue('#caption'), '金鐘 61 頒獎典禮 #金鐘61');
   assert.strictEqual(await page.evaluate(() => App.currentInput().cardText), TITLE3, '卡面文字＝標題（同樣分行）');
@@ -560,6 +560,33 @@ async function prB(origin) {
   await page.click('[data-frame="ent"]');
   const px = await page.evaluate(() => [...document.getElementById('editorCanvas').getContext('2d').getImageData(1060, 20, 1, 1).data].slice(0, 3));
   assert(px[0] > 220 && px[1] > 150 && px[1] < 215 && px[2] > 210, '預覽右上角是粉框 ' + px);
+  // Rundown：還沒設定時打勾 → 跳設定視窗；測試連線、儲存後開關打勾
+  const gas = [];
+  await page.route('https://script.google.com/**', async route => {
+    const b = JSON.parse(route.request().postData() || '{}'); gas.push(b);
+    const j = b.action === 'ping' ? { ok: true, title: 'FB RUNDOWN(2026)', sheets: ['2026/10', '2026/09'] }
+      : { ok: true, results: b.entries.map((e, i) => (i === 0 ? { ok: true, page: e.page, status: 'write', cell: '2026/10!AB107', time: e.time } : { ok: false, page: e.page, error: '08:00 時段在這天已經排滿' })) };
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(j) });
+  });
+  assert.strictEqual(await page.isChecked('#rdOn'), false);
+  await page.click('#rdOn');
+  await page.waitForSelector('#rdDlg:not([hidden])');
+  assert.strictEqual(await page.isChecked('#rdOn'), false, '沒設定前不打勾');
+  await page.check('#rdDlgOn');
+  await page.fill('#rdUrl', 'https://example.com/x');
+  await page.click('#rdDlg button[type=submit]');
+  assert.match(await page.textContent('#rdHint'), /script\.google\.com/);
+  await page.fill('#rdUrl', 'https://script.google.com/macros/s/AKfyTEST_123/exec');
+  await page.fill('#rdToken', 'secret-token-1234');
+  await page.click('#rdTest');
+  await page.waitForFunction(() => /連線成功/.test(document.getElementById('rdHint').textContent));
+  assert.deepStrictEqual(gas.shift(), { token: 'secret-token-1234', action: 'ping' });
+  await page.click('#rdDlg button[type=submit]');
+  assert(await page.isHidden('#rdDlg'));
+  assert.strictEqual(await page.isChecked('#rdOn'), true);
+  assert.match(await page.getAttribute('#slug', 'placeholder'), /金鐘61/);
+  ok('Rundown：未設定先開設定視窗、網址檢查、測試連線、儲存後開關打勾；SLUG 預設顯示標題前 4 字');
+
   for (const i of [0, 1, 3]) await pg(i).locator('button').first().click();
   const sentBefore = (await sends()).length, upBefore = worker.uploads;
   await page.click('#sendBtn');
@@ -570,9 +597,23 @@ async function prB(origin) {
   assert.deepStrictEqual(s3.map(c => [c.body.page, c.body.template]), [['news', 'newsnet_ent'], ['ent', 'newsnet_ent'], ['jkk', 'newsnet_ent']]);
   assert.deepStrictEqual(s3[0].body.title_lines, ['金鐘61／《飢餓》10週年大禮！', '峮峮驚喜合體遭催回歸', '蔡黃汝羞謝「好友」閃瞎全場']);
   assert.strictEqual(worker.uploads, upBefore + 1);
-  await page.click('#clearBtn');
-  await page.click('[data-frame="news"]');
   ok('粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
+  const rdReq = gas.shift();
+  assert.strictEqual(rdReq.action, 'add'); assert.strictEqual(rdReq.mode, 'next'); assert.strictEqual(rdReq.token, 'secret-token-1234');
+  assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['news', '3012399/圖文/金鐘61'], ['ent', '3012399/圖文/金鐘61']], '擠看看沒有 Rundown 區段，略過');
+  assert.match(rdReq.entries[0].date, /^\d{4}-\d{2}-\d{2}$/); assert.match(rdReq.entries[0].time, /^\d{2}:\d{2}$/);
+  const rdMsg = await page.textContent('#sendMsg');
+  assert.match(rdMsg, /Rundown：新聞 \d{2}:\d{2} → AB107；娛樂：08:00 時段在這天已經排滿/);
+  const rdRec = await page.evaluate(() => Records.list()[0].pages.find(p => p.code === 'news').rundown);
+  assert.deepStrictEqual([rdRec.ok, rdRec.cell], [true, '2026/10!AB107']);
+  ok('Rundown：送出成功後寫入（' + rdMsg.split('｜')[1] + '）');
+  await page.fill('#slug', '自訂 SLUG');
+  await page.click('#clearBtn');
+  assert.strictEqual(await page.inputValue('#slug'), '');
+  await page.click('#rdOn');
+  assert.strictEqual(await page.evaluate(() => Rundown.enabled()), false);
+  await page.click('[data-frame="news"]');
+  ok('Rundown 開關可關閉；清空頁面一併清 SLUG');
 
   // 手機：純文字底圖 → 預覽 /render_text_card → 泡泡
   await page.setViewportSize({ width: 390, height: 844 });

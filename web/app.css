@@ -240,3 +240,17 @@ button.chip.e:hover{box-shadow:0 0 0 1px #9b1c1c}
   #newBtn{order:1;margin-left:auto;padding:9px 16px}
   #extPill,#imgPill{order:2}
 }
+/* Rundown 自動排入 */
+.slug-row{display:flex;align-items:center;gap:10px;margin-top:10px}
+.m-right .slug-row label{margin:0;white-space:nowrap}
+.slug-row input{max-width:220px;padding:8px 10px;font-size:14px}
+.rd-sw{display:flex;align-items:center;gap:4px}
+.rd-on{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;white-space:nowrap}
+.rd-on input{width:18px;height:18px;accent-color:var(--accent)}
+.rd-on:has(input:checked){color:var(--accent)}
+.login .rd-box{width:min(440px,100%);max-width:440px;max-height:calc(100vh - 32px);overflow:auto}
+.rd-box > label:not(.ck){display:block;margin:12px 0 0;font-size:13px;font-weight:700;color:var(--muted)}
+.rd-box .ck{display:flex;gap:8px;align-items:center;margin:8px 0 0;cursor:pointer;font-size:14px}
+.rd-box .ck input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
+.rd-mode{border:0;padding:0;margin:14px 0 0}.rd-mode legend{font-size:13px;font-weight:700;color:var(--muted);padding:0}
+.rd-box .row{flex-wrap:wrap;gap:8px;margin-top:14px}.rd-box #rdTest{margin-right:auto}

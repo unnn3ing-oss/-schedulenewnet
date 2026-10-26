@@ -131,7 +131,7 @@
     }
     const body = ((rec.pages || []).find(p => p.body) || {}).body || {};
     return { mode: card ? 'text' : 'frame', frame: rec.frame === 'ent' ? 'ent' : 'news', lines: lines.map(s => s.trim()).filter(Boolean),
-      caption: String(rec.caption != null ? rec.caption : body.caption || ''), url: String(rec.url || ''), cardStyle: rec.cardStyle || '' };
+      caption: String(rec.caption != null ? rec.caption : body.caption || ''), url: String(rec.url || ''), cardStyle: rec.cardStyle || '', slug: String(rec.slug || '') };
   }
 
   // ---- 「複製標題」「複製圖片」----

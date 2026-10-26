@@ -1,5 +1,5 @@
 <!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' https://snn-images.19jpz-3.workers.dev; style-src 'self'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https:; connect-src 'self' https://snn-images.19jpz-3.workers.dev https://script.google.com https://script.googleusercontent.com; style-src 'self'; script-src 'self'">
 <title>網新快速排程</title>
 <link rel="stylesheet" href="verify.css"><link rel="stylesheet" href="segmented.css"><link rel="stylesheet" href="app.css">
 </head><body>
@@ -84,10 +84,12 @@
           <span class="cap-btns"><button class="btn sm" id="aiGenBtn" type="button" title="依標題（與帶入的文章摘要）產生小編文">✨ AI 產生</button><button class="btn sm" id="aiFixBtn" type="button" title="校對小編文錯字">🔍 校錯字</button></span></div>
         <textarea id="caption" rows="7" placeholder="小編文（含 hashtag）"></textarea>
         <div class="hint" id="capHint" role="status"></div>
+        <div class="slug-row" id="slugRow"><label for="slug">Rundown SLUG</label><input id="slug" type="text" maxlength="20" autocomplete="off" placeholder="空白＝標題前 4 字"></div>
       </div>
     </div>
     <footer class="m-foot">
       <div class="pages" id="pages"></div>
+      <div class="rd-sw"><label class="rd-on" title="送出成功後自動寫進 FB RUNDOWN"><input type="checkbox" id="rdOn"><span>排入 Rundown</span></label><button class="btn sm ghost" id="rdSetBtn" type="button" aria-label="Rundown 設定" title="Rundown 設定">⚙</button></div>
       <div class="send" id="sendArea">
         <span class="muted guard" id="sendMsg" role="status">🛡 送出時自動判讀</span>
         <button class="btn" id="clearBtn" type="button" hidden>清空頁面</button>
@@ -116,6 +118,18 @@
     <p class="hint" id="ilHint" role="status"></p>
     <div class="row"><button class="btn ghost" id="ilLogout" type="button" hidden>登出</button><button class="btn" id="ilCancel" type="button">取消</button><button class="btn primary" id="ilGo" type="submit">登入</button></div></form>
 </div>
+<div class="login" id="rdDlg" role="dialog" aria-modal="true" aria-labelledby="rdTitle" hidden>
+  <form class="cf-box rd-box" id="rdForm"><h3 id="rdTitle">Rundown 自動排入</h3>
+    <p class="muted">送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、粉專、時段（新聞＝主粉、娛樂、少康、國際＋；擠看看、氣象沒有區段會略過）。</p>
+    <label class="ck"><input type="checkbox" id="rdDlgOn"><span>開啟自動排入</span></label>
+    <label for="rdUrl">Apps Script 網址</label><input id="rdUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
+    <label for="rdToken">金鑰（TOKEN）</label><input id="rdToken" type="password" autocomplete="off" placeholder="與 Apps Script 指令碼屬性 TOKEN 相同">
+    <fieldset class="rd-mode"><legend>該時間已經有稿子時</legend>
+      <label class="ck"><input type="radio" name="rdMode" id="rdModeNext" checked><span>往下找空格填入（不覆蓋）</span></label>
+      <label class="ck"><input type="radio" name="rdMode" id="rdModeInsert"><span>插在該時間，這天這時段下面往下推</span></label></fieldset>
+    <p class="hint" id="rdHint" role="status"></p>
+    <div class="row"><button class="btn ghost" id="rdTest" type="button">測試連線</button><button class="btn" id="rdCancel" type="button">取消</button><button class="btn primary" type="submit">儲存</button></div></form>
+</div>
 <div class="dlg" id="rsDlg" role="dialog" aria-modal="true" aria-labelledby="rsTitle" hidden>
   <div class="cf-box rs-box"><h3 id="rsTitle">重送</h3><p class="muted rs-what" id="rsWhat"></p>
     <div id="rsTime" hidden>
@@ -134,5 +148,5 @@
     <div class="row"><button class="btn" id="rcCancel" type="button">取消</button><button class="btn danger" id="rcGo" type="button">刪除紀錄</button></div></div>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
-<script src="config.js"></script><script src="rules.js"></script><script src="article.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="rules.js"></script><script src="article.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="rundown.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="app.js"></script>
 </body></html>
