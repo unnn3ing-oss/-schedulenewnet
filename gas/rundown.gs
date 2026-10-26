@@ -1,5 +1,5 @@
 // FB RUNDOWN 自動排入（Google Apps Script 網頁應用程式）
-// 網站送出／排程成功後 POST { token, action:'add', mode, entries:[{ page, date:'YYYY-MM-DD', time:'HH:mm', text:'4041548/圖文/颱風假' }] }
+// 網站送出／排程成功後 POST { token, action:'add', entries:[{ page, date:'YYYY-MM-DD', time:'HH:mm', text:'4041548/圖文/颱風假' }] }
 // 安裝步驟見 README「Rundown 自動排入」。指令碼屬性：TOKEN（必填，與網站設定相同）、SHEET_ID（可省略，預設 FB RUNDOWN(2026)）
 //
 // 試算表版面（2026/10 分頁實測）：
@@ -17,8 +17,8 @@ function rdStr(v) { return String(v == null ? '' : v).trim(); }
 function rdIsLabel(v) { return /^\d{4}$/.test(rdStr(v)); }
 function rdLabelMin(v) { var s = rdStr(v); return +s.slice(0, 2) * 60 + +s.slice(2); }
 function rdIsCode(v) { return Object.prototype.hasOwnProperty.call(RD_CODE_MIN, rdStr(v)); }
-// 可以填的格子：空白、前一天留下的分鐘碼、還沒填的「/圖文/」預留格
-function rdIsFree(v) { var s = rdStr(v); return s === '' || rdIsCode(s) || s === '/圖文/'; }
+// 可以填的格子：空白、前一天留下的分鐘碼、沒有 ID 與 SLUG 的「/文字/」「/圖文/」預留格
+function rdIsFree(v) { var s = rdStr(v).replace(/\s+/g, ''); return s === '' || rdIsCode(s) || s === '/文字/' || s === '/圖文/'; }
 function rdA1(row, col) {   // 0 起算 → A1
   var s = '', n = col + 1;
   while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
@@ -94,9 +94,11 @@ function rdRowTimes(V, blk, x) {
   return out;
 }
 
-// 決定要寫哪一格。mode：'next'＝已有內容就往下找空格；'insert'＝插在該時間，下面往下推（只動這個日期欄）
+// 決定要寫哪一格（照時間順序排進去）：
+// 目標＝「時間 ≤ 目標時間」的最後一筆稿子的下一格，但不早於最接近目標的那個分鐘格（例：08:07 → :05 那格）
+// 目標格可填（空白／預留格）就直接填；已有稿子就插在這格，這個日期欄往下推到第一個可填的格子為止（只動這一欄）
 // 回傳 { status:'exists'|'write'|'insert', row, shiftTo?, time } 或 { error }
-function rdPlan(V, x, page, hhmm, text, mode) {
+function rdPlan(V, x, page, hhmm, text) {
   var sec = rdFindSection(V, page);
   if (!sec) return { error: '找不到「' + (RD_SECTIONS[page] || [page])[0] + '」區段' };
   var key = text.split('/').slice(0, 2).join('/') + '/';
@@ -106,15 +108,18 @@ function rdPlan(V, x, page, hhmm, text, mode) {
   if (!blocks.length) return { error: '區段裡沒有時段' };
   var want = +hhmm.slice(0, 2) * 60 + +hhmm.slice(3, 5), blk = blocks[0];
   blocks.forEach(function (b) { if (b.min <= want && (blk.min > want || b.min > blk.min)) blk = b; });   // 開始時間 ≤ 目標的區塊裡最晚的（區段尾端可能有 0000）
-  var times = rdRowTimes(V, blk, x), best = -1;
-  times.forEach(function (t) { if (t <= want && t > best) best = t; });
-  var anchor = blk.start + Math.max(0, times.indexOf(best));
+  var times = rdRowTimes(V, blk, x), best = -1, lastBusy = -1;
+  times.forEach(function (t, i) {
+    if (t > want) return;
+    if (t > best) best = t;
+    if (!rdIsFree(V[blk.start + i][x])) lastBusy = blk.start + i;
+  });
+  var target = Math.max(blk.start + Math.max(0, times.indexOf(best)), lastBusy + 1);
   var free = -1;
-  for (var r = anchor; r < blk.end; r++) if (rdIsFree(V[r][x])) { free = r; break; }
+  for (var r = target; r < blk.end; r++) if (rdIsFree(V[r][x])) { free = r; break; }
   if (free < 0) return { error: rdFmt(blk.min) + ' 時段在這天已經排滿' };
-  var time = rdFmt(times[(mode === 'insert' ? anchor : free) - blk.start]);
-  if (mode === 'insert' && free > anchor) return { status: 'insert', row: anchor, shiftTo: free, time: time };
-  return { status: 'write', row: free, time: time };
+  if (free > target) return { status: 'insert', row: target, shiftTo: free, time: hhmm };
+  return { status: 'write', row: free, time: hhmm };
 }
 
 // ---- 以下只在 Apps Script 執行 ----
@@ -137,14 +142,14 @@ function doPost(e) {
   try {
     var names = ss.getSheets().map(function (s) { return s.getName(); });
     var results = body.entries.map(function (en) {
-      try { return rdAddOne(ss, names, en, body.mode === 'insert' ? 'insert' : 'next'); } catch (x) { return { ok: false, page: en.page, error: String(x && x.message || x) }; }
+      try { return rdAddOne(ss, names, en); } catch (x) { return { ok: false, page: en.page, error: String(x && x.message || x) }; }
     });
     SpreadsheetApp.flush();
     return rdJson({ ok: true, results: results });
   } finally { lock.releaseLock(); }
 }
 
-function rdAddOne(ss, names, en, mode) {
+function rdAddOne(ss, names, en) {
   var dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rdStr(en.date)), text = rdStr(en.text);
   if (!dm || !/^\d{2}:\d{2}$/.test(rdStr(en.time)) || !text) return { ok: false, page: en.page, error: '資料不完整' };
   var y = +dm[1], m = +dm[2], d = +dm[3];
@@ -153,7 +158,7 @@ function rdAddOne(ss, names, en, mode) {
   var sh = ss.getSheetByName(name), V = sh.getDataRange().getDisplayValues();
   var x = rdFindDateCol(V, m, d);
   if (x < 0) return { ok: false, page: en.page, error: name + ' 找不到 ' + rdPad(m) + rdPad(d) + ' 欄' };
-  var p = rdPlan(V, x, en.page, en.time, text, mode);
+  var p = rdPlan(V, x, en.page, en.time, text);
   if (p.error) return { ok: false, page: en.page, error: p.error };
   var cell = name + '!' + rdA1(p.row, x);
   if (p.status === 'exists') return { ok: true, page: en.page, status: 'exists', cell: cell };

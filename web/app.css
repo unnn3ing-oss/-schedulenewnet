@@ -252,5 +252,4 @@ button.chip.e:hover{box-shadow:0 0 0 1px #9b1c1c}
 .rd-box > label:not(.ck){display:block;margin:12px 0 0;font-size:13px;font-weight:700;color:var(--muted)}
 .rd-box .ck{display:flex;gap:8px;align-items:center;margin:8px 0 0;cursor:pointer;font-size:14px}
 .rd-box .ck input{width:18px;height:18px;margin:0;accent-color:var(--accent)}
-.rd-mode{border:0;padding:0;margin:14px 0 0}.rd-mode legend{font-size:13px;font-weight:700;color:var(--muted);padding:0}
 .rd-box .row{flex-wrap:wrap;gap:8px;margin-top:14px}.rd-box #rdTest{margin-right:auto}

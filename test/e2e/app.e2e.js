@@ -599,7 +599,7 @@ async function prB(origin) {
   assert.strictEqual(worker.uploads, upBefore + 1);
   ok('粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
   const rdReq = gas.shift();
-  assert.strictEqual(rdReq.action, 'add'); assert.strictEqual(rdReq.mode, 'next'); assert.strictEqual(rdReq.token, 'secret-token-1234');
+  assert.strictEqual(rdReq.action, 'add'); assert.strictEqual(rdReq.token, 'secret-token-1234'); assert.strictEqual('mode' in rdReq, false);
   assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['news', '3012399/圖文/金鐘61'], ['ent', '3012399/圖文/金鐘61']], '擠看看沒有 Rundown 區段，略過');
   assert.match(rdReq.entries[0].date, /^\d{4}-\d{2}-\d{2}$/); assert.match(rdReq.entries[0].time, /^\d{2}:\d{2}$/);
   const rdMsg = await page.textContent('#sendMsg');

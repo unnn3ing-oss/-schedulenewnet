@@ -124,9 +124,7 @@
     <label class="ck"><input type="checkbox" id="rdDlgOn"><span>開啟自動排入</span></label>
     <label for="rdUrl">Apps Script 網址</label><input id="rdUrl" type="url" autocomplete="off" placeholder="https://script.google.com/macros/s/…/exec">
     <label for="rdToken">金鑰（TOKEN）</label><input id="rdToken" type="password" autocomplete="off" placeholder="與 Apps Script 指令碼屬性 TOKEN 相同">
-    <fieldset class="rd-mode"><legend>該時間已經有稿子時</legend>
-      <label class="ck"><input type="radio" name="rdMode" id="rdModeNext" checked><span>往下找空格填入（不覆蓋）</span></label>
-      <label class="ck"><input type="radio" name="rdMode" id="rdModeInsert"><span>插在該時間，這天這時段下面往下推</span></label></fieldset>
+    <p class="hint">照時間順序排進去：該時間的格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格，這天這個時段下面往下推（不覆蓋）。</p>
     <p class="hint" id="rdHint" role="status"></p>
     <div class="row"><button class="btn ghost" id="rdTest" type="button">測試連線</button><button class="btn" id="rdCancel" type="button">取消</button><button class="btn primary" type="submit">儲存</button></div></form>
 </div>

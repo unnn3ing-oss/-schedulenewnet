@@ -1,5 +1,5 @@
 // Rundown 自動排入：送出成功後把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 試算表。
-// 寫入由 gas/rundown.gs（Google Apps Script 網頁應用程式，以小編自己的帳號執行）處理；網頁只送 { token, action, mode, entries }。
+// 寫入由 gas/rundown.gs（Google Apps Script 網頁應用程式，以小編自己的帳號執行）處理；網頁只送 { token, action, entries }。
 // 純函式（entries、defaultSlug…）Node 可 require 測試；瀏覽器另有設定小視窗與 post()。
 (function (root, factory) {
   const api = factory();
@@ -54,7 +54,7 @@
   if (typeof document === 'undefined') return;
   const R = window.Rundown, KEY = 'snn.rundown.v1', $ = id => document.getElementById(id);
   const listeners = [];
-  const DEF = { on: false, url: '', token: '', mode: 'next' };
+  const DEF = { on: false, url: '', token: '' };
   function settings() {
     try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); return Object.assign({}, DEF, v && typeof v === 'object' ? v : {}); } catch (e) { return Object.assign({}, DEF); }
   }
@@ -78,13 +78,13 @@
     if (!j.ok) throw new Error('Rundown：' + (j.error || '失敗'));
     return j;
   }
-  const add = list => { const s = settings(); return call(s, { action: 'add', mode: s.mode, entries: list }); };
+  const add = list => call(settings(), { action: 'add', entries: list });
 
   // ---- 設定小視窗 ----
   const box = () => $('rdDlg');
   function hint(msg, cls) { $('rdHint').textContent = msg || ''; $('rdHint').className = 'hint' + (cls ? ' ' + cls : ''); }
   function form() {
-    return { on: $('rdDlgOn').checked, url: $('rdUrl').value.trim(), token: $('rdToken').value.trim(), mode: $('rdModeInsert').checked ? 'insert' : 'next' };
+    return { on: $('rdDlgOn').checked, url: $('rdUrl').value.trim(), token: $('rdToken').value.trim() };
   }
   function check(v) {
     if (!R.URL_RE.test(v.url)) return '網址要是 https://script.google.com/macros/s/…/exec';
@@ -94,7 +94,6 @@
   function open() {
     const s = settings();
     $('rdDlgOn').checked = s.on; $('rdUrl').value = s.url; $('rdToken').value = s.token;
-    $('rdModeNext').checked = s.mode !== 'insert'; $('rdModeInsert').checked = s.mode === 'insert';
     hint(''); box().hidden = false;
     setTimeout(() => (s.url ? $('rdDlgOn') : $('rdUrl')).focus(), 0);
   }
