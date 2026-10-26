@@ -150,6 +150,8 @@
   $('url').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); quickFill(); } });
   $('url').addEventListener('input', () => { state.articleId = Rules.articleId($('url').value); });
   $('fillBtn').addEventListener('click', quickFill);
+  // 貼上網址就直接帶入（等貼上的值寫進欄位後再讀）
+  $('url').addEventListener('paste', () => setTimeout(() => { if (/^https?:\/\/\S+$/i.test($('url').value.trim())) quickFill(); }, 0));
 
   // page_meta 回傳格式未確認：接受常見欄位名，並看一層 data／meta／result
   function pickMeta(obj) {
@@ -189,9 +191,9 @@
       state.summary = meta.summary || '';
       if (meta.title) setLines(Rules.overrideLines(meta.title));   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle；兩種模式共用
       let msg = '已帶入' + (meta.title ? '標題' : '') + (state.articleId ? `（文章 ${state.articleId}）` : ''), cls = 'ok';
-      if (meta.image && state.mode === 'frame') {
+      if (meta.image) {   // 不論目前是作圖框或純文字底圖都先載入主圖，之後切到作圖框不用再按一次帶入
         const im = await Ext.fetchImage(meta.image);
-        if (im.ok && im.data && im.data.image) { try { await Editor.loadUrl(im.data.image); msg += '與主圖'; } catch (e) { msg += '，但主圖讀不出來'; cls = 'bad'; } }
+        if (im.ok && im.data && im.data.image) { try { await Editor.loadUrl(im.data.image); msg += state.mode === 'frame' ? '與主圖' : '與主圖（切到作圖框即可使用）'; } catch (e) { msg += '，但主圖讀不出來'; cls = 'bad'; } }
         else { msg += '；主圖沒抓到（' + (im.error === 'host_not_allowed' ? '圖片網域不在允許範圍' : im.error === 'no_extension' ? '外掛沒回應，請更新外掛到 0.4.0 以上' : im.error) + '），請手動上傳'; cls = 'bad'; }
       }
       hint(msg, cls);
@@ -548,6 +550,7 @@
     const recInfo = { mode: input.mode, frame: state.frame, title: input.mode === 'single' ? getLines().filter(Boolean).join(' ') : input.cardText.trim().slice(0, 60),
       lines: getLines(), caption: input.caption, cardStyle: state.cardStyle, articleId: Rules.articleId(input.url), url: input.url,
       imgExp: input.mode === 'single' && upCache ? upCache.exp : '', thumb: makeThumb(),
+      render: Payload.previewRequest(input),   // 列表「複製圖片」用同一個請求重新產成品圖（只存網址與文字）
       guard: { checkId: flow.guard.checkId, level: flow.guard.level, reasons: flow.guard.reasons || [] } };
     if (!flow.recordId) flow.recordId = Records.add(Object.assign(recInfo, { pages: [] }));
     else Records.update(flow.recordId, recInfo);

@@ -255,6 +255,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
 
   await prB(`http://localhost:${server.address().port}`);
   await prC(`http://localhost:${server.address().port}`);
+  await fillBothModes(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -276,10 +277,13 @@ const MOCK_BRIDGE = () => {
   function respond(op, p) {
     if (op === 'ping') return { ok: true, version: '0.5.0' };
     if (op === 'cookies') return { ok: true, data: [{ name: 'queen_session', sameSite: 'lax', httpOnly: true, expires: new Date(Date.now() + 5 * 864e5).toISOString() }] };
+    if (op === 'fetchImage') return { ok: true, data: { image: picture(1200, 675, '文章主圖（模擬）') } };
     if (op !== 'call') return { ok: false, error: 'unknown_op' };
     calls.push({ path: p.path, method: p.method, body: p.body });
+    if (/^\/page_meta\?.*9990001/.test(p.path)) return json(200, { title: '主圖帶入測試', image: 'https://news-images.tvbs.com.tw/a.jpg' });
     if (/^\/page_meta\?/.test(p.path)) return json(200, { title: '蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始', description: '摘要' });
     if (p.path === '/guard/check') return json(200, { level: window.__mock.guardLevel, check_id: 'chk-1', reasons: ['標題用語較聳動'] });
+    if (/^\/render/.test(p.path) && window.__mock.renderFail) return json(500, { detail: '產圖失敗（模擬）' });
     if (p.path === '/render') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '後端套版（模擬）') } };
     if (p.path === '/render_text_card') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '純文字（模擬）') } };
     if (p.path === '/ai_caption') return json(200, p.body.mode === 'generate' ? { caption: 'AI 產生的小編文 #颱風' } : { text: p.body.text.replace('上般', '上班') });
@@ -297,7 +301,8 @@ const MOCK_BRIDGE = () => {
     const d = e.data;
     if (e.source !== window || !d || d.source !== 'snn-web') return;
     const res = respond(d.op, d.payload || {});
-    setTimeout(() => window.postMessage(Object.assign({ source: 'snn-ext', nonce: d.nonce }, res), location.origin), 40);
+    const slow = d.op === 'call' && /^\/render/.test((d.payload || {}).path || '') && window.__mock.renderDelay;
+    setTimeout(() => window.postMessage(Object.assign({ source: 'snn-ext', nonce: d.nonce }, res), location.origin), slow || 40);
   });
 };
 
@@ -623,7 +628,9 @@ async function prC(origin) {
 
   const row0 = page.locator('.rec').first();
   const md = await page.evaluate(t => Records.fmtMD(Sched.combine(t, '21:30')), tomorrow);
-  assert.deepStrictEqual(await chips(row0), ['新聞・已發布 ↗', `少康・排程 ${md}`, '氣象・失敗 ↻ 重送']);
+  const c0 = await chips(row0);
+  assert.match(c0[0], /^新聞・已發布 \d\d\/\d\d \d\d:\d\d ↗$/, '已發布顯示發布時間');
+  assert.deepStrictEqual(c0.slice(1), [`少康・排程 ${md}`, '氣象・失敗 ↻ 重送']);
   assert.strictEqual(await row0.locator('a.chip').getAttribute('href'), 'https://www.facebook.com/123_news');
   assert.strictEqual(await row0.locator('a.chip').getAttribute('target'), '_blank');
   assert.match(await row0.locator('.rec-t').textContent(), /^颱風假最新！北北基桃 明天照常上班上課$/);
@@ -650,7 +657,7 @@ async function prC(origin) {
   await page.check('#rsAck');
   assert(!(await page.locator('#rsGo').isDisabled()));
   await page.click('#rsGo');
-  await page.waitForFunction(() => /氣象・已發布 ↗/.test(document.querySelector('.rec').textContent));
+  await page.waitForFunction(() => /氣象・已發布 \d\d\/\d\d \d\d:\d\d ↗/.test(document.querySelector('.rec').textContent));
   const re = (await sends()).slice(first.length);
   assert.strictEqual(re.length, 1);
   assert.strictEqual(re[0].path, '/publish');
@@ -683,7 +690,8 @@ async function prC(origin) {
   assert.strictEqual(await page.locator('.rec').count(), 20, '每頁 20 筆');
   assert.strictEqual(await page.textContent('#recCnt'), '共 25 則');
   const dueRow = page.locator('.rec', { hasText: '【快訊】北市宣布' });
-  assert.deepStrictEqual(await chips(dueRow), ['新聞・應已發布（推測）']);
+  const dc = await chips(dueRow);
+  assert.strictEqual(dc.length, 1); assert.match(dc[0], /^新聞・應已發布 \d\d\/\d\d \d\d:\d\d（推測）$/);
   assert.match(await dueRow.locator('.chip.due').getAttribute('title'), /無法確認/);
   assert.match(await dueRow.locator('.rec-m').textContent(), /純文字底圖/);
   assert.deepStrictEqual(await page.locator('.rec').nth(0).locator('.rec-t b').textContent(), '颱風假最新！北北基桃', '新的在前');
@@ -776,13 +784,96 @@ async function prC(origin) {
   assert.strictEqual(await page.evaluate(() => Records.list().length), 24);
   ok('刪除紀錄：確認後只刪本機這一筆');
 
+  // 複製標題、複製圖片（重新請後端產成品圖 → 剪貼簿 image/png）
+  await ctx.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+  const toastIs = re => page.waitForFunction(r => new RegExp(r).test(document.getElementById('toast').textContent), re.source);
+  const clipText = () => page.evaluate(() => navigator.clipboard.readText());
+  const clipImage = () => page.evaluate(async () => {
+    const items = await navigator.clipboard.read();
+    const it = items.find(i => i.types.includes('image/png'));
+    if (!it) return { types: items.flatMap(i => i.types) };
+    const b = await it.getType('image/png'), bm = await createImageBitmap(b);
+    return { types: it.types, size: b.size, w: bm.width, h: bm.height };
+  });
+  const renders = async () => (await calls()).filter(c => /^\/render/.test(c.path));
+  const tyRow = page.locator('.rec', { hasText: '颱風假最新' });
+  await tyRow.locator('[data-ctitle]').click();
+  await toastIs(/^已複製標題$/);
+  assert.strictEqual(await clipText(), '颱風假最新！北北基桃\n明天照常上班上課');
+  const r0 = (await renders()).length;
+  await page.evaluate(() => { window.__mock.renderDelay = 700; });
+  await tyRow.locator('[data-cimg]').click();
+  await page.waitForFunction(() => /產圖中/.test(document.querySelector('.rec [data-cimg][aria-busy=true]')?.textContent || ''));
+  assert(await tyRow.locator('[data-cimg]').isDisabled(), '產圖中按鈕停用');
+  await toastIs(/已複製圖片/);
+  await page.evaluate(() => { window.__mock.renderDelay = 0; });
+  const rr = (await renders()).slice(r0);
+  assert.strictEqual(rr.length, 1);
+  assert.strictEqual(rr[0].path, '/render');
+  assert.deepStrictEqual(Object.keys(rr[0].body), ['image_url', 'lines', 'layout', 'crop'], '/render body 只有舊版的四個欄位');
+  assert.deepStrictEqual(rr[0].body, { image_url: first[0].body.image_url, lines: ['颱風假最新！北北基桃', '明天照常上班上課'], layout: 'newsnet_news', crop: null });
+  const img = await clipImage();
+  assert.deepStrictEqual([img.types.includes('image/png'), img.w, img.h], [true, 540, 540], '剪貼簿有後端成品圖：' + JSON.stringify(img));
+  assert.strictEqual(await tyRow.locator('[data-cimg]').textContent(), '複製圖片', '產完恢復');
+  assert.strictEqual(worker.uploads, 1, '不重傳圖');
+  ok('複製標題：剪貼簿是分行標題；複製圖片：產圖中狀態、/render 只帶 image_url／lines／layout／crop、剪貼簿是 image/png');
+
+  // 純文字底圖、過期、舊紀錄、後端錯誤、不支援 ClipboardItem 時改下載
+  await page.evaluate(() => {
+    const now = Date.now(), all = JSON.parse(localStorage.getItem(Records.KEY));
+    const cardIn = { mode: 'text_card', lines: ['【快訊】雙北宣布', '明天停班停課'], cardText: '【快訊】雙北宣布\n明天停班停課', cardStyle: NEWSNET_CONFIG.textCardStyles[1].key };
+    all.push({ id: 'seed-card', at: new Date(now - 5 * 864e5).toISOString(), mode: 'text_card', title: cardIn.cardText, lines: cardIn.lines, caption: '', url: '', cardStyle: cardIn.cardStyle,
+      render: Payload.previewRequest(cardIn), pages: [{ code: 'news', label: '新聞', kind: 'now', status: 'ok', link: 'https://www.facebook.com/card' }] });
+    all.push({ id: 'seed-exp', at: new Date(now - 4 * 864e5).toISOString(), imgExp: new Date(now - 864e5).toISOString(), mode: 'single', frame: 'news', title: '過期的圖', lines: ['過期的圖'],
+      render: { path: '/render', body: { image_url: 'https://snn-images.19jpz-3.workers.dev/i/' + '8'.repeat(32) + '.jpg', lines: ['過期的圖'], layout: 'newsnet_news', crop: null } },
+      pages: [{ code: 'news', label: '新聞', kind: 'now', status: 'ok' }] });
+    localStorage.setItem(Records.KEY, JSON.stringify(all));
+    RecList.render();
+  });
+  const cardRow = page.locator('.rec', { hasText: '【快訊】雙北宣布' });
+  await cardRow.locator('[data-ctitle]').click();
+  await toastIs(/^已複製標題$/);
+  assert.strictEqual(await clipText(), '【快訊】雙北宣布\n明天停班停課');
+  const r1 = (await renders()).length;
+  await cardRow.locator('[data-cimg]').click();
+  await toastIs(/已複製圖片/);
+  const rc = (await renders()).slice(r1);
+  assert.deepStrictEqual(rc.map(c => c.path), ['/render_text_card']);
+  assert.deepStrictEqual(rc[0].body, await page.evaluate(() => Payload.previewRequest({ mode: 'text_card', lines: ['【快訊】雙北宣布', '明天停班停課'], cardStyle: NEWSNET_CONFIG.textCardStyles[1].key }).body));
+  assert((await clipImage()).types.includes('image/png'));
+  const expBtn = page.locator('.rec', { hasText: '過期的圖' }).locator('[data-cimg]');
+  assert.strictEqual(await expBtn.getAttribute('aria-disabled'), 'true');
+  assert.strictEqual(await expBtn.getAttribute('title'), '圖片已過期（圖床只保留 3 天）');
+  const r2 = (await renders()).length;
+  await expBtn.click({ force: true });   // aria-disabled：仍可點，點了說明原因
+  await toastIs(/^圖片已過期（圖床只保留 3 天）$/);
+  const oldBtn = page.locator('.rec', { hasText: '舊紀錄 1' }).first().locator('[data-cimg]');
+  assert.strictEqual(await oldBtn.getAttribute('aria-disabled'), 'true');
+  assert.match(await oldBtn.getAttribute('title'), /舊版紀錄沒有存出圖資料/);
+  assert.strictEqual((await renders()).length, r2, '不能複製的不打後端');
+  await page.evaluate(() => { window.__mock.renderFail = true; });
+  await tyRow.locator('[data-cimg]').click();
+  await toastIs(/^複製圖片失敗：HTTP 500：產圖失敗（模擬）$/);
+  await page.evaluate(() => { window.__mock.renderFail = false; });
+  await page.evaluate(() => { window.__realCI = window.ClipboardItem; window.ClipboardItem = undefined; });
+  const [dl] = await Promise.all([page.waitForEvent('download'), tyRow.locator('[data-cimg]').click()]);
+  assert.strictEqual(dl.suggestedFilename(), 'newsnet-3012345.png');
+  assert.strictEqual(fs.readFileSync(await dl.path()).subarray(1, 4).toString(), 'PNG');
+  await toastIs(/不支援複製圖片，已下載 newsnet-3012345\.png/);
+  await page.evaluate(() => { window.ClipboardItem = window.__realCI; });
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.screenshot({ path: path.join(SHOTS, 'copy-list.png') });
+  ok('純文字底圖打 /render_text_card；過期與舊紀錄停用並說明原因；後端錯誤顯示訊息；不支援時改下載 PNG；已截圖 copy-list.png');
+
   // 手機 390：列表、彈窗底列
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => scrollTo(0, 0));
   const mg = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth,
-    out: [...document.querySelectorAll('.rec, .rec .chip, .rec-tabs, .pager')].filter(e => { const r = e.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth + 0.5; }).length }));
+    out: [...document.querySelectorAll('.rec, .rec .chip, .rec-act .linkish, .rec-tabs, .pager')].filter(e => { const r = e.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth + 0.5; }).length }));
   assert.deepStrictEqual(mg, { sw: 390, out: 0 }, '列表沒有橫向捲動、元素都在畫面內');
   await page.screenshot({ path: path.join(SHOTS, 'prC-mobile.png') });
+  await page.evaluate(() => { document.getElementById('toast').hidden = true; });
+  await page.screenshot({ path: path.join(SHOTS, 'copy-list-mobile.png') });
   await page.click('#newBtn');
   for (const i of [0, 2, 5]) await pg(i).locator('button').first().click();
   const foot = await page.evaluate(() => {
@@ -801,5 +892,41 @@ async function prC(origin) {
 
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   ok('PR C 沒有 page error / console error');
+  await browser.close();
+}
+
+// ===== 帶入：純文字底圖模式也載入主圖，切回作圖框不用再按一次；貼上網址自動帶入 =====
+async function fillBothModes(origin) {
+  console.log('\n  帶入（兩種模式都載入主圖）');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  await page.goto(origin + '/index.html');
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  await page.click('#newBtn');
+  await page.click('[data-mode="text"]');
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), false);
+  await page.fill('#url', 'https://news.tvbs.com.tw/life/9990001');
+  await page.click('#fillBtn');
+  await page.waitForFunction(() => /已帶入標題.*與主圖（切到作圖框即可使用）/.test(document.getElementById('urlHint').textContent));
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), true);
+  await page.click('[data-mode="frame"]');
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), true);
+  ok('純文字底圖模式帶入也載入主圖，切到作圖框直接有圖');
+
+  await page.evaluate(() => Editor.clearImage());
+  await page.fill('#url', '');
+  await page.focus('#url');
+  await page.evaluate(() => {
+    const el = document.getElementById('url');
+    el.value = 'https://news.tvbs.com.tw/life/9990001';
+    el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true }));
+  });
+  await page.waitForFunction(() => Editor.hasImage());
+  ok('貼上網址自動帶入（不用按帶入）');
+  assert.deepStrictEqual(errors, []);
   await browser.close();
 }

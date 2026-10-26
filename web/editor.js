@@ -52,18 +52,15 @@
   });
   let frame = 'news', titleLines = [];
 
-  // ===== 以下標題畫法複製自 quickpatterntool/app.js（圖片背景的新聞／娛樂框：字級 50＝67px、置中、區塊中心 y=880）=====
+  // ===== 標題畫法：底子複製自 quickpatterntool/app.js，字級與位置改成量自後端 /render 實際產圖（2026-10-26，1／2／3 行樣本）=====
+  // 後端：同為 WHZ-Heavy、66px、白字置中、行距 93px，最後一行固定在 y≈931，往上疊（不是整塊置中）
   const SIZE = W;
   const FONT_STACK = `"WHZ-Heavy", "Microsoft JhengHei", "PMingLiU", sans-serif`;
   const whzFontReady = document.fonts ? document.fonts.load(`67px "WHZ-Heavy"`).catch(() => {}) : Promise.resolve();
-  const BOX_CENTER = 880;      // fixed vertical center of the headline block (measured from real TVBS exports — 1/2/3-line titles all anchor here)
-  const LINE_HEIGHT_RATIO = 93 / 67; // measured line-height : font-size ratio
-  const CANVA_TO_PX = 67 / 50;
-  const DEFAULT_CANVA_SIZE_IMAGE = 50; // Canva 字級 50 — image/ribbon frame
+  const LAST_LINE_Y = 931;     // 最後一行的中線（textBaseline: middle），量自後端產圖
+  const LINE_HEIGHT = 93;      // 行距（px），量自後端產圖
+  const TITLE_PX = 66;         // 字級（px），量自後端產圖（同字型寬度比 67px 小 1.5%）
   const TITLE_LIGHT = '#ffffff';
-  function canvaToPx(canvaSize) {
-    return canvaSize * CANVA_TO_PX;
-  }
   function fitFontSize(targetCtx, lines, maxWidth, baseSize) {
     let size = baseSize;
     targetCtx.font = `${size}px ${FONT_STACK}`;
@@ -73,13 +70,13 @@
     }
     return size;
   }
-  function drawTitle(targetCtx, lines, baseSize, centerY, color = TITLE_LIGHT) {
+  function drawTitle(targetCtx, lines, baseSize, lastY, color = TITLE_LIGHT) {
     if (lines.length === 0) return;
 
-    const paddingX = 60;
+    const paddingX = 30;   // 後端 15 個全形字（約 990px）不縮字
     const maxWidth = SIZE - paddingX * 2;
     const fontSize = fitFontSize(targetCtx, lines, maxWidth, baseSize);
-    const lineHeight = fontSize * LINE_HEIGHT_RATIO;
+    const lineHeight = LINE_HEIGHT * fontSize / baseSize;
     const n = lines.length;
 
     targetCtx.textAlign = 'center';
@@ -87,7 +84,7 @@
     targetCtx.font = `${fontSize}px ${FONT_STACK}`;
 
     lines.forEach((line, i) => {
-      const y = centerY - (n - 1) * lineHeight / 2 + i * lineHeight;
+      const y = lastY - (n - 1 - i) * lineHeight;
       targetCtx.fillStyle = color;
       targetCtx.fillText(line, SIZE / 2, y);
     });
@@ -99,7 +96,7 @@
     drawBase(ctx);
     const ov = frames[frame];
     if (ov && ov.complete && ov.naturalWidth) ctx.drawImage(ov, 0, 0, W, H);
-    drawTitle(ctx, titleLines, canvaToPx(DEFAULT_CANVA_SIZE_IMAGE), BOX_CENTER);
+    drawTitle(ctx, titleLines, TITLE_PX, LAST_LINE_Y);
   }
   const changed = () => { render(); if (fxEditor) fxEditor.layout(); emit(); };
 

@@ -3,6 +3,7 @@
 // 紀錄格式（PR B 舊紀錄缺的欄位一律當空值處理，不需要轉換）：
 //   { id, at, updatedAt, mode:'single'|'text_card', frame:'news'|'ent', title, lines[], caption, url, articleId, cardStyle,
 //     thumb:'data:image/jpeg…', imgExp, guard:{ checkId, level, reasons[] },
+//     render:{ path:'/render'|'/render_text_card', body }（送出當下的後端出圖請求，給「複製圖片」重新產圖；只存網址與文字，不存圖）,
 //     pages:[{ code, label, kind:'now'|'sched', schedule:'YYYY-MM-DDTHH:mm', status:'ok'|'fail', link, postId, error, sentAt, path, body }] }
 (function (root, factory) {
   const node = typeof module === 'object' && module.exports;
@@ -133,6 +134,45 @@
       caption: String(rec.caption != null ? rec.caption : body.caption || ''), url: String(rec.url || ''), cardStyle: rec.cardStyle || '' };
   }
 
+  // ---- 「複製標題」「複製圖片」----
+  // 標題文字：分行以 \n 接起（純文字底圖就是卡面文字），與「複製到新增發文」帶入的標題相同
+  const titleText = rec => copyInput(rec).lines.join('\n');
+  // 純文字底圖 /render_text_card 的欄位（同 Payload.previewRequest）
+  const CARD_KEYS = ['ip', 'text', 'bg', 'text_color', 'width', 'height', 'wordmark', 'font', 'shadow', 'line_gap', 'center_on_canvas'];
+  const pick = (o, keys) => Object.fromEntries(keys.filter(k => o[k] !== undefined).map(k => [k, o[k]]));
+  // 重新向後端要成品圖的請求：新紀錄存了送出當下的 render（＝Payload.previewRequest）；
+  // 舊紀錄從存的送出內容（失敗的台才留 body）還原。/render 的 body 一律只有 { image_url, lines, layout, crop }。沒資料回 null
+  function renderRequest(rec) {
+    const r = rec && rec.render;
+    if (r && r.body && typeof r.body === 'object') {
+      if (r.path === '/render' && r.body.image_url) return { path: '/render', body: { image_url: String(r.body.image_url), lines: (r.body.lines || []).map(String), layout: String(r.body.layout || ''), crop: null } };
+      if (r.path === '/render_text_card' && r.body.text) return { path: '/render_text_card', body: pick(r.body, CARD_KEYS) };
+    }
+    const b = ((rec && rec.pages) || []).map(p => p && p.body).find(x => x && typeof x === 'object');
+    if (!b) return null;
+    if (b.mode === 'text_card') return b.text ? { path: '/render_text_card', body: pick(b, CARD_KEYS) } : null;
+    if (!b.image_url) return null;
+    return { path: '/render', body: { image_url: String(b.image_url), lines: (b.title_lines || []).map(String),
+      layout: String(b.template || (rec.frame === 'ent' ? 'newsnet_ent' : 'newsnet_news')), crop: null } };   // 同 Rules.frameTemplate
+  }
+  // 能不能複製圖片：{ ok:true, request } 或 { ok:false, reason }。作圖框的圖在圖床，過期就產不出來
+  function copyImageCheck(rec, now) {
+    const request = renderRequest(rec);
+    if (!request) return { ok: false, reason: '舊版紀錄沒有存出圖資料，無法複製圖片；請用「複製到新增發文」重做' };
+    if (request.path === '/render') {
+      const exp = imageExpiry(rec);
+      if (!exp || exp.getTime() <= now.getTime()) return { ok: false, reason: `圖片已過期（圖床只保留 ${IMG_DAYS} 天）` };
+    }
+    return { ok: true, request };
+  }
+  // 下載用檔名：newsnet-<文章編號>.png；沒有文章編號用送出日期時間
+  function imageFileName(rec) {
+    const id = String(rec.articleId || '').replace(/[^\w-]/g, '');
+    if (id) return `newsnet-${id}.png`;
+    const d = new Date(time(rec.at) || Date.now());
+    return `newsnet-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.png`;
+  }
+
   // ---- 儲存衛生 ----
   // 新的在前、最多 MAX 筆；縮圖只留 7 天內且最新 THUMB_KEEP 筆；成功的台不會再重送，拿掉 body
   function prune(all, now) {
@@ -207,7 +247,7 @@
 
   const api = { KEY, MAX, PAGE_SIZE, THUMB_DAYS, THUMB_KEEP, THUMB_CHARS, TABS, create, parseSchedule, fmtMD, titleParts, modeLabel, frameLabel,
     pageState, matches, filter, counts, pageCount, clampPage, slicePage, pageWindow, imageExpiry, resendCheck, validateAt, resendRequest,
-    guardBodyOf, copyInput, prune, okThumb };
+    guardBodyOf, copyInput, titleText, renderRequest, copyImageCheck, imageFileName, prune, okThumb };
   if (typeof window !== 'undefined') {
     let ls = null;
     try { ls = window.localStorage; } catch (e) { /* 隱私模式等被停用 */ }

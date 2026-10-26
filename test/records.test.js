@@ -197,3 +197,59 @@ test('resendRequest：照存的 body 原樣送，只換時間與守則；紅燈�
   assert.deepEqual(R.guardBodyOf({ body: body('news') }), { ip: 'newsnet', title_lines: ['第一行', '第二行'], caption: 'cap', text: '' });
   assert.deepEqual(R.guardBodyOf({ body: body('news', { mode: 'text_card', title_lines: [], text: '卡' }) }).text, '卡');
 });
+
+test('titleText：標題分行以 \\n 接起；純文字底圖是卡面文字；舊紀錄從 body 還原', () => {
+  assert.equal(R.titleText({ mode: 'single', lines: [' 金鐘61 ', '', '峮峮合體'] }), '金鐘61\n峮峮合體');
+  assert.equal(R.titleText({ mode: 'text_card', lines: ['【快訊】北市宣布', '明天停班停課'] }), '【快訊】北市宣布\n明天停班停課');
+  assert.equal(R.titleText({ mode: 'single', title: 'x y', pages: [{ code: 'news', body: body('news') }] }), '第一行\n第二行');
+  assert.equal(R.titleText({ mode: 'text_card', title: '舊\n卡' }), '舊\n卡');
+});
+
+const CARD = { ip: 'newsnet', text: '【快訊】\n停班', bg: '#c00', text_color: '#fff', width: 1080, height: 1080, wordmark: 'w', font: 'f', shadow: true, line_gap: 1.2, center_on_canvas: true };
+test('renderRequest：/render 的 body 只有 image_url、lines、layout、crop；純文字打 /render_text_card', () => {
+  const img = 'https://snn-images.19jpz-3.workers.dev/i/' + '1'.repeat(32) + '.jpg';
+  // 新紀錄：存了送出當下的 render
+  const a = R.renderRequest({ render: { path: '/render', body: { image_url: img, lines: ['一', '二'], layout: 'newsnet_ent', crop: null } } });
+  assert.deepEqual(a, { path: '/render', body: { image_url: img, lines: ['一', '二'], layout: 'newsnet_ent', crop: null } });
+  assert.deepEqual(Object.keys(a.body), ['image_url', 'lines', 'layout', 'crop']);
+  // 多餘欄位不帶、crop 一律 null
+  const b = R.renderRequest({ render: { path: '/render', body: { image_url: img, lines: ['一'], layout: 'newsnet_news', crop: { x: 1 }, template: 'x' } } });
+  assert.deepEqual(Object.keys(b.body), ['image_url', 'lines', 'layout', 'crop']); assert.equal(b.body.crop, null);
+  const c = R.renderRequest({ mode: 'text_card', render: { path: '/render_text_card', body: Object.assign({ extra: 1 }, CARD) } });
+  assert.deepEqual(c, { path: '/render_text_card', body: CARD });
+  // 舊紀錄：從失敗台存的 body 還原；沒 template 依版型
+  const d = R.renderRequest({ frame: 'ent', pages: [{ code: 'ent', status: 'ok' }, { code: 'news', body: body('news', { template: 'newsnet_ent' }) }] });
+  assert.deepEqual(d, { path: '/render', body: { image_url: 'https://img/i/1.jpg', lines: ['第一行', '第二行'], layout: 'newsnet_ent', crop: null } });
+  assert.equal(R.renderRequest({ frame: 'ent', pages: [{ code: 'news', body: body('news') }] }).body.layout, 'newsnet_ent');
+  assert.equal(R.renderRequest({ pages: [{ code: 'news', body: body('news') }] }).body.layout, 'newsnet_news');
+  const e = R.renderRequest({ pages: [{ code: 'news', body: Object.assign(body('news', { mode: 'text_card', image_url: '', title_lines: [] }), CARD) }] });
+  assert.deepEqual(e, { path: '/render_text_card', body: CARD });
+  // 沒有可用資料
+  assert.equal(R.renderRequest({ pages: [{ code: 'news', status: 'ok' }] }), null);
+  assert.equal(R.renderRequest({ pages: [{ code: 'news', body: body('news', { image_url: '' }) }] }), null);
+  assert.equal(R.renderRequest({ render: { path: '/render', body: { image_url: '' } } }), null);
+});
+
+test('copyImageCheck：圖床過期、舊紀錄不能複製圖片；純文字不受圖床影響', () => {
+  const render = { path: '/render', body: { image_url: 'https://img/i/1.jpg', lines: ['一'], layout: 'newsnet_news', crop: null } };
+  const fresh = { at: iso(NOW, -60), imgExp: iso(NOW, 3 * 1440 - 60), render };
+  const okc = R.copyImageCheck(fresh, NOW);
+  assert.equal(okc.ok, true); assert.deepEqual(okc.request, render);
+  assert.equal(R.copyImageCheck(Object.assign({}, fresh, { imgExp: iso(NOW, -1) }), NOW).reason, '圖片已過期（圖床只保留 3 天）');
+  assert.match(R.copyImageCheck({ at: iso(NOW, -4 * 1440), render }, NOW).reason, /圖片已過期/, '沒存 imgExp 以送出＋3 天估');
+  assert.match(R.copyImageCheck({ at: iso(NOW, -60), pages: [{ code: 'news', status: 'ok' }] }, NOW).reason, /舊版紀錄沒有存出圖資料/);
+  const card = { mode: 'text_card', at: iso(NOW, -10 * 1440), render: { path: '/render_text_card', body: CARD } };
+  assert.equal(R.copyImageCheck(card, NOW).ok, true);
+});
+
+test('imageFileName：有文章編號用編號，否則用送出時間', () => {
+  assert.equal(R.imageFileName({ articleId: '3012345', at: iso(NOW, 0) }), 'newsnet-3012345.png');
+  assert.equal(R.imageFileName({ articleId: '', at: new Date(2026, 9, 5, 9, 7).toISOString() }), 'newsnet-20261005-0907.png');
+});
+
+test('prune：保留 render（只有網址與文字，很小）', () => {
+  const render = { path: '/render', body: { image_url: 'https://img/i/1.jpg', lines: ['一'], layout: 'newsnet_news', crop: null } };
+  const out = R.prune([{ id: 'a', at: iso(NOW, -60), render, pages: [{ code: 'news', status: 'ok', body: body('news') }] }], NOW);
+  assert.deepEqual(out[0].render, render);
+  assert.equal('body' in out[0].pages[0], false);
+});

@@ -161,7 +161,14 @@ input.tp-date{width:auto;flex:1;min-width:0;font-weight:700}
 .rec-main{min-width:0}
 .rec-t{font-size:15px;line-height:1.4;overflow-wrap:anywhere}.rec-t .muted{font-weight:400}
 .rec-m{font-size:13px;margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;column-gap:12px}
-.rec-act{display:inline-flex;gap:10px}
+.rec-act{display:inline-flex;flex-wrap:wrap;column-gap:12px;row-gap:2px}
+.linkish[aria-disabled=true]{opacity:.55;cursor:not-allowed;text-decoration-style:dotted}
+.linkish[aria-disabled=true]:hover{color:var(--muted);text-decoration-color:var(--border)}
+.linkish:disabled{cursor:progress;text-decoration:none;color:var(--muted)}
+.rcopy{padding:4px 12px;font-size:13px;font-weight:600}
+.rcopy[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+.rcopy:disabled{cursor:progress;opacity:.7}
+.rec-act{align-items:center}
 .linkish{border:0;background:none;padding:2px 0;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px}
 .linkish:hover{color:var(--accent);text-decoration-color:currentColor}
 .st2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
@@ -216,6 +223,7 @@ button.chip.e:hover{box-shadow:0 0 0 1px #9b1c1c}
   .rec{grid-template-columns:56px minmax(0,1fr);gap:4px 12px;align-items:start;padding:12px 0}
   .rec-th{width:56px;height:56px}
   .rec .st2{grid-column:1/-1;justify-content:flex-start;margin-top:6px}
+  .rec-act{flex-basis:100%;column-gap:14px}.rec-act .linkish{padding:6px 0}   /* 動作換到自己一列，好點 */
   .chip{white-space:normal}
   .rec-tabs{width:100%}.rec-tabs button{padding:7px 10px}
   /* 彈窗底列：粉專按鈕自動換行，全部送出整條寬、好按 */
