@@ -255,6 +255,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
 
   await prB(`http://localhost:${server.address().port}`);
   await prC(`http://localhost:${server.address().port}`);
+  await fillBothModes(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -276,8 +277,10 @@ const MOCK_BRIDGE = () => {
   function respond(op, p) {
     if (op === 'ping') return { ok: true, version: '0.5.0' };
     if (op === 'cookies') return { ok: true, data: [{ name: 'queen_session', sameSite: 'lax', httpOnly: true, expires: new Date(Date.now() + 5 * 864e5).toISOString() }] };
+    if (op === 'fetchImage') return { ok: true, data: { image: picture(1200, 675, '文章主圖（模擬）') } };
     if (op !== 'call') return { ok: false, error: 'unknown_op' };
     calls.push({ path: p.path, method: p.method, body: p.body });
+    if (/^\/page_meta\?.*9990001/.test(p.path)) return json(200, { title: '主圖帶入測試', image: 'https://news-images.tvbs.com.tw/a.jpg' });
     if (/^\/page_meta\?/.test(p.path)) return json(200, { title: '蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始', description: '摘要' });
     if (p.path === '/guard/check') return json(200, { level: window.__mock.guardLevel, check_id: 'chk-1', reasons: ['標題用語較聳動'] });
     if (p.path === '/render') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '後端套版（模擬）') } };
@@ -801,5 +804,41 @@ async function prC(origin) {
 
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   ok('PR C 沒有 page error / console error');
+  await browser.close();
+}
+
+// ===== 帶入：純文字底圖模式也載入主圖，切回作圖框不用再按一次；貼上網址自動帶入 =====
+async function fillBothModes(origin) {
+  console.log('\n  帶入（兩種模式都載入主圖）');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  await page.goto(origin + '/index.html');
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  await page.click('#newBtn');
+  await page.click('[data-mode="text"]');
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), false);
+  await page.fill('#url', 'https://news.tvbs.com.tw/life/9990001');
+  await page.click('#fillBtn');
+  await page.waitForFunction(() => /已帶入標題.*與主圖（切到作圖框即可使用）/.test(document.getElementById('urlHint').textContent));
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), true);
+  await page.click('[data-mode="frame"]');
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), true);
+  ok('純文字底圖模式帶入也載入主圖，切到作圖框直接有圖');
+
+  await page.evaluate(() => Editor.clearImage());
+  await page.fill('#url', '');
+  await page.focus('#url');
+  await page.evaluate(() => {
+    const el = document.getElementById('url');
+    el.value = 'https://news.tvbs.com.tw/life/9990001';
+    el.dispatchEvent(new ClipboardEvent('paste', { bubbles: true }));
+  });
+  await page.waitForFunction(() => Editor.hasImage());
+  ok('貼上網址自動帶入（不用按帶入）');
+  assert.deepStrictEqual(errors, []);
   await browser.close();
 }
