@@ -628,7 +628,9 @@ async function prC(origin) {
 
   const row0 = page.locator('.rec').first();
   const md = await page.evaluate(t => Records.fmtMD(Sched.combine(t, '21:30')), tomorrow);
-  assert.deepStrictEqual(await chips(row0), ['新聞・已發布 ↗', `少康・排程 ${md}`, '氣象・失敗 ↻ 重送']);
+  const c0 = await chips(row0);
+  assert.match(c0[0], /^新聞・已發布 \d\d\/\d\d \d\d:\d\d ↗$/, '已發布顯示發布時間');
+  assert.deepStrictEqual(c0.slice(1), [`少康・排程 ${md}`, '氣象・失敗 ↻ 重送']);
   assert.strictEqual(await row0.locator('a.chip').getAttribute('href'), 'https://www.facebook.com/123_news');
   assert.strictEqual(await row0.locator('a.chip').getAttribute('target'), '_blank');
   assert.match(await row0.locator('.rec-t').textContent(), /^颱風假最新！北北基桃 明天照常上班上課$/);
@@ -655,7 +657,7 @@ async function prC(origin) {
   await page.check('#rsAck');
   assert(!(await page.locator('#rsGo').isDisabled()));
   await page.click('#rsGo');
-  await page.waitForFunction(() => /氣象・已發布 ↗/.test(document.querySelector('.rec').textContent));
+  await page.waitForFunction(() => /氣象・已發布 \d\d\/\d\d \d\d:\d\d ↗/.test(document.querySelector('.rec').textContent));
   const re = (await sends()).slice(first.length);
   assert.strictEqual(re.length, 1);
   assert.strictEqual(re[0].path, '/publish');
@@ -688,7 +690,8 @@ async function prC(origin) {
   assert.strictEqual(await page.locator('.rec').count(), 20, '每頁 20 筆');
   assert.strictEqual(await page.textContent('#recCnt'), '共 25 則');
   const dueRow = page.locator('.rec', { hasText: '【快訊】北市宣布' });
-  assert.deepStrictEqual(await chips(dueRow), ['新聞・應已發布（推測）']);
+  const dc = await chips(dueRow);
+  assert.strictEqual(dc.length, 1); assert.match(dc[0], /^新聞・應已發布 \d\d\/\d\d \d\d:\d\d（推測）$/);
   assert.match(await dueRow.locator('.chip.due').getAttribute('title'), /無法確認/);
   assert.match(await dueRow.locator('.rec-m').textContent(), /純文字底圖/);
   assert.deepStrictEqual(await page.locator('.rec').nth(0).locator('.rec-t b').textContent(), '颱風假最新！北北基桃', '新的在前');

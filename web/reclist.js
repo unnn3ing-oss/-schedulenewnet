@@ -23,15 +23,16 @@
     const st = Records.pageState(p, n);
     if (st === 'published') {
       const link = /^https:\/\//.test(p.link || '') ? p.link : '';
-      if (!link) return make('span', 'chip ok', `${label}・已發布`);
-      const a = make('a', 'chip ok', `${label}・已發布 ↗`);
+      const t = p.sentAt ? new Date(p.sentAt) : null, when = t && !isNaN(t) ? ' ' + Records.fmtMD(t) : '';   // 立即發布＝送出成功的時間
+      if (!link) return make('span', 'chip ok', `${label}・已發布${when}`);
+      const a = make('a', 'chip ok', `${label}・已發布${when} ↗`);
       a.href = link; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = '開啟貼文';
       return a;
     }
     const at = Records.parseSchedule(p.schedule);
     if (st === 'scheduled') return make('span', 'chip', `${label}・排程 ${Records.fmtMD(at)}`);
     if (st === 'due') {
-      const c = make('span', 'chip due', `${label}・應已發布（推測）`);
+      const c = make('span', 'chip due', `${label}・應已發布 ${Records.fmtMD(at)}（推測）`);
       c.title = `排程時間 ${Records.fmtMD(at)} 已過；本機無法確認是否真的發出，請到粉專確認`;
       return c;
     }
@@ -57,9 +58,9 @@
     const meta = make('div', 'rec-m muted');
     meta.append([sentWhen(rec.at, n) + ' 送出', Records.modeLabel(rec), Records.frameLabel(rec)].filter(Boolean).join('・'));
     const act = make('span', 'rec-act');
-    const btn = (text, key) => { const b = make('button', 'linkish', text); b.type = 'button'; b.dataset[key] = rec.id; return b; };
-    const ct = btn('複製標題', 'ctitle');
-    const ci = btn('複製圖片', 'cimg'), chk = Records.copyImageCheck(rec, n);
+    const btn = (text, key, cls) => { const b = make('button', cls || 'linkish', text); b.type = 'button'; b.dataset[key] = rec.id; return b; };
+    const ct = btn('複製標題', 'ctitle', 'btn sm ghost rcopy');
+    const ci = btn('複製圖片', 'cimg', 'btn sm ghost rcopy'), chk = Records.copyImageCheck(rec, n);
     if (view.busy.has('img|' + rec.id)) { ci.textContent = '產圖中…'; ci.disabled = true; ci.setAttribute('aria-busy', 'true'); }
     else if (!chk.ok) { ci.setAttribute('aria-disabled', 'true'); ci.title = chk.reason; }   // 不用 disabled：手機點了也能看到原因
     else ci.title = '複製 FB 上看到的成品圖（含框與標題）';

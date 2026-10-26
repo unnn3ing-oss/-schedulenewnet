@@ -165,6 +165,10 @@ input.tp-date{width:auto;flex:1;min-width:0;font-weight:700}
 .linkish[aria-disabled=true]{opacity:.55;cursor:not-allowed;text-decoration-style:dotted}
 .linkish[aria-disabled=true]:hover{color:var(--muted);text-decoration-color:var(--border)}
 .linkish:disabled{cursor:progress;text-decoration:none;color:var(--muted)}
+.rcopy{padding:4px 12px;font-size:13px;font-weight:600}
+.rcopy[aria-disabled=true]{opacity:.45;cursor:not-allowed}
+.rcopy:disabled{cursor:progress;opacity:.7}
+.rec-act{align-items:center}
 .linkish{border:0;background:none;padding:2px 0;font:inherit;font-size:13px;color:var(--muted);cursor:pointer;text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:3px}
 .linkish:hover{color:var(--accent);text-decoration-color:currentColor}
 .st2{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
