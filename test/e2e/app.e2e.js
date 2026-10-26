@@ -151,6 +151,16 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   ]);
   assert.deepStrictEqual(rej, ['host_not_allowed', 'host_not_allowed', 'host_not_allowed', 'host_not_allowed']);
   ok('fetchImage 拒絕非 tvbs.com.tw／非 https');
+  const rejArt = await page.evaluate(async () => [
+    (await Ext.fetchArticle('https://example.com/news/1')).error,
+    (await Ext.fetchArticle('http://news.tvbs.com.tw/life/3012345')).error,
+    (await Ext.fetchArticle('https://evil-tvbs.com.tw/life/1')).error,
+    (await Ext.fetchArticle('https://news.tvbs.com.tw.evil.com/life/1')).error,
+    (await Ext.fetchArticle('https://digi-social-post.tvbs.ai/ip/newsnet/page_meta?url=x')).error,
+    (await Ext.fetchArticle('javascript:alert(1)')).error
+  ]);
+  assert.deepStrictEqual(rejArt, Array(6).fill('host_not_allowed'));
+  ok('fetchArticle 拒絕非 tvbs.com.tw／非 https（也不能拿來打後端）');
 
   // 8 截圖（桌面）
   await page.fill('#caption', '北北基桃明天照常上班上課！\n#颱風 #停班停課');
@@ -256,6 +266,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await prB(`http://localhost:${server.address().port}`);
   await prC(`http://localhost:${server.address().port}`);
   await fillBothModes(`http://localhost:${server.address().port}`);
+  await captionFlow(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -273,11 +284,23 @@ const MOCK_BRIDGE = () => {
     g.fillStyle = '#fff'; g.font = 'bold 40px sans-serif'; g.textAlign = 'center'; g.fillText(label, w / 2, h / 2);
     return c.toDataURL('image/png');
   };
+  // 類似 TVBS 的文章頁（og:title 帶站名、figcaption（圖／TVBS）、#hashtag 連結）；9990002 是沒有圖說與 hashtag 的版本
+  const ARTICLE = bare => `<!doctype html><html><head><title>蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始｜TVBS新聞網</title>
+<meta property="og:title" content="蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始｜TVBS新聞網">
+<meta property="og:image" content="https://cc.tvbs.com.tw/img/a.jpg"></head><body><article><h1>標題</h1>
+${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w=800"><figcaption>蔡英文現身造勢場合。（圖／TVBS）</figcaption></figure>
+<p>內文（記者王小明／台北報導）</p><div class="tags"><a href="/tag/沈伯洋">#沈伯洋</a><a href="/tag/蔡英文">#蔡英文</a><a href="/tag/認知作戰">#認知作戰</a><a href="/tag/賴清德">#賴清德</a></div>`}
+</article></body></html>`;
   const json = (status, obj, type) => ({ ok: true, data: { status, contentType: type || 'application/json', text: typeof obj === 'string' ? obj : JSON.stringify(obj) } });
   function respond(op, p) {
-    if (op === 'ping') return { ok: true, version: '0.5.0' };
+    if (op === 'ping') return { ok: true, version: '0.6.0' };
     if (op === 'cookies') return { ok: true, data: [{ name: 'queen_session', sameSite: 'lax', httpOnly: true, expires: new Date(Date.now() + 5 * 864e5).toISOString() }] };
     if (op === 'fetchImage') return { ok: true, data: { image: picture(1200, 675, '文章主圖（模擬）') } };
+    if (op === 'fetchArticle') {
+      calls.push({ op, url: p.url });
+      if (window.__mock.oldExt) return { ok: false, error: 'unknown_op' };   // 0.5.0 以前的外掛
+      return { ok: true, data: { html: ARTICLE(/9990002/.test(p.url)), url: p.url } };
+    }
     if (op !== 'call') return { ok: false, error: 'unknown_op' };
     calls.push({ path: p.path, method: p.method, body: p.body });
     if (/^\/page_meta\?.*9990001/.test(p.path)) return json(200, { title: '主圖帶入測試', image: 'https://news-images.tvbs.com.tw/a.jpg' });
@@ -286,7 +309,7 @@ const MOCK_BRIDGE = () => {
     if (/^\/render/.test(p.path) && window.__mock.renderFail) return json(500, { detail: '產圖失敗（模擬）' });
     if (p.path === '/render') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '後端套版（模擬）') } };
     if (p.path === '/render_text_card') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '純文字（模擬）') } };
-    if (p.path === '/ai_caption') return json(200, p.body.mode === 'generate' ? { caption: 'AI 產生的小編文 #颱風' } : { text: p.body.text.replace('上般', '上班') });
+    if (p.path === '/ai_caption') return json(200, p.body.mode === 'generate' ? { caption: window.__mock.aiText || 'AI 產生的小編文 #颱風' } : { text: p.body.text.replace('上般', '上班') });
     if (p.path === '/publish' || p.path === '/schedule') {
       const code = p.body.page;
       if (window.__mock.failOnce[code] > 0) {
@@ -366,8 +389,9 @@ async function prB(origin) {
   await page.fill('#title', '颱風假最新！北北基桃\n明天照常上班上課');
 
   // AI 小編文
+  assert.strictEqual(await page.inputValue('#caption'), '【颱風假最新！北北基桃 明天照常上班上課】\n（圖／TVBS）\n#沈伯洋 #蔡英文 #賴清德', '帶入的小編文跟著改過的標題');
   await page.click('#aiGenBtn');
-  await page.waitForFunction(() => document.getElementById('caption').value === 'AI 產生的小編文 #颱風');
+  await page.waitForFunction(() => document.getElementById('caption').value === 'AI 產生的小編文 #颱風\n【颱風假最新！北北基桃 明天照常上班上課】\n（圖／TVBS）\n#沈伯洋 #蔡英文 #賴清德');
   await page.fill('#caption', '北北基桃明天照常上般上課！\n#颱風 #停班停課');
   await page.click('#aiFixBtn');
   await page.waitForFunction(() => /上班上課/.test(document.getElementById('caption').value));
@@ -928,5 +952,96 @@ async function fillBothModes(origin) {
   await page.waitForFunction(() => Editor.hasImage());
   ok('貼上網址自動帶入（不用按帶入）');
   assert.deepStrictEqual(errors, []);
+  await browser.close();
+}
+
+// ===== 帶入預填小編文（QPT 的圖文格式）、標題同步【】那一行、AI 產生放最上面 =====
+async function captionFlow(origin) {
+  console.log('\n  小編文（圖文格式）');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  await page.goto(origin + '/index.html');
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  const cap = () => page.inputValue('#caption');
+  const hintText = () => page.textContent('#urlHint');
+  const fill = async (u, re) => {
+    await page.fill('#url', u);
+    await page.click('#fillBtn');
+    await page.waitForFunction(re => new RegExp(re).test(document.getElementById('urlHint').textContent), re.source);
+  };
+  const T0 = '蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始';
+  const CAP = '（圖／TVBS）', TAGS = '#沈伯洋 #蔡英文 #賴清德';
+
+  await page.click('#newBtn');
+  await fill('https://news.tvbs.com.tw/politics/3012345', /小編文已帶入/);
+  assert.strictEqual(await cap(), `【${T0}】\n${CAP}\n${TAGS}`, '【原標題（含全形空格）】／主圖圖說／2～3 字 hashtag');
+  assert.match(await hintText(), /小編文已帶入標題、圖說、hashtag/);
+  const art = (await page.evaluate(() => window.__calls)).filter(c => c.op === 'fetchArticle');
+  assert.deepStrictEqual(art, [{ op: 'fetchArticle', url: 'https://news.tvbs.com.tw/politics/3012345' }]);
+  ok('帶入：小編文預填【標題】／（圖／TVBS）／#標籤（' + (await cap()).replace(/\n/g, '⏎') + '）');
+
+  // 每次改標題都即時更新【】那一行（逐字打也算）
+  await page.fill('#title', '颱風假最新！北北基桃\n明天照常上班上課');
+  assert.strictEqual(await cap(), `【颱風假最新！北北基桃 明天照常上班上課】\n${CAP}\n${TAGS}`);
+  await page.focus('#title');
+  await page.keyboard.press('End');
+  await page.keyboard.type('喔');
+  assert.strictEqual((await cap()).split('\n')[0], '【颱風假最新！北北基桃 明天照常上班上課喔】');
+  await page.keyboard.press('Backspace');
+  ok('改標題：【】那一行逐字跟著改，其他行不動');
+
+  // AI 產生：放最上面；再按一次是換掉，不是疊兩份
+  await page.evaluate(() => { window.__mock.aiText = 'AI 第一版小編文\n第二行'; });
+  await page.click('#aiGenBtn');
+  await page.waitForFunction(() => /^AI 第一版/.test(document.getElementById('caption').value));
+  assert.strictEqual(await cap(), `AI 第一版小編文\n第二行\n【颱風假最新！北北基桃 明天照常上班上課】\n${CAP}\n${TAGS}`);
+  await page.evaluate(() => { window.__mock.aiText = 'AI 第二版小編文'; });
+  await page.click('#aiGenBtn');
+  await page.waitForFunction(() => /^AI 第二版/.test(document.getElementById('caption').value));
+  assert.strictEqual(await cap(), `AI 第二版小編文\n【颱風假最新！北北基桃 明天照常上班上課】\n${CAP}\n${TAGS}`);
+  ok('AI 產生：文字放在最上面；再按一次換掉上一次的 AI 文字');
+
+  // AI 產生之後、小編手動改了圖說：改標題仍只換【】那一行
+  await page.fill('#caption', (await cap()).replace(CAP, '（圖／小編改的圖說）'));
+  await page.fill('#title', '北北基桃明天\n照常上班上課');
+  assert.strictEqual(await cap(), `AI 第二版小編文\n【北北基桃明天 照常上班上課】\n（圖／小編改的圖說）\n${TAGS}`);
+  await page.evaluate(() => document.querySelector('.m-body').scrollTop = 0);
+  await page.screenshot({ path: path.join(SHOTS, 'caption-qpt.png') });
+  ok('AI 產生＋手動改圖說後改標題：只換【】那一行；已截圖 caption-qpt.png');
+
+  // 小編改過的小編文：再帶入不覆蓋，只更新【】那一行
+  await fill('https://news.tvbs.com.tw/politics/3012345', /小編文已改過/);
+  assert.strictEqual(await cap(), `AI 第二版小編文\n【${T0}】\n（圖／小編改的圖說）\n${TAGS}`);
+  ok('小編改過的小編文：帶入不覆蓋（' + await hintText() + '）');
+
+  // 【】那一行整行刪掉：改標題不再補回來
+  await page.fill('#caption', 'AI 第二版小編文\n（圖／小編改的圖說）');
+  await page.fill('#title', '新標題');
+  assert.strictEqual(await cap(), 'AI 第二版小編文\n（圖／小編改的圖說）');
+  ok('【】那一行刪掉後，改標題不補回來');
+
+  // 沒抓到圖說／hashtag：照 QPT 列出缺什麼
+  await page.fill('#caption', '');
+  await fill('https://news.tvbs.com.tw/politics/9990002', /小編文已帶入/);
+  assert.strictEqual(await cap(), `【${T0}】`);
+  assert.match(await hintText(), /小編文已帶入，但沒抓到圖說、沒抓到 2～3 字的 hashtag/);
+  ok('缺圖說與 hashtag 時提示：' + await hintText());
+
+  // 舊外掛（沒有 fetchArticle）：提示更新，標題與【標題】照樣帶入
+  await page.evaluate(() => { window.__mock.oldExt = true; });
+  await page.fill('#caption', '');
+  await page.fill('#title', '');
+  await fill('https://news.tvbs.com.tw/politics/3012345', /外掛版本太舊/);
+  assert.strictEqual(await page.inputValue('#title'), (await page.evaluate(t => Rules.breakTitle(t), T0)).join('\n'));
+  assert.strictEqual(await cap(), `【${T0}】`);
+  assert.match(await page.getAttribute('#urlHint', 'class'), /bad/);
+  ok('舊外掛：提示更新到 0.6.0，標題與【標題】照樣帶入（' + await hintText() + '）');
+
+  assert.deepStrictEqual(errors, [], errors.join('\n'));
   await browser.close();
 }

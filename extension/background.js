@@ -92,6 +92,38 @@ async function fetchImage(url) {
   return { ok: true, data: { image: await toDataUrl(blob), contentType: type, bytes: blob.size } };
 }
 
+// 抓文章網頁（給網頁解析圖說與 hashtag）：同樣只允許 tvbs.com.tw 的 https 網址、不帶 cookie；轉址後的最終網址也要在允許範圍。
+// 只回 HTML 原文與最終網址，不呼叫任何後端端點。上限 5 MB、15 秒（整個下載過程）。
+const ARTICLE_MAX_BYTES = 5 * 1024 * 1024, ARTICLE_TIMEOUT = 15000;
+async function fetchArticle(url) {
+  if (!imageHostOk(url)) return { ok: false, error: 'host_not_allowed' };
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ARTICLE_TIMEOUT);
+  try {
+    const r = await fetch(url, { credentials: 'omit', redirect: 'follow', signal: ctrl.signal });
+    if (!imageHostOk(r.url)) return { ok: false, error: 'host_not_allowed' };
+    if (!r.ok) return { ok: false, error: 'http_' + r.status };
+    const type = r.headers.get('content-type') || '';
+    if (!/^text\/html/i.test(type)) return { ok: false, error: 'not_html' };
+    if (Number(r.headers.get('content-length') || 0) > ARTICLE_MAX_BYTES) { ctrl.abort(); return { ok: false, error: 'too_big' }; }
+    const reader = r.body.getReader(), chunks = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > ARTICLE_MAX_BYTES) { ctrl.abort(); return { ok: false, error: 'too_big' }; }
+      chunks.push(value);
+    }
+    const charset = (/charset=([\w-]+)/i.exec(type) || [])[1] || 'utf-8';
+    let dec;
+    try { dec = new TextDecoder(charset); } catch (e) { dec = new TextDecoder('utf-8'); }
+    return { ok: true, data: { html: dec.decode(await new Blob(chunks).arrayBuffer()), url: r.url } };
+  } catch (e) {
+    return { ok: false, error: ctrl.signal.aborted ? 'timeout' : String(e && e.message || e) };
+  } finally { clearTimeout(timer); }
+}
+
 async function cookieInfo() {
   // 只回報名稱與到期時間，不回傳值。
   const list = await chrome.cookies.getAll({ url: HOST + '/' });
@@ -104,6 +136,9 @@ async function handle(msg) {
   if (op === 'cookies') return { ok: true, data: await cookieInfo() };
   if (op === 'fetchImage') {
     try { return await fetchImage(String((payload || {}).url || '')); } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
+  }
+  if (op === 'fetchArticle') {
+    try { return await fetchArticle(String((payload || {}).url || '')); } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
   }
   if (op !== 'call') return { ok: false, error: 'unknown_op' };
   const { mode, path, method = 'GET', body } = payload || {};
