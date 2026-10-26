@@ -136,10 +136,20 @@
     b.addEventListener('click', () => setCardStyle(s.key));
     sw.appendChild(b);
   });
+  // 色票一行排不下就左右滑：觸控板／手機原生可滑，滑鼠滾輪轉成水平捲動
+  sw.addEventListener('wheel', e => {
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || sw.scrollWidth <= sw.clientWidth) return;
+    e.preventDefault(); sw.scrollLeft += e.deltaY;
+  }, { passive: false });
   function setCardStyle(key) {
     if (!C.textCardStyles.some(s => s.key === key)) return;
     state.cardStyle = key;
     sw.querySelectorAll('.sw').forEach(x => x.setAttribute('aria-checked', String(x.dataset.key === key)));
+    const cur = sw.querySelector(`.sw[data-key="${key}"]`);
+    if (cur && sw.clientWidth) {   // 只捲色票列本身，不動到整頁
+      const l = cur.offsetLeft - sw.offsetLeft, r = l + cur.offsetWidth;
+      if (l < sw.scrollLeft) sw.scrollLeft = l - 8; else if (r > sw.scrollLeft + sw.clientWidth) sw.scrollLeft = r - sw.clientWidth + 8;
+    }
     drawTextCard(); flowEdit();
   }
   // 後端 /render_text_card 實測（font: hanwang＝WHZ-Heavy）：76px、行距 110（76×1.45）、一行最多 11 個全形字、

@@ -85,8 +85,8 @@ textarea{font-family:inherit;resize:vertical}
 .cap-btns{display:flex;gap:6px}
 
 /* 純文字底圖 */
-.swatches{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}
-.sw{width:36px;height:36px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;padding:0}
+.swatches{display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;scrollbar-width:thin;margin:6px 0;padding:4px 4px 8px}
+.sw{flex:0 0 auto;scroll-snap-align:start;width:36px;height:36px;border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 0 1px var(--border);cursor:pointer;padding:0}
 .sw[aria-checked="true"]{box-shadow:0 0 0 3px var(--accent)}
 
 /* 粉專按鈕 */
