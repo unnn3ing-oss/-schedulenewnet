@@ -250,3 +250,66 @@ test('回應不含 Secret 值', async () => {
     assert.equal(body.includes(env.APP_PASSWORD) || body.includes(env.SESSION_SECRET), false);
   }
 });
+
+/* ---------- /rundown：網址與金鑰只在 Worker ---------- */
+const RD_URL = 'https://script.google.com/macros/s/AKfyTEST_123/exec';
+const rdEnv = (extra) => mkEnv(Object.assign({ RUNDOWN_URL: RD_URL, RUNDOWN_TOKEN: 't'.repeat(16) }, extra));
+async function rundown(body, { env, session, gas } = {}) {
+  env = env || rdEnv();
+  session = session === undefined ? await goodSession(env) : session;
+  const h = { 'content-type': 'text/plain' };
+  if (session !== null) h.authorization = 'Bearer ' + session;
+  const seen = [], orig = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { seen.push({ url, init }); return gas ? gas(url, init) : new Response('{"ok":true,"title":"T","sheets":["2026/10"]}'); };
+  try { const res = await call('/rundown', { method: 'POST', headers: h, body: JSON.stringify(body) }, env); return { res, seen }; } finally { globalThis.fetch = orig; }
+}
+const ENTRY = { page: 'news', date: '2026-10-27', time: '08:07', text: '1234567/圖文/測試圖文' };
+
+test('rundownBody：只放行 ping／格式正確的 add', async () => {
+  const { rundownBody } = await load();
+  assert.deepEqual(rundownBody({ action: 'ping', token: 'x' }), { action: 'ping' });
+  assert.deepEqual(rundownBody({ action: 'add', entries: [Object.assign({ extra: 1 }, ENTRY)] }), { action: 'add', entries: [ENTRY] });
+  for (const bad of [null, {}, { action: 'del' }, { action: 'add', entries: [] }, { action: 'add', entries: Array(11).fill(ENTRY) },
+    { action: 'add', entries: [Object.assign({}, ENTRY, { page: 'jkk' })] }, { action: 'add', entries: [Object.assign({}, ENTRY, { time: '8:07' })] },
+    { action: 'add', entries: [Object.assign({}, ENTRY, { text: 'a\nb' })] }, { action: 'add', entries: [Object.assign({}, ENTRY, { text: 'x'.repeat(101) })] }])
+    assert.equal(rundownBody(bad), null);
+});
+
+test('rundown 沒有／偽造憑證 → 401，不轉送', async () => {
+  for (const session of [null, 'bad.token']) {
+    const { res, seen } = await rundown({ action: 'ping' }, { session });
+    assert.equal(res.status, 401); assert.equal(seen.length, 0);
+  }
+});
+
+test('rundown 沒設 RUNDOWN_URL／RUNDOWN_TOKEN → 503；格式錯 → 400', async () => {
+  for (const extra of [{ RUNDOWN_URL: '' }, { RUNDOWN_URL: 'https://example.com/exec' }, { RUNDOWN_TOKEN: 'short' }]) {
+    const { res, seen } = await rundown({ action: 'ping' }, { env: rdEnv(extra) });
+    assert.equal(res.status, 503); assert.equal((await parse(res)).code, 'rundown_off'); assert.equal(seen.length, 0);
+  }
+  const { res } = await rundown({ action: 'add', entries: [] });
+  assert.equal(res.status, 400);
+});
+
+test('rundown 轉送：Worker 補上金鑰，回傳 results／ping 資訊，不洩漏金鑰', async () => {
+  const env = rdEnv();
+  const p = await rundown({ action: 'ping', token: 'from-web' }, { env });
+  assert.equal(p.seen[0].url, RD_URL);
+  assert.deepEqual(JSON.parse(p.seen[0].init.body), { token: env.RUNDOWN_TOKEN, action: 'ping' });
+  assert.deepEqual(await parse(p.res), { ok: true, data: { title: 'T', sheets: ['2026/10'] } });
+  const results = [{ ok: true, page: 'news', status: 'write', cell: '2026/10!AB106', time: '08:07' }];
+  const a = await rundown({ action: 'add', entries: [ENTRY] }, { env, gas: () => new Response(JSON.stringify({ ok: true, results })) });
+  assert.deepEqual(JSON.parse(a.seen[0].init.body), { token: env.RUNDOWN_TOKEN, action: 'add', entries: [ENTRY] });
+  const text = await a.res.text();
+  assert.deepEqual(JSON.parse(text), { ok: true, data: { results } });
+  assert(!text.includes(env.RUNDOWN_TOKEN) && !text.includes(RD_URL));
+});
+
+test('rundown：Apps Script 回非 JSON 或 ok:false → 502', async () => {
+  const a = await rundown({ action: 'ping' }, { gas: () => new Response('<html>登入</html>') });
+  assert.equal(a.res.status, 502);
+  const b = await rundown({ action: 'ping' }, { gas: () => new Response('{"ok":false,"error":"金鑰不對"}') });
+  assert.equal(b.res.status, 502); assert.match((await parse(b.res)).error, /金鑰不對/);
+  const c = await rundown({ action: 'ping' }, { gas: () => { throw new Error('net'); } });
+  assert.equal(c.res.status, 502);
+});

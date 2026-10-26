@@ -339,7 +339,7 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
 
 // 模擬圖床 Worker（/login、/upload），回傳計數
 async function mockWorker(ctx, origin) {
-  const worker = { logins: 0, uploads: 0, auths: [] };
+  const worker = { logins: 0, uploads: 0, auths: [], rundown: [] };
   await ctx.route(IMG_BASE + '/**', async route => {
     const req = route.request(), u = new URL(req.url());
     const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Vary': 'Origin' };
@@ -356,6 +356,12 @@ async function mockWorker(ctx, origin) {
       if (req.headers().authorization !== 'Bearer sess-1') return send(401, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
       worker.uploads++;
       return send(200, { ok: true, data: { url: `${IMG_BASE}/i/${String(worker.uploads).repeat(32)}.jpg`, key: 'k', expiresAt: new Date(Date.now() + 3 * 864e5).toISOString() } });
+    }
+    if (u.pathname === '/rundown') {
+      if (req.headers().authorization !== 'Bearer sess-1') return send(401, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
+      const b = JSON.parse(req.postData() || '{}'); worker.rundown.push(b);
+      return send(200, { ok: true, data: b.action === 'ping' ? { title: 'FB RUNDOWN(2026)', sheets: ['2026/10', '2026/09'] }
+        : { results: b.entries.map((e, i) => (i === 0 ? { ok: true, page: e.page, status: 'write', cell: '2026/10!AB107', time: e.time } : { ok: false, page: e.page, error: '08:00 時段在這天已經排滿' })) } });
     }
     return send(404, { ok: false, code: 'not_found' });
   });
@@ -560,32 +566,24 @@ async function prB(origin) {
   await page.click('[data-frame="ent"]');
   const px = await page.evaluate(() => [...document.getElementById('editorCanvas').getContext('2d').getImageData(1060, 20, 1, 1).data].slice(0, 3));
   assert(px[0] > 220 && px[1] > 150 && px[1] < 215 && px[2] > 210, '預覽右上角是粉框 ' + px);
-  // Rundown：還沒設定時打勾 → 跳設定視窗；測試連線、儲存後開關打勾
-  const gas = [];
-  await page.route('https://script.google.com/**', async route => {
-    const b = JSON.parse(route.request().postData() || '{}'); gas.push(b);
-    const j = b.action === 'ping' ? { ok: true, title: 'FB RUNDOWN(2026)', sheets: ['2026/10', '2026/09'] }
-      : { ok: true, results: b.entries.map((e, i) => (i === 0 ? { ok: true, page: e.page, status: 'write', cell: '2026/10!AB107', time: e.time } : { ok: false, page: e.page, error: '08:00 時段在這天已經排滿' })) };
-    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(j) });
-  });
+  // Rundown：開關直接存；⚙ 只有開關與測試連線（網址、金鑰在 Worker Secrets）
+  const gas = worker.rundown;
   assert.strictEqual(await page.isChecked('#rdOn'), false);
   await page.click('#rdOn');
+  assert.strictEqual(await page.isChecked('#rdOn'), true);
+  assert.strictEqual(await page.evaluate(() => Rundown.enabled()), true);
+  await page.click('#rdSetBtn');
   await page.waitForSelector('#rdDlg:not([hidden])');
-  assert.strictEqual(await page.isChecked('#rdOn'), false, '沒設定前不打勾');
-  await page.check('#rdDlgOn');
-  await page.fill('#rdUrl', 'https://example.com/x');
-  await page.click('#rdDlg button[type=submit]');
-  assert.match(await page.textContent('#rdHint'), /script\.google\.com/);
-  await page.fill('#rdUrl', 'https://script.google.com/macros/s/AKfyTEST_123/exec');
-  await page.fill('#rdToken', 'secret-token-1234');
+  assert.strictEqual(await page.isChecked('#rdDlgOn'), true);
+  assert.strictEqual(await page.$('#rdUrl'), null, '不再有網址欄');
   await page.click('#rdTest');
   await page.waitForFunction(() => /連線成功/.test(document.getElementById('rdHint').textContent));
-  assert.deepStrictEqual(gas.shift(), { token: 'secret-token-1234', action: 'ping' });
+  assert.deepStrictEqual(gas.shift(), { action: 'ping' }, '網頁不帶金鑰');
   await page.click('#rdDlg button[type=submit]');
   assert(await page.isHidden('#rdDlg'));
   assert.strictEqual(await page.isChecked('#rdOn'), true);
   assert.match(await page.getAttribute('#slug', 'placeholder'), /金鐘61/);
-  ok('Rundown：未設定先開設定視窗、網址檢查、測試連線、儲存後開關打勾；SLUG 預設顯示標題前 4 字');
+  ok('Rundown：開關直接存、⚙ 測試連線經 Worker（不帶金鑰）；SLUG 預設顯示標題前 4 字');
 
   for (const i of [0, 1, 3]) await pg(i).locator('button').first().click();
   const sentBefore = (await sends()).length, upBefore = worker.uploads;
@@ -599,7 +597,7 @@ async function prB(origin) {
   assert.strictEqual(worker.uploads, upBefore + 1);
   ok('粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
   const rdReq = gas.shift();
-  assert.strictEqual(rdReq.action, 'add'); assert.strictEqual(rdReq.token, 'secret-token-1234'); assert.strictEqual('mode' in rdReq, false);
+  assert.strictEqual(rdReq.action, 'add'); assert.strictEqual('token' in rdReq, false); assert.strictEqual('mode' in rdReq, false);
   assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['news', '3012399/圖文/金鐘61'], ['ent', '3012399/圖文/金鐘61']], '擠看看沒有 Rundown 區段，略過');
   assert.match(rdReq.entries[0].date, /^\d{4}-\d{2}-\d{2}$/); assert.match(rdReq.entries[0].time, /^\d{2}:\d{2}$/);
   const rdMsg = await page.textContent('#sendMsg');

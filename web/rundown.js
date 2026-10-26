@@ -1,5 +1,5 @@
 // Rundown 自動排入：送出成功後把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 試算表。
-// 寫入由 gas/rundown.gs（Google Apps Script 網頁應用程式，以小編自己的帳號執行）處理；網頁只送 { token, action, entries }。
+// 寫入由 gas/rundown.gs（Google Apps Script 網頁應用程式，以小編自己的帳號執行）處理；網頁送到圖床 Worker /rundown，Worker 補上金鑰再轉給 Apps Script。
 // 純函式（entries、defaultSlug…）Node 可 require 測試；瀏覽器另有設定小視窗與 post()。
 (function (root, factory) {
   const api = factory();
@@ -7,7 +7,6 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   const PAGES = { news: '主粉', ent: '娛樂粉', shaokang: '少康粉', intl: '國際＋粉' };   // 其他粉專在 Rundown 沒有區段
   const TYPE = '圖文';
-  const URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
   const pad = n => String(n).padStart(2, '0');
 
   // 沒填 SLUG：標題第一行去空白後前 4 字（「/」會打亂格式，一併拿掉）
@@ -46,78 +45,65 @@
     return `${label} ${r.time || ''} → ${cell}${r.status === 'insert' ? '（插入）' : ''}`;
   }
 
-  return { PAGES, TYPE, URL_RE, defaultSlug, cleanSlug, entryText, whenOf, entries, describe };
+  return { PAGES, TYPE, defaultSlug, cleanSlug, entryText, whenOf, entries, describe };
 });
 
-// ---- 瀏覽器：設定（localStorage）、送出、設定小視窗 ----
+// ---- 瀏覽器：開關（localStorage）、經圖床 Worker 轉送、設定小視窗 ----
+// Apps Script 網址與金鑰只放在 Worker 的 Secrets（RUNDOWN_URL／RUNDOWN_TOKEN），網頁端只帶圖床登入憑證
 (function () {
   if (typeof document === 'undefined') return;
-  const R = window.Rundown, KEY = 'snn.rundown.v1', $ = id => document.getElementById(id);
+  const KEY = 'snn.rundown.v1', $ = id => document.getElementById(id);
   const listeners = [];
-  const DEF = { on: false, url: '', token: '' };
   function settings() {
-    try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); return Object.assign({}, DEF, v && typeof v === 'object' ? v : {}); } catch (e) { return Object.assign({}, DEF); }
+    try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); return { on: !!(v && v.on) }; } catch (e) { return { on: false }; }
   }
   function save(patch) {
-    const v = Object.assign(settings(), patch);
+    const v = { on: !!Object.assign(settings(), patch).on };
     try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) { /* 被停用：這次分頁內照常 */ }
     listeners.forEach(fn => fn(v));
     return v;
   }
-  const ready = s => R.URL_RE.test(s.url) && s.token.length >= 12;
-  const enabled = () => { const s = settings(); return s.on && ready(s); };
+  const enabled = () => settings().on;
 
-  async function call(s, payload) {
+  // POST 圖床 Worker /rundown；沒登入或憑證失效就跳圖床登入，登入後再送一次
+  async function call(payload) {
+    const post = s => fetch(ImgHost.BASE + '/rundown', { method: 'POST', headers: { 'Authorization': 'Bearer ' + s.session, 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
     let r;
     try {
-      // text/plain：簡單請求，不用 CORS 預檢；Apps Script 會轉址到 googleusercontent 再回 JSON
-      r = await fetch(s.url, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ token: s.token }, payload)) });
-    } catch (e) { throw new Error('連不上 Rundown（Apps Script 網址或存取權限不對）'); }
+      r = await post(ImgHost.session() || await ImgHost.prompt(''));
+      if (r.status === 401) { ImgHost.logout(); r = await post(await ImgHost.prompt('expired')); }
+    } catch (e) {
+      throw new Error(e && e.code === 'need_login' ? '沒有登入圖床（Rundown 經由圖床 Worker 轉送）' : '連不上圖床 Worker');
+    }
     const j = await r.json().catch(() => null);
-    if (!j) throw new Error(`Rundown 回應看不懂（HTTP ${r.status}），請確認部署時「誰可以存取」選「所有人」`);
-    if (!j.ok) throw new Error('Rundown：' + (j.error || '失敗'));
-    return j;
+    if (!j) throw new Error(`Rundown 回應看不懂（HTTP ${r.status}）`);
+    if (!j.ok) throw new Error(j.error || 'Rundown 失敗');
+    return j.data || {};
   }
-  const add = list => call(settings(), { action: 'add', entries: list });
+  const add = list => call({ action: 'add', entries: list });
 
   // ---- 設定小視窗 ----
   const box = () => $('rdDlg');
   function hint(msg, cls) { $('rdHint').textContent = msg || ''; $('rdHint').className = 'hint' + (cls ? ' ' + cls : ''); }
-  function form() {
-    return { on: $('rdDlgOn').checked, url: $('rdUrl').value.trim(), token: $('rdToken').value.trim() };
-  }
-  function check(v) {
-    if (!R.URL_RE.test(v.url)) return '網址要是 https://script.google.com/macros/s/…/exec';
-    if (v.token.length < 12) return '金鑰至少 12 字（與 Apps Script 的 TOKEN 相同）';
-    return '';
-  }
   function open() {
-    const s = settings();
-    $('rdDlgOn').checked = s.on; $('rdUrl').value = s.url; $('rdToken').value = s.token;
+    $('rdDlgOn').checked = settings().on;
     hint(''); box().hidden = false;
-    setTimeout(() => (s.url ? $('rdDlgOn') : $('rdUrl')).focus(), 0);
+    setTimeout(() => $('rdDlgOn').focus(), 0);
   }
   const close = () => { box().hidden = true; };
   const isOpen = () => !!box() && !box().hidden;
 
   function wire() {
     if (!box()) return;
-    $('rdForm').addEventListener('submit', e => {
-      e.preventDefault();
-      const v = form(), bad = (v.on || v.url || v.token) ? check(v) : '';
-      if (bad && v.on) { hint(bad, 'bad'); return; }
-      save(v); close();
-    });
+    $('rdForm').addEventListener('submit', e => { e.preventDefault(); save({ on: $('rdDlgOn').checked }); close(); });
     $('rdTest').addEventListener('click', async () => {
-      const v = form(), bad = check(v);
-      if (bad) { hint(bad, 'bad'); return; }
       $('rdTest').disabled = true; hint('測試中…');
-      try { const j = await call(v, { action: 'ping' }); hint(`連線成功：${j.title || '試算表'}（分頁 ${(j.sheets || []).join('、')}…）`, 'ok'); } catch (x) { hint(x.message, 'bad'); } finally { $('rdTest').disabled = false; }
+      try { const j = await call({ action: 'ping' }); hint(`連線成功：${j.title || '試算表'}（分頁 ${(j.sheets || []).join('、')}…）`, 'ok'); } catch (x) { hint(x.message, 'bad'); } finally { $('rdTest').disabled = false; }
     });
     $('rdCancel').addEventListener('click', close);
     box().addEventListener('mousedown', e => { if (e.target === box()) close(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
 
-  Object.assign(window.Rundown, { settings, save, ready, enabled, add, open, close, isOpen, onChange: fn => listeners.push(fn) });
+  Object.assign(window.Rundown, { settings, save, enabled, add, open, close, isOpen, onChange: fn => listeners.push(fn) });
 })();

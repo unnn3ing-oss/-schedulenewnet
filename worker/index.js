@@ -2,6 +2,8 @@
  * POST /login  {password}                 → 通過後簽發 12 小時憑證
  * POST /upload（Authorization: Bearer 憑證，內容為圖片原始位元組）→ 存進 R2，回公開網址
  * GET|HEAD /i/<key>                       → 公開讀取（不需登入，網址本身不可猜）
+ * POST /rundown（Authorization: Bearer 憑證，{action:'ping'|'add', entries}）→ 轉送給 FB RUNDOWN 的 Apps Script（gas/rundown.gs）
+ *   網址與金鑰只放在 Worker：RUNDOWN_URL（Apps Script 網頁應用程式 /exec 網址）、RUNDOWN_TOKEN（同 Apps Script 的 TOKEN，至少 12 字）
  * 必要 Secrets：APP_PASSWORD（至少 8 字元，建議 12 以上）、SESSION_SECRET（至少 32 字元）
  * 必要綁定：IMAGES（R2 bucket）
  * 選用 Variables：ALLOWED_ORIGIN（預設 https://unnn3ing-oss.github.io）、MAX_AGE_DAYS（預設 3）、MAX_BYTES（預設 8388608）、FAIL_DELAY_MS（登入失敗延遲，預設 1000）
@@ -27,8 +29,12 @@ const MESSAGES = {
   misconfigured: 'Worker 尚未設定完成。',
   too_large: '圖片太大。',
   unsupported: '只接受 JPEG、PNG、WebP 圖片，且內容必須與類型相符。',
-  not_found: '找不到。'
+  not_found: '找不到。',
+  rundown_off: 'Worker 尚未設定 RUNDOWN_URL／RUNDOWN_TOKEN。',
+  rundown_failed: '連不上 Rundown 的 Apps Script。'
 };
+const RUNDOWN_URL_RE = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+const RUNDOWN_PAGES = ['news', 'ent', 'shaokang', 'intl'];
 
 /* ---------- 憑證（與 hottopic 相同） ---------- */
 function b64urlEncode(bytes) {
@@ -167,6 +173,42 @@ async function handleUpload(request, env) {
   return reply(request, env, { ok: true, data: { url: new URL(request.url).origin + '/i/' + key, key, expiresAt } });
 }
 
+/* 只轉送格式正確的排入資料；Apps Script 那邊再驗 TOKEN、找格子 */
+export function rundownBody(body) {
+  if (!body || (body.action !== 'ping' && body.action !== 'add')) return null;
+  if (body.action === 'ping') return { action: 'ping' };
+  const list = body.entries;
+  if (!Array.isArray(list) || !list.length || list.length > 10) return null;
+  const entries = [];
+  for (const e of list) {
+    if (!e || !RUNDOWN_PAGES.includes(e.page) || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || !/^\d{2}:\d{2}$/.test(e.time)) return null;
+    if (typeof e.text !== 'string' || !e.text.trim() || e.text.length > 100 || /[\r\n]/.test(e.text)) return null;
+    entries.push({ page: e.page, date: e.date, time: e.time, text: e.text });
+  }
+  return { action: 'add', entries };
+}
+
+async function handleRundown(request, env) {
+  if (!longEnough(env.SESSION_SECRET)) return misconfigured(request, env);
+  const m = /^Bearer (\S+)$/.exec(request.headers.get('authorization') || '');
+  const session = m ? m[1] : '';
+  if (!(await verifySession(env.SESSION_SECRET, session, Math.floor(Date.now() / 1000)))) return fail(request, env, 'unauthorized', 401);
+  if (!RUNDOWN_URL_RE.test(env.RUNDOWN_URL || '') || !longEnough(env.RUNDOWN_TOKEN, 12)) return fail(request, env, 'rundown_off', 503);
+  if (!(await underLimit(env, session))) return fail(request, env, 'rate_limited', 429);
+  const body = rundownBody(await readJson(request));
+  if (!body) return fail(request, env, 'bad_request', 400);
+  let j;
+  try {
+    // Apps Script 會 302 到 googleusercontent 再回 JSON
+    const r = await fetch(env.RUNDOWN_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ token: env.RUNDOWN_TOKEN }, body)) });
+    j = await r.json().catch(() => null);
+  } catch (e) { j = null; }
+  if (!j || typeof j !== 'object') return fail(request, env, 'rundown_failed', 502, 'Rundown 的 Apps Script 沒有回 JSON（確認部署的「誰可以存取」是「所有人」）。');
+  if (!j.ok) return fail(request, env, 'rundown_failed', 502, 'Rundown：' + String(j.error || '失敗').slice(0, 200));
+  return reply(request, env, { ok: true, data: j.results ? { results: j.results } : { title: j.title, sheets: j.sheets } });
+}
+
 async function handleImage(request, env, key) {
   if (!hasBucket(env)) return misconfigured(request, env);
   const head = request.method === 'HEAD';
@@ -203,6 +245,7 @@ export default {
       }
       if (request.method === 'POST' && path === '/login') return await handleLogin(request, env);
       if (request.method === 'POST' && path === '/upload') return await handleUpload(request, env);
+      if (request.method === 'POST' && path === '/rundown') return await handleRundown(request, env);
       if ((request.method === 'GET' || request.method === 'HEAD') && path.startsWith('/i/')) {
         const key = path.slice(3);
         if (KEY_RE.test(key)) return await handleImage(request, env, key);

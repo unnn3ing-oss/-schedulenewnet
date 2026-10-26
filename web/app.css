@@ -111,7 +111,7 @@ textarea{font-family:inherit;resize:vertical}
 .img-pill{border:0;background:transparent;font:inherit;font-size:13px;padding:6px 8px;border-radius:999px;cursor:pointer}
 .img-pill:hover{background:var(--soft)}
 .login{position:fixed;inset:0;z-index:85;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px}
-.login .cf-box{width:min(360px,100%)}.login input{margin-top:6px}
+.login .cf-box{width:min(360px,100%)}#imgLogin{z-index:88}.login input{margin-top:6px}
 
 /* 後端預覽 */
 .be-prev{margin:14px 0 0;border:1px solid var(--border);border-radius:12px;padding:10px}

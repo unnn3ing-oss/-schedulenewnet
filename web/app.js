@@ -661,7 +661,7 @@
       entries.forEach(en => Records.updatePage(flow.recordId, en.page, { rundown: { ok: false, error: e.message } }));
       return { msg: 'Rundown 沒寫入：' + e.message, bad: true };
     }
-    const res = Array.isArray(j.results) ? j.results : [];
+    const res = Array.isArray(j && j.results) ? j.results : [];
     entries.forEach((en, i) => { const r = res[i] || { ok: false, error: '沒有回應' };
       Records.updatePage(flow.recordId, en.page, { rundown: { ok: !!r.ok, status: r.status || '', cell: r.cell || '', time: r.time || '', error: r.error || '' } }); });
     return { msg: 'Rundown：' + entries.map((en, i) => Rundown.describe(res[i], labelOf(en.page))).join('；'), bad: entries.some((en, i) => !(res[i] && res[i].ok)) };
@@ -735,13 +735,11 @@
   }
   RecList.mount({ toast, onCopy: openWith });
 
-  // Rundown 開關（存在這台瀏覽器）：還沒設定網址與金鑰就先開設定視窗
+  // Rundown 開關（存在這台瀏覽器）；Apps Script 網址與金鑰在 Worker Secrets
   const rdOn = $('rdOn');
-  const syncRd = v => { rdOn.checked = !!v.on && Rundown.ready(v); };
+  const syncRd = v => { rdOn.checked = !!v.on; };
   syncRd(Rundown.settings()); Rundown.onChange(syncRd);
   rdOn.addEventListener('change', () => {
-    const v = Rundown.settings();
-    if (rdOn.checked && !Rundown.ready(v)) { rdOn.checked = false; Rundown.open(); toast('先設定 Rundown 的 Apps Script 網址與金鑰'); return; }
     Rundown.save({ on: rdOn.checked });
     toast(rdOn.checked ? '送出成功後會自動排入 Rundown' : '已關閉 Rundown 自動排入');
   });

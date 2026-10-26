@@ -1,6 +1,6 @@
 // FB RUNDOWN 自動排入（Google Apps Script 網頁應用程式）
-// 網站送出／排程成功後 POST { token, action:'add', entries:[{ page, date:'YYYY-MM-DD', time:'HH:mm', text:'4041548/圖文/颱風假' }] }
-// 安裝步驟見 README「Rundown 自動排入」。指令碼屬性：TOKEN（必填，與網站設定相同）、SHEET_ID（可省略，預設 FB RUNDOWN(2026)）
+// 網站送出／排程成功後經圖床 Worker /rundown 轉送 POST { token, action:'add', entries:[{ page, date:'YYYY-MM-DD', time:'HH:mm', text:'4041548/圖文/颱風假' }] }
+// 安裝步驟見 README「Rundown 自動排入」。指令碼屬性：TOKEN（必填，與 Worker 的 RUNDOWN_TOKEN 相同）、SHEET_ID（可省略，預設 FB RUNDOWN(2026)）
 //
 // 試算表版面（2026/10 分頁實測）：
 // - 一個月一個分頁（名稱如 2026/10）；第 1～5 列之內有日期列，每個日期一欄，格子顯示 MMDD（1027）
