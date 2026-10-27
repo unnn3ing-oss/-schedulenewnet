@@ -10,12 +10,22 @@
 
   // ---- 小工具 ----
   let toastTimer = 0;
-  function toast(msg) {
-    const t = $('toast');
-    t.textContent = msg; t.hidden = false;
+  // action：{ label, fn }＝失敗時原地「重試」；有按鈕就停久一點
+  function toast(msg, action) {
+    const t = $('toast'), text = document.createElement('span');
+    text.textContent = msg;
+    t.replaceChildren(text);
+    if (action) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'toast-act'; b.textContent = action.label || '重試';
+      b.addEventListener('click', () => { t.hidden = true; clearTimeout(toastTimer); action.fn(); });
+      t.append(b);
+    }
+    t.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+    toastTimer = setTimeout(() => { t.hidden = true; }, action ? 8000 : 3500);
   }
+  const hideToast = () => { clearTimeout(toastTimer); $('toast').hidden = true; };
   Editor.onError = err => toast(({ not_image: '這不是圖片檔', too_big: '圖片太大（上限 30 MB）', bad_image: '讀不到這張圖片' })[err.message] || '載入圖片失敗');
   Editor.active = () => !overlay.hidden && state.mode === 'frame';
   const pad = n => String(n).padStart(2, '0');
@@ -214,25 +224,32 @@
     if (d.status >= 400) return `後端回應 ${d.status}，請確認網址或稍後再試`;
     return '';
   }
+  // 帶入時標題、小編文、圖片先放骨架（灰底 shimmer），各自拿到結果就拿掉
+  function skel(el, on) { el.classList.toggle('is-skel', on); if (el.tagName === 'TEXTAREA') el.readOnly = on; el.setAttribute('aria-busy', String(on)); }
+  const skelEls = () => [$('title'), $('caption'), $('canvasWrap')];
   let filling = false;
   async function quickFill() {
     if (filling) return;
     const url = $('url').value.trim();
     state.articleId = Rules.articleId(url);
     if (!url) { hint('請先貼文章網址', 'bad'); return; }
-    filling = true; $('fillBtn').disabled = true; hint('帶入中…');
+    filling = true; $('fillBtn').disabled = true; hint('帶入中…'); hideToast();
+    const capCur = $('caption').value;
+    skel($('title'), true); skel($('canvasWrap'), true);
+    if (!capCur.trim() || capCur === cap.auto) skel($('caption'), true);
+    const fail = msg => { hint(msg, 'bad'); toast('帶入失敗', { label: '重試', fn: quickFill }); };
     try {
       const artP = Ext.fetchArticle(url);   // 和 page_meta 同時抓：小編文的圖說與 hashtag 從文章網頁解析（同 QPT）
       const r = await Ext.call('/page_meta?url=' + encodeURIComponent(url));
       const err = metaError(r);
-      if (err) { hint(err, 'bad'); return; }
+      if (err) { fail(err); return; }
       const d = r.data;
       const raw = d.text != null ? d.text : d.snippet;
       let obj = null;
       try { obj = JSON.parse(raw); } catch (e) { /* 不是 JSON */ }
       const meta = obj ? pickMeta(obj) : { title: '', image: '' };
       if (!meta.title && !meta.image) {
-        hint(/<(!doctype|html)/i.test(raw || '') ? '後端回了網頁（可能被導去登入頁），請先登入網新發文台' : '讀不到標題或圖片（回應格式不認得），請手動填寫', 'bad');
+        fail(/<(!doctype|html)/i.test(raw || '') ? '後端回了網頁（可能被導去登入頁），請先登入網新發文台' : '讀不到標題或圖片（回應格式不認得），請手動填寫');
         return;
       }
       state.summary = meta.summary || '';
@@ -242,6 +259,7 @@
         setLines(lines);
         syncCaptionTitle();
       }
+      skel($('title'), false);
       let msg = '已帶入' + (meta.title ? '標題' : '') + (state.articleId ? `（文章 ${state.articleId}）` : ''), cls = 'ok';
       const imP = meta.image ? Ext.fetchImage(meta.image) : null;
       if (meta.image) {   // 不論目前是作圖框或純文字底圖都先載入主圖，之後切到作圖框不用再按一次帶入
@@ -249,10 +267,11 @@
         if (im.ok && im.data && im.data.image) { try { await Editor.loadUrl(im.data.image); msg += state.mode === 'frame' ? '與主圖' : '與主圖（切到作圖框即可使用）'; } catch (e) { msg += '，但主圖讀不出來'; cls = 'bad'; } }
         else { msg += '；主圖沒抓到（' + (im.error === 'host_not_allowed' ? '圖片網域不在允許範圍' : im.error === 'no_extension' ? '外掛沒回應，請更新外掛到 0.4.0 以上' : im.error) + '），請手動上傳'; cls = 'bad'; }
       }
+      skel($('canvasWrap'), false);
       const c = await fillCaption(artP, url);
       hint(msg + '；' + c.msg, c.bad ? 'bad' : cls);
       flowEdit();
-    } finally { filling = false; $('fillBtn').disabled = false; }
+    } finally { filling = false; $('fillBtn').disabled = false; skelEls().forEach(el => skel(el, false)); }
   }
 
   // 帶入的小編文＝QPT 的圖文格式：【標題】／圖說（例：（圖／TVBS））／#標籤 #標籤 #標籤。
@@ -475,7 +494,7 @@
       previewHint('後端產圖中…');
       const rq = Payload.previewRequest(input);
       const res = SendFlow.apiResult(await Ext.call(rq.path, 'POST', rq.body));
-      if (!res.ok || !res.image) { previewHint(res.error || '後端沒有回圖', 'bad'); $('bePrevImg').hidden = true; return; }
+      if (!res.ok || !res.image) { previewHint(res.error || '後端沒有回圖', 'bad'); $('bePrevImg').hidden = true; toast('後端預覽失敗', { label: '重試', fn: preview }); return; }
       $('bePrevImg').src = res.image; $('bePrevImg').hidden = false;
       previewKey = key;
       previewHint(previewKey === previewKeyNow() ? '' : '內容已改，按「後端預覽」更新', previewKey === previewKeyNow() ? '' : 'bad');
@@ -498,7 +517,7 @@
     const before = $('caption').value;
     try {
       const res = SendFlow.apiResult(await Ext.call('/ai_caption', 'POST', body));
-      if (!res.ok) { capHint(res.error, 'bad'); return; }
+      if (!res.ok) { capHint(res.error, 'bad'); toast(kind === 'generate' ? 'AI 產生失敗' : '校錯字失敗', { label: '重試', fn: () => aiCaption(kind) }); return; }
       const { text, hashtags, note } = Payload.aiCaptionResult(res.json || SendFlow.parseJson(res.text));
       if (!text) { capHint(note || 'AI 回應格式不認得，請手動撰寫', 'bad'); return; }
       if ($('caption').value !== before) { capHint('等待期間小編文被改過，沒有套用 AI 結果', 'bad'); return; }
@@ -635,16 +654,26 @@
     const late = codes.map(targetOf).find(t => t.at && Sched.validate(t.at, now()));
     if (late) { sendMsg(`${labelOf(late.code)}：${Sched.validate(late.at, now()).msg}`, 'bad'); renderFlow(); return; }
     setFlow({ type: direct ? 'resend' : 'click', canConfirm: true });
+    hideToast();
+    // 確定進度：上傳圖（還沒傳好才算一步）＋每台一步＋Rundown（開著才算）
+    const total = (input.mode === 'single' && !cacheOk() ? 1 : 0) + codes.length + (Rundown.enabled() ? 1 : 0);
+    let step = 0;
+    const tick = () => { progress(++step, total); };
+    progress(0, total);
     const prev = Object.fromEntries(codes.map(c => [c, state.pages[c].status]));
     codes.forEach(c => { state.pages[c].status = 'sending'; renderPage(c); });
     if (input.mode === 'single') {
       sendMsg('上傳圖片到圖床…');
+      const needed = !cacheOk();
       try { input.imageUrl = await ensureUploaded(); } catch (e) {
         codes.forEach(c => { state.pages[c].status = prev[c]; renderPage(c); });
         setFlow({ type: 'abort' });
+        progress(null);
         sendMsg('圖片沒有上傳：' + e.message, 'bad');
+        toast('圖片沒有上傳', { label: '重試', fn: () => resendCodes(codes) });
         return;
       }
+      if (needed) tick();
     }
     input.guard = { checkId: flow.guard.checkId, level: flow.guard.level, ack: flow.ack };
     const reqs = Payload.buildRequests(input, codes.map(targetOf));
@@ -657,22 +686,33 @@
     if (!flow.recordId) flow.recordId = Records.add(Object.assign(recInfo, { pages: [] }));
     else Records.update(flow.recordId, recInfo);
     if (Records.error() === 'quota') toast('瀏覽器儲存空間不足，已刪掉舊紀錄或縮圖');
-    for (const rq of reqs) {
+    for (const [i, rq] of reqs.entries()) {
       const st = state.pages[rq.code];
-      sendMsg(`送出${labelOf(rq.code)}…`);
+      sendMsg(`送出${labelOf(rq.code)}…（${i + 1}/${reqs.length}）`);
       const out = SendFlow.sendOutcome(SendFlow.apiResult(await Ext.call(rq.path, 'POST', rq.body)));
       st.status = out.ok ? 'ok' : 'fail'; st.result = out;
       Records.updatePage(flow.recordId, rq.code, { label: labelOf(rq.code), kind: rq.body.schedule ? 'sched' : 'now', schedule: rq.body.schedule,
         status: st.status, link: out.link || '', postId: out.postId || '', error: out.error || '', sentAt: new Date().toISOString(), path: rq.path, body: rq.body });
       renderPage(rq.code);
+      tick();
     }
     const rd = await toRundown(reqs, recInfo);
+    progress(null);
     setFlow({ type: 'sent' });
     const sent = C.pages.map(p => p.code).filter(c => /^(ok|fail)$/.test(state.pages[c].status));
     const failed = sent.filter(c => state.pages[c].status === 'fail');
     const sum = SendFlow.summary(sent.map(c => state.pages[c].status));
     const base = failed.length ? sum + '：' + failed.map(c => `${labelOf(c)} ${state.pages[c].result.error}`).join('；') : sum + '・要發下一篇請按「清空頁面」';
     sendMsg(base + (rd.msg ? '｜' + rd.msg : ''), failed.length || rd.bad ? 'bad' : 'ok');
+    if (failed.length) toast(`${failed.length} 台送出失敗`, { label: '重試', fn: () => resendCodes(failed) });
+  }
+  // 送出進度條：null＝收起來
+  function progress(done, total) {
+    const p = $('sendProg');
+    p.hidden = done == null;
+    if (done == null) return;
+    p.max = Math.max(1, total); p.value = done;
+    p.setAttribute('aria-valuetext', `已完成 ${done}/${total}`);
   }
 
   // 這次送成功的台各自寫進 FB RUNDOWN 對應區段（開關打開才做）；排程用排程時間、立即用送出當下。擠看看、氣象沒有區段，略過
@@ -682,6 +722,9 @@
     const { entries } = Rundown.entries({ articleId: info.articleId, slug: info.slug, lines: info.lines }, sent);
     if (!entries.length) return { msg: '' };
     sendMsg('寫入 Rundown…');
+    try { return await toRundownSend(entries); } finally { progress($('sendProg').max, $('sendProg').max); }
+  }
+  async function toRundownSend(entries) {
     let j;
     try { j = await Rundown.add(entries); } catch (e) {
       entries.forEach(en => Records.updatePage(flow.recordId, en.page, { rundown: { ok: false, error: e.message } }));
@@ -694,13 +737,14 @@
   }
 
   // 失敗的台各自重送：內容沒改、燈號仍有效就直接送；否則先重新判讀（泡泡只列這一台）
-  function resend(code) {
+  function resendCodes(codes) {
     if (flow.state === 'sending' || flow.state === 'checking') return;
     closePops();
     const g = flow.guard;
     const valid = g && g.ok && flow.key === Payload.guardKey(currentInput()) && (g.level !== 'red' || flow.ack);
-    if (valid) send([code], true); else check([code]);
+    if (valid) send(codes, true); else check(codes);
   }
+  const resend = code => resendCodes([code]);
 
   // ---- 開關彈窗 ----
   let confirmFn = null;

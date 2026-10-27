@@ -353,7 +353,8 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
     const d = e.data;
     if (e.source !== window || !d || d.source !== 'snn-web') return;
     const res = respond(d.op, d.payload || {});
-    const slow = d.op === 'call' && /^\/render/.test((d.payload || {}).path || '') && window.__mock.renderDelay;
+    const pp = d.op === 'call' ? (d.payload || {}).path || '' : '';
+    const slow = (/^\/render/.test(pp) && window.__mock.renderDelay) || (/^\/page_meta/.test(pp) && window.__mock.metaDelay) || (/^\/(publish|schedule)$/.test(pp) && window.__mock.sendDelay);
     setTimeout(() => window.postMessage(Object.assign({ source: 'snn-ext', nonce: d.nonce }, res), location.origin), slow || 40);
   });
 };
@@ -495,6 +496,21 @@ async function prB(origin) {
   assert.strictEqual(await page.textContent('#bePrevCap'), '後端產圖・新聞（藍框）');
   ok('後端預覽：跳圖床登入、錯密碼提示、上傳後 /render 帶圖床網址與 crop:null');
 
+  // 預覽失敗：toast 原地「重試」，按了就再打一次 /render（不重傳圖）
+  await page.evaluate(() => { window.__mock.renderFail = true; });
+  await page.click('#previewBtn');
+  await page.waitForSelector('#toast:not([hidden]) .toast-act');
+  assert.match(await page.textContent('#toast'), /後端預覽失敗/);
+  await page.evaluate(() => { window.__mock.renderFail = false; });
+  const rBefore = (await calls()).filter(c => c.path === '/render').length;
+  await page.click('#toast .toast-act');
+  await page.waitForSelector('#bePrevImg:not([hidden])');
+  await page.waitForFunction(() => document.getElementById('bePrevHint').textContent === '');
+  assert.strictEqual((await calls()).filter(c => c.path === '/render').length, rBefore + 1);
+  assert(await page.isHidden('#toast'));
+  assert.strictEqual(worker.uploads, 1);
+  ok('預覽失敗 toast 附「重試」，按了重新產圖');
+
   // 第 1 次按：自動判讀（紅燈）→ 泡泡；未勾「我知道風險」不能送
   await page.click('#sendBtn');
   await page.waitForSelector('#bubble:not([hidden])');
@@ -550,6 +566,9 @@ async function prB(origin) {
   assert(!/<|Bad Gateway/.test(msg), 'HTML 錯誤不進畫面');
   assert.deepStrictEqual(await page.$$eval('.pg', els => els.map(e => e.className.replace('pg', '').trim())), ['done', '', 'done', '', '', 'fail']);
   assert.strictEqual(await page.locator('.pg .retry:visible').count(), 1);
+  assert.match(await page.textContent('#toast'), /1 台送出失敗/);
+  assert.strictEqual(await page.textContent('#toast .toast-act'), '重試', '失敗 toast 原地提供重試');
+  assert(await page.isHidden('#sendProg'), '送完進度條收起來');
   assert.match(await pg(0).locator('.pg-mode').textContent(), /已發布 ↗/);
   assert.match(await pg(2).locator('.pg-mode').textContent(), /✓ 排程/);
   assert(await page.isVisible('#clearBtn'));
@@ -613,8 +632,18 @@ async function prB(origin) {
   const sentBefore = (await sends()).length, upBefore = worker.uploads;
   await page.click('#sendBtn');
   await page.waitForSelector('#bubble:not([hidden])');
+  await page.evaluate(() => { window.__mock.sendDelay = 400; });
   await page.click('#sendBtn');
+  await page.waitForSelector('#sendProg:not([hidden])');
+  await page.waitForFunction(() => /（2\/3）/.test(document.getElementById('sendMsg').textContent));
+  const prog = await page.evaluate(() => { const p = document.getElementById('sendProg'); return [p.value, p.max, p.getAttribute('aria-valuetext')]; });
+  assert.deepStrictEqual(prog.slice(0, 2), [1, 4], '已上傳圖：3 台＋Rundown＝4 步，送完第 1 台 ' + prog);
+  assert.strictEqual(prog[2], '已完成 1/4');
+  await page.screenshot({ path: path.join(SHOTS, 'p3-progress.png') });
   await page.waitForFunction(() => App.flow.state === 'done');
+  await page.evaluate(() => { window.__mock.sendDelay = 0; });
+  assert(await page.isHidden('#sendProg'));
+  ok('多台送出：訊息顯示（第幾台/共幾台）、確定進度條，送完收起');
   const s3 = (await sends()).slice(sentBefore);
   assert.deepStrictEqual(s3.map(c => [c.body.page, c.body.template]), [['news', 'newsnet_ent'], ['ent', 'newsnet_ent'], ['jkk', 'newsnet_ent']]);
   assert.deepStrictEqual(s3[0].body.title_lines, ['金鐘61／《飢餓》10週年大禮！', '峮峮驚喜合體遭催回歸', '蔡黃汝羞謝「好友」閃瞎全場']);
@@ -1009,8 +1038,17 @@ async function fillBothModes(origin) {
   await page.click('[data-mode="text"]');
   assert.strictEqual(await page.evaluate(() => Editor.hasImage()), false);
   await page.fill('#url', 'https://news.tvbs.com.tw/life/9990001');
+  await page.evaluate(() => { window.__mock.metaDelay = 500; });
   await page.click('#fillBtn');
+  await page.waitForSelector('#title.is-skel');
+  await page.screenshot({ path: path.join(SHOTS, 'p3-skeleton.png') });
+  assert(await page.evaluate(() => ['title', 'caption', 'canvasWrap'].every(id => document.getElementById(id).classList.contains('is-skel'))), '帶入中：標題、小編文、圖片都是骨架');
+  assert.strictEqual(await page.evaluate(() => document.getElementById('title').readOnly), true);
   await page.waitForFunction(() => /已帶入標題.*與主圖（切到作圖框即可使用）/.test(document.getElementById('urlHint').textContent));
+  await page.evaluate(() => { window.__mock.metaDelay = 0; });
+  assert.strictEqual(await page.locator('.is-skel').count(), 0, '帶入完骨架全部拿掉');
+  assert.strictEqual(await page.evaluate(() => document.getElementById('title').readOnly), false);
+  ok('帶入時標題、小編文、圖片顯示骨架，完成後恢復可編輯');
   assert.strictEqual(await page.evaluate(() => Editor.hasImage()), true);
   await page.click('[data-mode="frame"]');
   assert.strictEqual(await page.evaluate(() => Editor.hasImage()), true);
