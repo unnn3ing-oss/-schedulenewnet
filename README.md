@@ -59,7 +59,7 @@ PR B（送出）：
 - **圖床登入**：頂列「圖床未登入／已登入」可點開登入；第一次預覽或送出作圖框時也會自動跳出。輸入圖床密碼（Worker 的 `APP_PASSWORD`）換 12 小時憑證，存在本機 localStorage（不存密碼）；過期或上傳回 401 會再跳出登入。圖床網址寫在 `web/imghost.js`；Worker 的 `ALLOWED_ORIGIN` 必須是介面所在網址（GitHub Pages 是 `https://unnn3ing-oss.github.io`），本機 localhost 測試時要暫時改這個變數，否則瀏覽器會擋 CORS。
 - **作圖框送出**：`Editor.exportBlob()` 的 JPEG（不含疊圖與標題）上傳圖床，網址當 `image_url`、`crop: null`；勾選的每一台都送同一個 `template`：藍框 `newsnet_news`、粉框 `newsnet_ent`。純文字底圖不上傳，由後端依 `text_card` 欄位產圖（`title_lines` 空陣列、`line1`／`line2` 空字串，照交接文件 §4、§5）。
 - **🖼 後端預覽**：作圖框打 `/render`（目前選的藍框／粉框）、純文字打 `/render_text_card`，顯示後端實際產的圖。預覽和送出共用同一次上傳（照片／貼圖沒改就不重傳）。
-- **✨ AI 產生／🔍 校錯字**：`/ai_caption`（`generate` 帶標題（各行直接接起來，同官方發文台）與帶入的文章摘要；`proofread` 帶小編文與標題），結果填入小編文。
+- **✨ AI 產生／🔍 校錯字**：`/ai_caption`（`generate` 帶標題（各行直接接起來，同官方發文台）與帶入的文章摘要，回應 `{ versions, hashtags, usedArticle, note }` 取第一個版本放最上面、hashtag 併進最後一行（不重複）；`proofread` 帶小編文與標題），結果填入小編文。
 - **粉專 ▾**：立即發布（預設）／排程發布。排程視窗：日期預設今天、最晚 3 天後；時間直接打 4 碼（`2130` → `21:30`），↑↓ 每次 ±10 分；早於現在＋20 分或超過 3 天會在視窗內標紅。
 - **全部送出（兩段式）**：第 1 次按先檢查內容（照交接文件 §6.6 的順序）並自動打 `/guard/check`，按鈕上方泡泡列出每台與時間（立即或 HH:MM）和燈號，按鈕變「確認送出」；紅燈要勾「我知道風險」。點其他地方或改內容就回到第 1 步。第 2 次按才逐台送 `/publish` 或 `/schedule`（payload 由 `web/payload.js` 產生，完全照交接文件 §4）。失敗的台顯示錯誤（HTML 錯誤頁只顯示精簡訊息）與「↻ 重送」，只重送那一台。全部成功不清空，改按「清空頁面」。
 - **本機送出紀錄**：每次送出存一筆到 localStorage（`snn.records.v1`：粉專、立即／排程、時間、結果、貼文連結），列表見下方 PR C。

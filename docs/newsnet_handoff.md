@@ -28,7 +28,7 @@
 | `GET /page_meta?url=` | 帶入標題、og:image | 文章網址要 `encodeURIComponent` |
 | `POST /render_text_card` | 純文字底圖預覽 → PNG blob | |
 | `POST /render` | 作圖框預覽 → PNG blob | |
-| `POST /ai_caption` | AI 小編文 | `mode: generate`（帶 `title`、`summary`）或 `proofread`（帶 `text`、`titles`），另帶 `ip: "newsnet"` |
+| `POST /ai_caption` | AI 小編文 | `mode: generate`（帶 `title`、`summary`；回 `versions[]`、`hashtags[]`、`usedArticle`、`note`）或 `proofread`（帶 `text`、`titles`），另帶 `ip: "newsnet"` |
 | `POST /guard/check` | 社群守則判讀 | 見 §5 |
 | `POST /schedule` | 排程 | payload 見 §4 |
 | `POST /publish` | 立即發布 | 回 `message` 或 `post_url`／`post_id` |

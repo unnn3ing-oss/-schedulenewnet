@@ -151,3 +151,18 @@ test('validateInput：順序與訊息照舊版（§6.6）', () => {
   assert.equal(P.validateInput(frame({ lines: [' ', ''] })), '請填標題');
   assert.equal(P.validateInput(frame()), '');
 });
+
+test('aiCaptionResult：官方 generate 回應取 versions 第一個與 hashtags', () => {
+  const real = { versions: ['庫存去化終於告一段落，記憶體今天大回神啦！📈'], hashtags: ['記憶體', '南亞科'], usedArticle: false, note: '' };
+  assert.deepEqual(P.aiCaptionResult(real), { text: '庫存去化終於告一段落，記憶體今天大回神啦！📈', hashtags: ['記憶體', '南亞科'], note: '' });
+  assert.deepEqual(P.aiCaptionResult({ versions: ['', ' 第二版 '], hashtags: ['#颱風', ' 停 班 '] }), { text: '第二版', hashtags: ['颱風', '停班'], note: '' });
+  assert.equal(P.aiCaptionResult({ data: { text: '校對後' } }).text, '校對後');
+  assert.deepEqual(P.aiCaptionResult({ versions: [], note: '內容不足' }), { text: '', hashtags: [], note: '' });
+});
+
+test('mergeHashtags：併進最後的 hashtag 行、不重複', () => {
+  assert.equal(P.mergeHashtags('AI 文\n【標題】\n#南亞科 #股市', ['記憶體', '南亞科']), 'AI 文\n【標題】\n#南亞科 #股市 #記憶體');
+  assert.equal(P.mergeHashtags('AI 文\n【標題】', ['記憶體']), 'AI 文\n【標題】\n#記憶體');
+  assert.equal(P.mergeHashtags('AI 文 #記憶體', ['記憶體']), 'AI 文 #記憶體');
+  assert.equal(P.mergeHashtags('有 #標籤 的句子', ['新']), '有 #標籤 的句子\n#新');
+});

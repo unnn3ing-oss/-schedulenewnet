@@ -318,7 +318,7 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
     if (/^\/render/.test(p.path) && window.__mock.renderFail) return json(500, { detail: '產圖失敗（模擬）' });
     if (p.path === '/render') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '後端套版（模擬）') } };
     if (p.path === '/render_text_card') return { ok: true, data: { status: 200, contentType: 'image/png', image: picture(540, 540, '純文字（模擬）') } };
-    if (p.path === '/ai_caption') return json(200, p.body.mode === 'generate' ? { caption: window.__mock.aiText || 'AI 產生的小編文 #颱風' } : { text: p.body.text.replace('上般', '上班') });
+    if (p.path === '/ai_caption') return json(200, p.body.mode === 'generate' ? { versions: [window.__mock.aiText || 'AI 產生的小編文 #颱風'], hashtags: window.__mock.aiTags || ['颱風', '沈伯洋'], usedArticle: false, note: '' } : { text: p.body.text.replace('上般', '上班') });
     if (p.path === '/publish' || p.path === '/schedule') {
       const code = p.body.page;
       if (window.__mock.failOnce[code] > 0) {
@@ -1046,27 +1046,27 @@ async function captionFlow(origin) {
   ok('改標題：【】那一行逐字跟著改，其他行不動');
 
   // AI 產生：放最上面；再按一次是換掉，不是疊兩份
-  await page.evaluate(() => { window.__mock.aiText = 'AI 第一版小編文\n第二行'; });
+  await page.evaluate(() => { window.__mock.aiText = 'AI 第一版小編文\n第二行'; window.__mock.aiTags = ['颱風', '賴清德']; });
   await page.click('#aiGenBtn');
   await page.waitForFunction(() => /^AI 第一版/.test(document.getElementById('caption').value));
-  assert.strictEqual(await cap(), `AI 第一版小編文\n第二行\n【颱風假最新！北北基桃 明天照常上班上課】\n${CAP}\n${TAGS}`);
+  assert.strictEqual(await cap(), `AI 第一版小編文\n第二行\n【颱風假最新！北北基桃 明天照常上班上課】\n${CAP}\n${TAGS} #颱風`);
   await page.evaluate(() => { window.__mock.aiText = 'AI 第二版小編文'; });
   await page.click('#aiGenBtn');
   await page.waitForFunction(() => /^AI 第二版/.test(document.getElementById('caption').value));
-  assert.strictEqual(await cap(), `AI 第二版小編文\n【颱風假最新！北北基桃 明天照常上班上課】\n${CAP}\n${TAGS}`);
-  ok('AI 產生：文字放在最上面；再按一次換掉上一次的 AI 文字');
+  assert.strictEqual(await cap(), `AI 第二版小編文\n【颱風假最新！北北基桃 明天照常上班上課】\n${CAP}\n${TAGS} #颱風`);
+  ok('AI 產生：文字放在最上面；再按一次換掉上一次的 AI 文字；AI 的 hashtag 併進最後一行、不重複');
 
   // AI 產生之後、小編手動改了圖說：改標題仍只換【】那一行
   await page.fill('#caption', (await cap()).replace(CAP, '（圖／小編改的圖說）'));
   await page.fill('#title', '北北基桃明天\n照常上班上課');
-  assert.strictEqual(await cap(), `AI 第二版小編文\n【北北基桃明天 照常上班上課】\n（圖／小編改的圖說）\n${TAGS}`);
+  assert.strictEqual(await cap(), `AI 第二版小編文\n【北北基桃明天 照常上班上課】\n（圖／小編改的圖說）\n${TAGS} #颱風`);
   await page.evaluate(() => document.querySelector('.m-body').scrollTop = 0);
   await page.screenshot({ path: path.join(SHOTS, 'caption-qpt.png') });
   ok('AI 產生＋手動改圖說後改標題：只換【】那一行；已截圖 caption-qpt.png');
 
   // 小編改過的小編文：再帶入不覆蓋，只更新【】那一行
   await fill('https://news.tvbs.com.tw/politics/3012345', /小編文已改過/);
-  assert.strictEqual(await cap(), `AI 第二版小編文\n【${T0}】\n（圖／小編改的圖說）\n${TAGS}`);
+  assert.strictEqual(await cap(), `AI 第二版小編文\n【${T0}】\n（圖／小編改的圖說）\n${TAGS} #颱風`);
   ok('小編改過的小編文：帶入不覆蓋（' + await hintText() + '）');
 
   // 【】那一行整行刪掉：改標題不再補回來
