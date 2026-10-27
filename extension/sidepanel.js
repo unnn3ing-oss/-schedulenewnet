@@ -1,3 +1,20 @@
+// 分頁：「發文」是嵌入的網頁版、「狀態與更新」是登入狀態與版本更新；記住上次停在哪一頁
+(function () {
+  const tabs = { post: [document.getElementById('tabPost'), document.getElementById('panePost')],
+    info: [document.getElementById('tabInfo'), document.getElementById('paneInfo')] };
+  function show(name) {
+    for (const [k, [tab, pane]] of Object.entries(tabs)) {
+      tab.setAttribute('aria-selected', String(k === name));
+      pane.hidden = k !== name;
+    }
+    try { localStorage.setItem('snn-sp-tab', name); } catch (e) { /* 存不了就算了 */ }
+  }
+  for (const [k, [tab]] of Object.entries(tabs)) tab.addEventListener('click', () => show(k));
+  let saved = 'post';
+  try { saved = localStorage.getItem('snn-sp-tab') === 'info' ? 'info' : 'post'; } catch (e) { /* 預設發文 */ }
+  show(saved);
+})();
+
 // 標題：外掛名稱與版本
 const manifest = chrome.runtime.getManifest();
 document.getElementById('extName').textContent = manifest.name;
@@ -104,11 +121,13 @@ document.getElementById('extVer').textContent = `v${manifest.version}`;
         showNotes(latest.notes);
         showFiles(latest.changed);
         await refreshFolderHint();
+        document.getElementById('infoDot').hidden = false;
         chrome.action.setBadgeText({ text: '新' }).catch(() => {});
         chrome.action.setBadgeBackgroundColor({ color: '#d92d20' }).catch(() => {});
       } else {
         show(latest.localNewer ? `本機版本 ${ver(latest.localVersion)} 比 GitHub 上的 ${ver(latest.version)} 新，不需要更新` : `已是最新版本${latest.version ? ' ' + ver(latest.version) : ''}（${fmtDate(latest.date)}）`);
         applyBtn.hidden = true;
+        document.getElementById('infoDot').hidden = true;
         chrome.action.setBadgeText({ text: '' }).catch(() => {});
       }
     } catch (err) {

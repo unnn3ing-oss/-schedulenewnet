@@ -29,3 +29,16 @@ h1{margin:0;font-size:18px;font-weight:800}h2{margin:0 0 8px;font-size:15px}
 .up-tag{margin-left:6px;padding:0 6px;border-radius:6px;background:var(--track);color:var(--accent);font-size:11px}
 .hint{font-size:12px;margin-top:8px;color:var(--muted)}.hint:empty{display:none}
 .up-link{border:0;background:none;padding:0;font:inherit;color:var(--accent);text-decoration:underline;cursor:pointer}
+/* 版面：最上方「網頁版／舊版」與分頁，下面是嵌入的網頁版（佔滿剩下的高度）或狀態與更新 */
+body.sp{height:100vh;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.top{flex:none;padding:10px 12px 0;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:8px;border-bottom:1px solid var(--border);background:var(--surface)}
+.top-btns{display:flex;gap:8px}.top-btns .btn{flex:1 1 0;white-space:nowrap}
+.tabs{display:flex;gap:4px}
+.tabs button{flex:1 1 0;border:0;background:none;padding:7px 0 9px;font:inherit;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.tabs button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tabs .dot{margin-left:6px;padding:0 6px;border-radius:999px;background:var(--danger);color:#fff;font-size:11px}
+.tabs .dot[hidden]{display:none}
+.pane-post{flex:1 1 auto;min-height:0;display:flex}
+.pane-post[hidden],.wrap[hidden]{display:none}
+.pane-post iframe{flex:1 1 auto;width:100%;border:0;background:var(--bg)}
+body.sp .wrap{flex:1 1 auto;overflow:auto}

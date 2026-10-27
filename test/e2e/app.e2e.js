@@ -1184,5 +1184,15 @@ async function installGuide(origin) {
   assert(await p4.isHidden('#deployOverlay'), '手機不跳');
   await phone.close();
   ok('有外掛、手機都不自動跳出');
+  const panel = await browser.newContext({ viewport: { width: 400, height: 800 } });
+  const p5 = await panel.newPage();
+  await p5.setContent(`<iframe id="app" src="${origin}/index.html" style="width:400px;height:780px;border:0"></iframe>`);
+  const f5 = await (await p5.waitForSelector('#app')).contentFrame();
+  await f5.waitForFunction(() => /未偵測到外掛/.test(document.getElementById('extText').textContent), null, { timeout: 8000 });
+  await p5.waitForTimeout(500);
+  assert(await f5.evaluate(() => document.documentElement.classList.contains('in-panel')));
+  assert(await f5.isHidden('#deployBtn') && await f5.isHidden('#deployOverlay'), '嵌在側邊欄：不顯示安裝插件、不跳教學');
+  await panel.close();
+  ok('嵌在外掛側邊欄（iframe）：不顯示「安裝插件」、不自動跳教學');
   await browser.close();
 }
