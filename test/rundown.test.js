@@ -93,20 +93,15 @@ test('網站端：SLUG 預設標題前 4 字；格式 文章ID/圖文/SLUG', () 
   assert.equal(W.cleanSlug(' 颱風 /假 '), '颱風假');
 });
 
-test('網站端：寫一筆到選定區段；時間取該粉專的送出時間，沒發那台就用第一台', () => {
-  const info = { articleId: '4041548', slug: '', lines: ['颱風假最新'] };
-  const sent = [{ code: 'jkk', at: '2026-10-27T07:30' }, { code: 'ent', at: new Date(2026, 9, 27, 21, 3) }];
-  assert.deepEqual(W.entries(info, sent, 'ent'), { entries: [{ page: 'ent', date: '2026-10-27', time: '21:03', text: '4041548/圖文/颱風假最' }], source: 'ent' });
-  assert.deepEqual(W.entries(info, sent, 'news'), { entries: [{ page: 'news', date: '2026-10-27', time: '07:30', text: '4041548/圖文/颱風假最' }], source: 'jkk' });
-  assert.equal(W.entries({ articleId: '1', slug: '自訂', lines: ['x'] }, [{ code: 'intl', at: '2026-11-01T00:10' }], 'intl').entries[0].text, '1/圖文/自訂');
-  assert.deepEqual(W.entries(info, sent, 'jkk').entries, [], '擠看看沒有區段');
-  assert.deepEqual(W.entries(info, [], 'news').entries, []);
-});
-
-test('網站端：預設區段＝勾選的第一個有區段的粉專', () => {
-  assert.equal(W.pickPage(['jkk', 'ent', 'news']), 'ent');
-  assert.equal(W.pickPage(['jkk', 'weather']), '');
-  assert.equal(W.PAGES.news, '主粉（新聞粉）');
+test('網站端：有區段的粉專各寫一筆；排程用排程時間、立即用送出時間；擠看看、氣象略過', () => {
+  const { entries, skipped } = W.entries({ articleId: '4041548', slug: '', lines: ['颱風假最新'] },
+    [{ code: 'news', at: '2026-10-27T08:05' }, { code: 'ent', at: new Date(2026, 9, 27, 21, 3) }, { code: 'jkk', at: '2026-10-27T08:05' }, { code: 'weather', at: '2026-10-27T09:00' }]);
+  assert.deepEqual(entries, [
+    { page: 'news', date: '2026-10-27', time: '08:05', text: '4041548/圖文/颱風假最' },
+    { page: 'ent', date: '2026-10-27', time: '21:03', text: '4041548/圖文/颱風假最' }]);
+  assert.deepEqual(skipped, ['jkk', 'weather']);
+  assert.equal(W.entries({ articleId: '1', slug: '自訂', lines: ['x'] }, [{ code: 'intl', at: '2026-11-01T00:10' }]).entries[0].text, '1/圖文/自訂');
+  assert.deepEqual(Object.values(W.PAGES), ['主粉（新聞粉）', '娛樂粉', '少康粉', '國際＋粉']);
 });
 
 test('網站端：結果文字', () => {
