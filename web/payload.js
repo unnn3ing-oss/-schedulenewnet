@@ -120,10 +120,12 @@
     return { text: '', hashtags: [], note: '' };
   }
 
-  // 把 AI 給的 hashtag 併進小編文：已經有的不重複；最後一行是 hashtag 行就接在後面，否則另起一行
+  // 把 AI 給的 hashtag 併進小編文：小編文原有的優先，AI 的只補到總共 MAX_TAGS 個、已經有的不重複；
+  // 最後一行是 hashtag 行就接在後面，否則另起一行
+  const MAX_TAGS = 3;
   function mergeHashtags(caption, tags) {
     const has = new Set((String(caption).match(/[#＃][^\s#＃]+/g) || []).map(s => s.slice(1)));
-    const add = [...new Set(tags)].filter(t => !has.has(t)).map(t => '#' + t);
+    const add = [...new Set(tags)].filter(t => !has.has(t)).slice(0, Math.max(0, MAX_TAGS - has.size)).map(t => '#' + t);
     if (!add.length) return caption;
     const lines = String(caption).replace(/\s+$/, '').split('\n');
     const last = lines[lines.length - 1];

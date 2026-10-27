@@ -160,8 +160,10 @@ test('aiCaptionResult：官方 generate 回應取 versions 第一個與 hashtags
   assert.deepEqual(P.aiCaptionResult({ versions: [], note: '內容不足' }), { text: '', hashtags: [], note: '' });
 });
 
-test('mergeHashtags：併進最後的 hashtag 行、不重複', () => {
+test('mergeHashtags：原有的優先，AI 的只補到 3 個、併進最後的 hashtag 行、不重複', () => {
   assert.equal(P.mergeHashtags('AI 文\n【標題】\n#南亞科 #股市', ['記憶體', '南亞科']), 'AI 文\n【標題】\n#南亞科 #股市 #記憶體');
+  assert.equal(P.mergeHashtags('【標題】\n#股市', ['南亞科', '記憶體', '旺宏']), '【標題】\n#股市 #南亞科 #記憶體');
+  assert.equal(P.mergeHashtags('【標題】\n#一 #二 #三', ['記憶體']), '【標題】\n#一 #二 #三');
   assert.equal(P.mergeHashtags('AI 文\n【標題】', ['記憶體']), 'AI 文\n【標題】\n#記憶體');
   assert.equal(P.mergeHashtags('AI 文 #記憶體', ['記憶體']), 'AI 文 #記憶體');
   assert.equal(P.mergeHashtags('有 #標籤 的句子', ['新']), '有 #標籤 的句子\n#新');
