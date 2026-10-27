@@ -110,8 +110,20 @@
     redraw: render,
     onLayout: () => setFxDisabled()
   });
-  function setFxDisabled() { fxTiles.forEach(b => { b.disabled = !bg.image; }); }
-  function mountFxBar(slot) {
+  // T寶貼圖與馬賽克收在一顆按鈕裡：按了才彈出那一排，加一個、點外面或按 Esc 就收起來；沒有照片時按鈕停用
+  let fxSlot = null, fxBtn = null;
+  function setFxDisabled() {
+    fxTiles.forEach(b => { b.disabled = !bg.image; });
+    if (fxBtn) { fxBtn.disabled = !bg.image; if (!bg.image) closeFx(); }
+  }
+  const fxOpen = () => !!fxSlot && !fxSlot.hidden;
+  function closeFx(focus) {
+    if (!fxOpen()) return;
+    fxSlot.hidden = true;
+    fxBtn.setAttribute('aria-expanded', 'false');
+    if (focus) fxBtn.focus();
+  }
+  function mountFxBar(slot, btn) {
     const { row, tiles } = Stickers.buildRow(fxEditor);
     fxTiles = tiles;
     const hint = document.createElement('div');
@@ -119,6 +131,18 @@
     hint.textContent = Stickers.hintText;
     slot.appendChild(row);
     slot.appendChild(hint);
+    if (btn) {
+      fxSlot = slot; fxBtn = btn;
+      slot.hidden = true;
+      btn.setAttribute('aria-expanded', 'false');
+      btn.addEventListener('click', () => {
+        if (fxOpen()) return closeFx();
+        slot.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+      });
+      tiles.forEach(b => b.addEventListener('click', () => closeFx()));
+      document.addEventListener('pointerdown', e => { if (fxOpen() && !slot.contains(e.target) && !btn.contains(e.target)) closeFx(); });
+    }
     setFxDisabled();
   }
   fxEditor.sync();
@@ -272,7 +296,7 @@
   });
 
   window.Editor = {
-    setFrame, setTitleLines, exportBlob, loadFile, loadUrl, clearImage, mountFxBar,
+    setFrame, setTitleLines, exportBlob, loadFile, loadUrl, clearImage, mountFxBar, fxOpen, closeFx,
     hasImage: () => !!bg.image,
     hasContent: () => !!bg.image || items.length > 0,
     size: () => [W, H],

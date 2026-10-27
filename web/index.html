@@ -55,8 +55,9 @@
             <button class="btn sm" id="pickBtn" type="button">選照片</button>
             <button class="btn sm" id="clearImgBtn" type="button" disabled>移除照片</button>
             <button class="btn sm" id="previewBtn" type="button" disabled title="上傳照片後請後端套版，確認實際發出的樣子">🖼 後端預覽</button>
+            <button class="btn sm" id="fxBtn" type="button" disabled aria-controls="fxBar" aria-expanded="false" title="加 T寶貼圖或馬賽克（要先選照片）">😊 T寶／馬賽克</button>
           </div>
-          <div class="fx-bar" id="fxBar"></div>
+          <div class="fx-bar" id="fxBar" role="group" aria-label="T寶貼圖與馬賽克" hidden></div>
         </div>
         <div id="textPane" hidden>
           <div class="canvas-wrap text"><canvas id="textCanvas" width="1080" height="1080"></canvas></div>

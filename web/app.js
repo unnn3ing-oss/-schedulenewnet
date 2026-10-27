@@ -117,7 +117,7 @@
   $('pickBtn').addEventListener('click', () => $('fileInput').click());
   $('clearImgBtn').addEventListener('click', () => Editor.clearImage());
   Editor.onChange(() => { $('clearImgBtn').disabled = !Editor.hasImage(); });
-  Editor.mountFxBar($('fxBar'));
+  Editor.mountFxBar($('fxBar'), $('fxBtn'));
 
   // ---- 純文字底圖（示意：實際以後端 /render_text_card 為準）----
   // 底色按 HSB 排序（QPT app.js 的 hexToHSB 與排序規則）
@@ -762,6 +762,7 @@
       if (login) { ImgHost.cancel(); return; }
       if (rdSet) { Rundown.close(); $('rdSetBtn').focus(); return; }
       if (!$('confirm').hidden) { $('confirm').hidden = true; return; }
+      if (Editor.fxOpen()) { Editor.closeFx(true); return; }
       if (!menu.hidden || !pop.hidden) { const c = popFor; closePops(); if (c) pgEls[c].mode.focus(); return; }
       if (flow.state === 'armed') { flow.seq++; setFlow({ type: 'outside' }); sendMsg('已取消，要送出請再按一次'); sendBtn.focus(); return; }
       requestClose();
