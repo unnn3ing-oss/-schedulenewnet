@@ -22,10 +22,9 @@
 
   // ---- 外掛狀態 ----
   async function refreshExt() {
-    const pill = $('extPill'), text = $('extText'), help = $('extHelp');
+    const pill = $('extPill'), text = $('extText');
     const p = await Ext.ping(1500);
-    if (!p.ok) { pill.className = 'pill bad'; text.textContent = '未偵測到外掛'; help.hidden = false; return; }
-    help.hidden = true;
+    if (!p.ok) { pill.className = 'pill bad'; text.textContent = '未偵測到外掛'; return false; }
     const c = await Ext.cookies();
     const q = c.ok && Array.isArray(c.data) ? c.data.find(x => x.name === 'queen_session') : null;
     if (!q) { pill.className = 'pill warn'; text.textContent = '外掛已連線・尚未登入網新'; return; }
@@ -33,6 +32,15 @@
     const days = exp ? Math.max(0, Math.ceil((exp - Date.now()) / 86400000)) : null;
     pill.className = 'pill ok';
     text.textContent = '外掛已連線・' + (days === null ? '已登入' : `登入剩 ${days} 天`);
+    return true;
+  }
+  // 首次載入：偵測不到外掛（再等一下重試一次，外掛的橋接可能晚一點才注入）就打開安裝教學；手機不能裝 Chrome 擴充功能，不跳
+  async function checkExtOnLoad() {
+    if (await refreshExt()) return;
+    await new Promise(r => setTimeout(r, 1500));
+    if (await refreshExt()) return;
+    if (/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent) || !overlay.hidden || Deploy.isOpen()) return;
+    Deploy.open();
   }
 
   // ---- 標題：一個輸入框、一行一句（作圖框與純文字底圖共用）；每行字數顯示在框外右側 ----
@@ -777,6 +785,5 @@
   Editor.setFrame(state.frame);
   updateCounters(); drawTextCard(); renderFlow();
   window.App = { state, flow, getLines, setLines, currentInput, openWith };   // 後續 PR 與測試用
-  refreshExt();
-  setTimeout(() => { if ($('extPill').className === 'pill') refreshExt(); }, 2500);
+  checkExtOnLoad();
 })();

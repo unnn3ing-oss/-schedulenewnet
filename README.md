@@ -34,7 +34,7 @@ GitHub Pages 介面 ──postMessage──▶ 外掛 bridge.js ──▶ 外掛
 ## 連線驗證（目前階段）
 
 1. 在 Chrome 登入網新發文台。
-2. `chrome://extensions` → 開「開發人員模式」→「載入未封裝項目」→ 選 `extension/` 資料夾。
+2. 安裝外掛：網站右上角「🧩 安裝插件」有 6 步驟教學（沿用 QPT 網頁版），可直接把 GitHub 上最新的 `extension/` 寫進電腦資料夾或下載 ZIP（每個檔案以 git blob SHA 驗證），再到 `chrome://extensions` 開「開發人員模式」→「載入未封裝項目」。電腦版打開網站時偵測不到外掛會自動跳出這個教學（手機不跳）。
 3. 開 `https://unnn3ing-oss.github.io/-schedulenewnet/verify.html`，按「開始驗證」。
 
 驗證頁只會呼叫 `page_meta`、`guard/check`，**不會排程或發文**；cookie 只讀名稱與到期時間，不讀值。外掛（0.5.0 起）的端點白名單：`page_meta`、`hero`、`guard/check`、`render`、`render_text_card`、`ai_caption`、`schedule`、`publish`，其他路徑一律拒絕。
