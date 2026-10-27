@@ -93,6 +93,8 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
 .ds-more summary { padding: 11px 0; cursor: pointer; font-size: 14px; font-weight: 700; color: var(--muted); }
 .ds-more[open] summary { color: var(--text); }
 .ds-more p { margin: 0 0 12px; font-size: 14px; line-height: 1.7; }
+.ds-more .ds-actions { margin: 0 0 12px; }
+.ds-tip + .ds-copy { margin-top: 10px; }
 
 .ds-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 8px; }
 .ds-actions .ds-btn { flex: 1 1 170px; }

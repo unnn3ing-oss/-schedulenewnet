@@ -34,7 +34,7 @@ GitHub Pages 介面 ──postMessage──▶ 外掛 bridge.js ──▶ 外掛
 ## 連線驗證（目前階段）
 
 1. 在 Chrome 登入網新發文台。
-2. 安裝外掛：網站右上角「🧩 安裝插件」有 6 步驟教學（沿用 QPT 網頁版），可直接把 GitHub 上最新的 `extension/` 寫進電腦資料夾或下載 ZIP（每個檔案以 git blob SHA 驗證），再到 `chrome://extensions` 開「開發人員模式」→「載入未封裝項目」。電腦版打開網站時偵測不到外掛會自動跳出這個教學（手機不跳）。
+2. 安裝外掛：網站右上角「🧩 安裝插件」有 5 步驟教學。主要做法仿 videodownload 的一鍵安裝檔（`web/installer.js`）：網頁先從 GitHub 抓最新的 `extension/`（每個檔案以 git blob SHA 驗證），打包嵌進 Windows `schedulenewnet-install.cmd`／Mac `schedulenewnet-install-mac.sh`（Mac 在終端機執行 `bash ~/Downloads/schedulenewnet-install-mac.sh`）。安裝檔把插件放到家目錄的 `schedulenewnet-ext`（同名資料夾不是這個插件就停下、不覆蓋）、把路徑複製到剪貼簿、打開 `chrome://extensions`；剩下「開發人員模式」→「載入未封裝項目」→ 貼上路徑要自己點（Chrome 不允許程式代按）。公司電腦不能執行安裝檔時，教學裡仍可改用「選擇資料夾並寫入」或下載 ZIP。電腦版打開網站時偵測不到外掛會自動跳出這個教學（手機不跳）。
 3. 開 `https://unnn3ing-oss.github.io/-schedulenewnet/verify.html`，按「開始驗證」。
 
 驗證頁只會呼叫 `page_meta`、`guard/check`，**不會排程或發文**；cookie 只讀名稱與到期時間，不讀值。外掛（0.5.0 起）的端點白名單：`page_meta`、`hero`、`guard/check`、`render`、`render_text_card`、`ai_caption`、`schedule`、`publish`，其他路徑一律拒絕。
@@ -107,7 +107,7 @@ PR C（送出紀錄）：
 
 - 點瀏覽器工具列的外掛圖示會開啟側邊欄：顯示網新登入狀態（`queen_session` 是否存在、幾天後到期）、常用工具連結，以及「版本更新」。
 - 外掛每小時自動向 GitHub 檢查一次，有新版時圖示會顯示紅色「新」；也可以在側邊欄按「檢查更新」。
-- 按「更新到最新版」時，第一次會要求選擇外掛所在的資料夾（`extension/`，只需選一次），之後會自動下載、驗證並寫入有變動的檔案，再重新載入外掛。只同步 repo 的 `extension/` 資料夾，其他檔案不受影響。
+- 按「更新到最新版」時，第一次會要求選擇外掛所在的資料夾（用安裝檔裝的是家目錄的 `schedulenewnet-ext`，只需選一次），之後會自動下載、驗證並寫入有變動的檔案，再重新載入外掛。只同步 repo 的 `extension/` 資料夾，其他檔案不受影響。
 - **v0.2.0（含）以前的版本沒有更新功能**，需要手動把 `extension/` 資料夾整個換成新版一次（重新載入外掛）；之後就能自動更新。
 - 維護規則：只要 `extension/` 內有任何變動，就要同步調高 `manifest.json` 的 `version`，並在 `changelog.json` 加一筆對應版本的說明。
 

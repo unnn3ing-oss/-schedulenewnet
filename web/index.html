@@ -167,69 +167,23 @@
     <header class="ds-head">
       <div class="ds-title">
         <h2 id="deployTitle">安裝 Chrome 插件</h2>
-        <p>網新快速排程要透過這個插件帶著網新後台的登入送出。只要做一次，約 3 分鐘。</p>
+        <p>網新快速排程要透過這個插件帶著網新後台的登入送出。只要做一次，約 2 分鐘。</p>
       </div>
       <button type="button" id="deployCloseBtn" class="ds-close" aria-label="關閉安裝教學">✕</button>
     </header>
 
     <ol class="ds-steps" id="deploySteps" aria-label="安裝步驟">
-      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 1：建立資料夾"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">建立資料夾</span></button></li>
-      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 2：下載檔案"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">下載檔案</span></button></li>
-      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 3：開啟擴充頁"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">開啟擴充頁</span></button></li>
-      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 4：開發人員模式"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">開發人員模式</span></button></li>
-      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 5：載入插件"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">載入插件</span></button></li>
-      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 6：開始使用"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">開始使用</span></button></li>
+      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 1：下載安裝檔"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">下載安裝檔</span></button></li>
+      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 2：執行安裝檔"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">執行安裝檔</span></button></li>
+      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 3：開發人員模式"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">開發人員模式</span></button></li>
+      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 4：載入插件"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">載入插件</span></button></li>
+      <li class="ds-step"><button type="button" class="ds-step-btn" aria-label="步驟 5：開始使用"><span class="ds-dot" aria-hidden="true"></span><span class="ds-lbl">開始使用</span></button></li>
     </ol>
 
     <main class="ds-main" id="deployMain">
 
-      <!-- 步驟 1：建立資料夾 -->
+      <!-- 步驟 1：下載安裝檔 -->
       <section class="ds-pane" data-step="1" data-cycle="7000" aria-labelledby="dsh1">
-        <div class="ds-art" aria-hidden="true">
-          <svg class="sv" viewBox="0 0 480 300" focusable="false">
-            <g class="sv-all">
-              <rect class="win" x="50" y="26" width="380" height="248" rx="12"/>
-              <path class="bar" d="M50 58V38a12 12 0 0 1 12-12h356a12 12 0 0 1 12 12v20z"/>
-              <circle class="dot3" cx="68" cy="42" r="4"/><circle class="dot3" cx="82" cy="42" r="4"/><circle class="dot3" cx="96" cy="42" r="4"/>
-              <text class="t b" x="240" y="46" text-anchor="middle">選擇資料夾</text>
-              <rect class="skel" x="66" y="70" width="150" height="24" rx="12"/>
-              <text class="t m" x="80" y="86">文件</text>
-              <g class="x-press" data-style="--d:1.3s"><rect class="btn-o" x="296" y="70" width="118" height="24" rx="12"/><text class="t a" x="355" y="86" text-anchor="middle">新增資料夾</text></g>
-              <use class="fold" href="#ds-folder" x="74" y="112" width="22" height="18"/><rect class="skel" x="108" y="117" width="90" height="8" rx="4"/>
-              <use class="fold" href="#ds-folder" x="74" y="144" width="22" height="18"/><rect class="skel" x="108" y="149" width="64" height="8" rx="4"/>
-              <g class="x-pop" data-style="--d:1.6s">
-                <rect class="sel" x="62" y="174" width="356" height="30" rx="8"/>
-                <use class="fold" href="#ds-folder" x="74" y="180" width="22" height="18"/>
-                <text class="t" x="108" y="194">schedulenewnet-ext</text>
-                <rect class="cover x-type" x="106" y="178" width="112" height="22"/>
-                <rect class="caret x-caret" x="107" y="180" width="1.6" height="18"/>
-              </g>
-              <rect class="skel" x="262" y="240" width="60" height="24" rx="12"/><text class="t m" x="292" y="256" text-anchor="middle">取消</text>
-              <g class="x-press" data-style="--d:4.2s"><rect class="btn-f" x="330" y="240" width="84" height="24" rx="12"/><text class="t w" x="372" y="256" text-anchor="middle">選擇資料夾</text></g>
-              <g class="cur c1"><circle class="rip" data-style="--d:1.3s" r="12"/><circle class="rip" data-style="--d:4.2s" r="12"/><use href="#ds-cursor" x="-4.6" y="-2.8" width="22" height="22"/></g>
-            </g>
-          </svg>
-        </div>
-        <div class="ds-text">
-          <p class="ds-kicker">步驟 1／6</p>
-          <h3 id="dsh1" tabindex="-1">建立放插件的資料夾</h3>
-          <p class="ds-lead">網頁沒辦法直接替瀏覽器安裝插件，所以要先在電腦上準備一個資料夾放插件檔案，再到 Chrome 載入一次。</p>
-          <p class="ds-label">建議的資料夾名稱（按一下複製，不用自己打）</p>
-          <div class="ds-copy">
-            <code id="deployFolderName">schedulenewnet-ext</code>
-            <button type="button" class="ds-btn" id="deployCopyName">複製名稱</button>
-          </div>
-          <ol class="ds-do">
-            <li>先按下面的「下一步」，到步驟 2 按「選擇資料夾並寫入」，會跳出選擇資料夾的視窗。</li>
-            <li>在視窗裡按「<b>新增資料夾</b>」<span data-only="mac">（Mac 叫「新增檔案夾」）</span>，貼上剛剛複製的名稱（<kbd class="k-mod">Ctrl</kbd> + <kbd>V</kbd>）後按 Enter。</li>
-            <li>選取那個新資料夾，按「選擇資料夾」。</li>
-          </ol>
-          <p class="ds-tip"><b>小提醒</b>　Chrome 不允許直接選「下載」「文件」「桌面」這幾個資料夾本身，請在它們裡面新增或選一個資料夾。選到已經有東西的資料夾時，我會在裡面自動建立同名資料夾，不會動到你原本的檔案。</p>
-        </div>
-      </section>
-
-      <!-- 步驟 2：下載檔案 -->
-      <section class="ds-pane" data-step="2" data-cycle="7000" aria-labelledby="dsh2" hidden>
         <div class="ds-art" aria-hidden="true">
           <svg class="sv" viewBox="0 0 480 300" focusable="false">
             <g class="sv-all">
@@ -246,108 +200,89 @@
               <use class="fl x-fly" data-style="--d:2.6s;--dy:-30px" href="#ds-file" x="186" y="100" width="16" height="20"/>
               <use class="fl x-fly" data-style="--d:3.0s;--dy:-8px" href="#ds-file" x="186" y="124" width="16" height="20"/>
               <use class="fl x-fly" data-style="--d:3.4s;--dy:-18px" href="#ds-file" x="186" y="114" width="16" height="20"/>
-              <use class="fold big" href="#ds-folder" x="314" y="96" width="120" height="98"/>
-              <text class="t b" x="374" y="222" text-anchor="middle">schedulenewnet-ext</text>
-              <g class="x-pop" data-style="--d:4.6s"><circle class="okc" cx="426" cy="104" r="14"/><path class="okt" d="M419 104l5 5 9-10"/></g>
+              <use class="fl big" href="#ds-file" x="334" y="88" width="84" height="106"/>
+              <text class="t b" x="376" y="222" text-anchor="middle">安裝檔</text>
+              <g class="x-pop" data-style="--d:4.6s"><circle class="okc" cx="426" cy="96" r="14"/><path class="okt" d="M419 96l5 5 9-10"/></g>
               <rect class="track" x="60" y="252" width="360" height="9" rx="4.5"/>
               <rect class="prog x-prog" x="60" y="252" width="360" height="9" rx="4.5"/>
-              <text class="t m s x-out" data-style="--o:4.5s" x="60" y="244">正在寫入檔案…</text>
-              <text class="t g s x-pop" data-style="--d:4.6s" x="60" y="244">✓ 已寫入完成</text>
+              <text class="t m s x-out" data-style="--o:4.5s" x="60" y="244">正在打包安裝檔…</text>
+              <text class="t g s x-pop" data-style="--d:4.6s" x="60" y="244">✓ 已下載安裝檔</text>
             </g>
           </svg>
         </div>
         <div class="ds-text">
-          <p class="ds-kicker">步驟 2／6</p>
-          <h3 id="dsh2" tabindex="-1">下載最新版插件檔案</h3>
-          <p class="ds-lead">從 GitHub 下載最新版，直接寫進步驟 1 建好的資料夾。</p>
+          <p class="ds-kicker">步驟 1／5</p>
+          <h3 id="dsh1" tabindex="-1">下載安裝檔</h3>
+          <p class="ds-lead">網頁沒辦法直接替瀏覽器安裝插件。這個安裝檔會從 GitHub 帶著最新版插件，放到你電腦的固定資料夾，再幫你打開 Chrome 的擴充功能頁。</p>
           <div class="ds-actions">
-            <button type="button" class="ds-btn primary" id="deployPickBtn">選擇資料夾並寫入</button>
-            <button type="button" class="ds-btn" id="deployZipBtn">改下載 ZIP</button>
+            <button type="button" class="ds-btn primary" id="deployInstallBtn">下載安裝檔</button>
           </div>
           <div class="ds-status" id="deployStatus" role="status"></div>
           <ol class="ds-do">
-            <li>按「選擇資料夾並寫入」，選步驟 1 建好的資料夾，再按「選擇資料夾」。</li>
-            <li>Chrome 會問「要讓這個網站編輯資料夾裡的檔案嗎？」，請按「<b>編輯檔案</b>」（只會寫入插件檔案）。</li>
-            <li>等到出現「已把 N 個檔案寫入」就完成了，按「下一步」。</li>
+            <li>按「下載安裝檔」，會下載 <code id="deployInstallName">schedulenewnet-install.cmd</code>。</li>
+            <li data-only="win">Chrome 若顯示「這類檔案可能有害」，請在下載清單按「<b>保留</b>」。</li>
+            <li>出現「已下載安裝檔」後，按「下一步」。</li>
           </ol>
           <details class="ds-more">
-            <summary>瀏覽器不能選資料夾，或想自己解壓縮？改用 ZIP</summary>
-            <p>按「改下載 ZIP」，下載後先<b>解壓縮</b>（Windows：在 ZIP 上按右鍵 →「全部解壓縮」；Mac：連點兩下）。步驟 5 要選的是<b>解壓縮後、打開就看得到 <code>manifest.json</code> 的那一層資料夾</b>。Windows 解壓縮後常會多包一層，要再點進去一層。</p>
+            <summary>公司電腦不能執行安裝檔？改用手動安裝</summary>
+            <p>先在電腦上建一個空資料夾（例如「文件」裡新增 <code>schedulenewnet-ext</code>），按「選擇資料夾並寫入」選它，Chrome 問要不要讓網站編輯檔案時按「<b>編輯檔案</b>」。不能選資料夾的瀏覽器就按「下載 ZIP」，下載後先解壓縮。完成後跳到步驟 3。</p>
+            <div class="ds-actions">
+              <button type="button" class="ds-btn" id="deployPickBtn">選擇資料夾並寫入</button>
+              <button type="button" class="ds-btn" id="deployZipBtn">下載 ZIP</button>
+            </div>
           </details>
         </div>
       </section>
 
-      <!-- 步驟 3：開啟擴充頁 -->
-      <section class="ds-pane" data-step="3" data-cycle="8000" aria-labelledby="dsh3" hidden>
+      <!-- 步驟 2：執行安裝檔 -->
+      <section class="ds-pane" data-step="2" data-cycle="7000" aria-labelledby="dsh2" hidden>
         <div class="ds-art" aria-hidden="true">
           <svg class="sv" viewBox="0 0 480 300" focusable="false">
             <g class="sv-all">
-              <rect class="win" x="30" y="20" width="420" height="262" rx="12"/>
-              <path class="bar" d="M30 54V32a12 12 0 0 1 12-12h396a12 12 0 0 1 12 12v22z"/>
-              <path class="tab" d="M44 54v-6a8 8 0 0 1 8-8h104a8 8 0 0 1 8 8v6z"/>
-              <text class="t s x-out" data-style="--o:4.5s" x="60" y="52">新分頁</text>
-              <text class="t s x-pop" data-style="--d:4.7s" x="60" y="52">擴充功能</text>
-              <rect class="toolrow" x="30" y="54" width="420" height="36"/>
-              <circle class="ic" cx="54" cy="72" r="7"/><circle class="ic" cx="76" cy="72" r="7"/><circle class="ic" cx="98" cy="72" r="7"/>
-              <rect class="addr" x="118" y="62" width="250" height="20" rx="10"/>
-              <text class="t s mono" x="132" y="76">chrome://extensions</text>
-              <rect class="cover2 x-type2" x="130" y="64" width="160" height="16"/>
-              <use class="puz" href="#ds-puzzle" x="384" y="63" width="18" height="18"/>
-              <circle class="ic" cx="426" cy="72" r="9"/>
-              <!-- 新分頁：三個按鍵 -->
-              <g class="x-out" data-style="--o:4.5s">
-                <g transform="translate(58 156)">
-                  <rect class="key" x="0" y="0" width="82" height="40" rx="9"/>
-                  <text class="t kt" x="41" y="25" text-anchor="middle"><tspan class="k-mod">Ctrl</tspan> T</text>
-                  <g class="x-pop" data-style="--d:.9s"><rect class="keyon" x="0" y="0" width="82" height="40" rx="9"/><text class="t kt w" x="41" y="25" text-anchor="middle"><tspan class="k-mod">Ctrl</tspan> T</text></g>
-                  <text class="t m s" x="41" y="62" text-anchor="middle">開新分頁</text>
-                </g>
-                <path class="arr" d="M150 176h24m-7-6l7 6-7 6"/>
-                <g transform="translate(184 156)">
-                  <rect class="key" x="0" y="0" width="82" height="40" rx="9"/>
-                  <text class="t kt" x="41" y="25" text-anchor="middle"><tspan class="k-mod">Ctrl</tspan> V</text>
-                  <g class="x-pop" data-style="--d:2.1s"><rect class="keyon" x="0" y="0" width="82" height="40" rx="9"/><text class="t kt w" x="41" y="25" text-anchor="middle"><tspan class="k-mod">Ctrl</tspan> V</text></g>
-                  <text class="t m s" x="41" y="62" text-anchor="middle">貼上網址</text>
-                </g>
-                <path class="arr" d="M276 176h24m-7-6l7 6-7 6"/>
-                <g transform="translate(310 156)">
-                  <rect class="key" x="0" y="0" width="112" height="40" rx="9"/>
-                  <text class="t kt" x="56" y="25" text-anchor="middle">Enter</text>
-                  <g class="x-pop" data-style="--d:3.7s"><rect class="keyon" x="0" y="0" width="112" height="40" rx="9"/><text class="t kt w" x="56" y="25" text-anchor="middle">Enter</text></g>
-                  <text class="t m s" x="56" y="62" text-anchor="middle">前往</text>
-                </g>
-              </g>
-              <!-- 擴充功能頁 -->
-              <g class="x-pop" data-style="--d:4.7s">
-                <rect class="hdr" x="30" y="90" width="420" height="34"/>
-                <path class="ham" d="M46 102h14M46 107h14M46 112h14"/>
-                <text class="t b" x="72" y="112">擴充功能</text>
-                <rect class="skel" x="170" y="99" width="120" height="16" rx="8"/>
-                <rect class="skel" x="46" y="140" width="388" height="56" rx="10"/>
-                <rect class="skel" x="46" y="206" width="388" height="56" rx="10"/>
-              </g>
+              <rect class="win" x="40" y="30" width="400" height="240" rx="12"/>
+              <path class="bar" d="M40 62V42a12 12 0 0 1 12-12h376a12 12 0 0 1 12 12v20z"/>
+              <circle class="dot3" cx="58" cy="46" r="4"/><circle class="dot3" cx="72" cy="46" r="4"/><circle class="dot3" cx="86" cy="46" r="4"/>
+              <text class="t b" x="240" y="50" text-anchor="middle">安裝程式</text>
+              <text class="t s a mono x-pop" data-style="--d:.5s" x="62" y="92">==&gt; 檢查資料夾</text>
+              <text class="t s a mono x-pop" data-style="--d:1.2s" x="62" y="118">==&gt; 寫入插件檔案</text>
+              <text class="t s m mono x-pop" data-style="--d:1.8s" x="94" y="140">~/schedulenewnet-ext</text>
+              <text class="t s a mono x-pop" data-style="--d:2.5s" x="62" y="166">==&gt; 複製資料夾路徑</text>
+              <text class="t s a mono x-pop" data-style="--d:3.2s" x="62" y="192">==&gt; 開啟 Chrome 擴充功能頁</text>
+              <g class="x-pop" data-style="--d:4s"><circle class="okc" cx="70" cy="228" r="10"/><path class="okt" d="M65 228l3.5 3.5 6.5-7"/><text class="t g b" x="88" y="233">安裝檔完成！</text></g>
             </g>
           </svg>
         </div>
         <div class="ds-text">
-          <p class="ds-kicker">步驟 3／6</p>
-          <h3 id="dsh3" tabindex="-1">開啟 Chrome 的擴充功能頁</h3>
-          <p class="ds-lead">網頁不能替你開啟這個頁面，請複製網址，自己貼到 Chrome 的網址列。</p>
+          <p class="ds-kicker">步驟 2／5</p>
+          <h3 id="dsh2" tabindex="-1">執行安裝檔</h3>
+          <p class="ds-lead">安裝檔會把插件放到 <code>schedulenewnet-ext</code> 資料夾、把路徑複製好，並打開 Chrome 的擴充功能頁。</p>
+          <ol class="ds-do" data-only="win">
+            <li>點 Chrome 下載清單裡的 <code>schedulenewnet-install.cmd</code>（或到「下載」資料夾連點兩下）。</li>
+            <li>出現藍色的「Windows 已保護您的電腦」時，按「<b>其他資訊</b>」→「<b>仍要執行</b>」。</li>
+            <li>黑色視窗顯示「<b>安裝檔完成！</b>」後，按任意鍵關掉，回到 Chrome。</li>
+          </ol>
+          <ol class="ds-do" data-only="mac">
+            <li>按下面的「複製指令」。</li>
+            <li>按 <kbd>⌘</kbd> + <kbd>空白鍵</kbd> 搜尋「<b>終端機</b>」並打開，按 <kbd>⌘</kbd> + <kbd>V</kbd> 貼上，再按 <kbd>Enter</kbd>。</li>
+            <li>顯示「<b>安裝檔完成！</b>」就可以關掉終端機，回到 Chrome。</li>
+          </ol>
+          <div class="ds-copy" data-only="mac">
+            <code id="deployMacCmd">bash ~/Downloads/schedulenewnet-install-mac.sh</code>
+            <button type="button" class="ds-btn" id="deployCopyCmd">複製指令</button>
+          </div>
+          <p class="ds-tip"><b>沒有自動打開擴充功能頁？</b>　複製下面的網址，貼到 Chrome 網址列再按 <kbd>Enter</kbd>。</p>
           <div class="ds-copy">
             <code>chrome://extensions</code>
             <button type="button" class="ds-btn" id="deployCopyUrl">複製網址</button>
           </div>
-          <ol class="ds-do">
-            <li>在 Chrome 按 <kbd class="k-mod">Ctrl</kbd> + <kbd>T</kbd> 開一個新分頁（也可以點分頁列最右邊的「＋」）。</li>
-            <li>按 <kbd class="k-mod">Ctrl</kbd> + <kbd>V</kbd> 把剛複製的網址貼到網址列，再按 <kbd>Enter</kbd>。</li>
-            <li>看到標題寫著「<b>擴充功能</b>」的頁面就對了，保持開著，接著做步驟 4。</li>
-          </ol>
-          <p class="ds-tip"><b>另一個方法</b>　點 Chrome 右上角的「⋮」→「擴充功能」→「管理擴充功能」，也會到同一個頁面。</p>
+          <details class="ds-more" data-only="mac">
+            <summary>終端機顯示「No such file or directory」？</summary>
+            <p>代表安裝檔不在「下載項目」資料夾，或 Chrome 幫它改了名字（例如多了「 (1)」）。請在終端機輸入 <code>bash</code> 和一個空格，再把安裝檔從 Finder 拖進終端機視窗，按 <kbd>Enter</kbd>。</p>
+          </details>
         </div>
       </section>
-
-      <!-- 步驟 4：開發人員模式 -->
-      <section class="ds-pane" data-step="4" data-cycle="6500" aria-labelledby="dsh4" hidden>
+      <!-- 步驟 3：開發人員模式 -->
+      <section class="ds-pane" data-step="3" data-cycle="6500" aria-labelledby="dsh3" hidden>
         <div class="ds-art" aria-hidden="true">
           <svg class="sv" viewBox="0 0 480 300" focusable="false">
             <g class="sv-all">
@@ -383,11 +318,11 @@
           </svg>
         </div>
         <div class="ds-text">
-          <p class="ds-kicker">步驟 4／6</p>
-          <h3 id="dsh4" tabindex="-1">打開「開發人員模式」</h3>
+          <p class="ds-kicker">步驟 3／5</p>
+          <h3 id="dsh3" tabindex="-1">打開「開發人員模式」</h3>
           <p class="ds-lead">這個插件不是從 Chrome 線上應用程式商店安裝的，所以要先打開「開發人員模式」，Chrome 才允許載入自己的資料夾。</p>
           <ol class="ds-do">
-            <li>在擴充功能頁的<b>右上角</b>，找到「<b>開發人員模式</b>」開關。</li>
+            <li>到安裝檔打開的擴充功能頁，在<b>右上角</b>找到「<b>開發人員模式</b>」開關。</li>
             <li>點一下開關，變成<b>藍色</b>就是打開了。</li>
             <li>打開後，左上方會多出「<b>載入未封裝項目</b>」「封裝擴充功能」「更新」三個按鈕，下一步會用到第一個。</li>
           </ol>
@@ -395,8 +330,8 @@
         </div>
       </section>
 
-      <!-- 步驟 5：載入插件 -->
-      <section class="ds-pane" data-step="5" data-cycle="9000" aria-labelledby="dsh5" hidden>
+      <!-- 步驟 4：載入插件 -->
+      <section class="ds-pane" data-step="4" data-cycle="9000" aria-labelledby="dsh4" hidden>
         <div class="ds-art" aria-hidden="true">
           <svg class="sv" viewBox="0 0 480 300" focusable="false">
             <g class="sv-all">
@@ -450,26 +385,27 @@
           </svg>
         </div>
         <div class="ds-text">
-          <p class="ds-kicker">步驟 5／6</p>
-          <h3 id="dsh5" tabindex="-1">載入插件</h3>
-          <p class="ds-lead">接下來告訴 Chrome：插件檔案放在哪個資料夾。</p>
+          <p class="ds-kicker">步驟 4／5</p>
+          <h3 id="dsh4" tabindex="-1">載入插件</h3>
+          <p class="ds-lead">接下來告訴 Chrome：插件檔案放在哪個資料夾。安裝檔已經把路徑複製好了，直接貼上就好。</p>
           <p class="ds-label">要選的資料夾</p>
           <div class="ds-copy"><code id="deployLoadFolder">schedulenewnet-ext</code></div>
           <ol class="ds-do">
             <li>按擴充功能頁左上角的「<b>載入未封裝項目</b>」。</li>
-            <li>在跳出的視窗，找到上面這個資料夾，點一下選取它。</li>
-            <li>按右下角的「<b>選擇資料夾</b>」（Mac 上可能顯示「選取」或「開啟」）。</li>
+            <li data-only="win">在跳出的視窗下方「<b>資料夾</b>」欄位按 <kbd>Ctrl</kbd> + <kbd>V</kbd> 貼上路徑，再按「<b>選擇資料夾</b>」。</li>
+            <li data-only="mac">在跳出的視窗按 <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>G</kbd>，按 <kbd>⌘</kbd> + <kbd>V</kbd> 貼上路徑後按 <kbd>Enter</kbd>，再按「<b>選取</b>」。</li>
             <li>清單裡出現「<b>網新快速排程 連線驗證</b>」，就載入成功了。</li>
           </ol>
+          <p class="ds-tip"><b>以前用安裝檔裝過？</b>　不用再載入一次，在擴充功能頁找到這個插件，按卡片上的<b>重新整理圖示</b>即可。</p>
           <details class="ds-more">
             <summary>出現「無法載入擴充功能」或「找不到 manifest」？</summary>
-            <p>代表選到上一層了。請再往裡面點一層，直到<b>打開資料夾就能直接看到 <code>manifest.json</code>、<code>app.js</code> 等檔案</b>，再選那一層。用 ZIP 解壓縮的話，最常多包一層。</p>
+            <p>代表選到上一層了。請再往裡面點一層，直到<b>打開資料夾就能直接看到 <code>manifest.json</code>、<code>bridge.js</code> 等檔案</b>，再選那一層。用 ZIP 解壓縮的話，最常多包一層。</p>
           </details>
         </div>
       </section>
 
-      <!-- 步驟 6：釘選並開始使用 -->
-      <section class="ds-pane" data-step="6" data-cycle="8500" aria-labelledby="dsh6" hidden>
+      <!-- 步驟 5：釘選並開始使用 -->
+      <section class="ds-pane" data-step="5" data-cycle="8500" aria-labelledby="dsh5" hidden>
         <div class="ds-art" aria-hidden="true">
           <svg class="sv" viewBox="0 0 480 300" focusable="false">
             <g class="sv-all">
@@ -514,8 +450,8 @@
           </svg>
         </div>
         <div class="ds-text">
-          <p class="ds-kicker">步驟 6／6</p>
-          <h3 id="dsh6" tabindex="-1">重新整理，開始使用</h3>
+          <p class="ds-kicker">步驟 5／5</p>
+          <h3 id="dsh5" tabindex="-1">重新整理，開始使用</h3>
           <p class="ds-lead">裝好了！回到這個網頁重新整理，右上角顯示「外掛已連線」就能開始排程。</p>
           <ol class="ds-do">
             <li>按「完成」關掉教學，再按 <kbd>F5</kbd><span data-only="mac">（Mac 按 <kbd>⌘</kbd> + <kbd>R</kbd>）</span>重新整理這個網頁。</li>
@@ -531,10 +467,10 @@
 
     <footer class="ds-foot">
       <button type="button" class="ds-btn" id="deployPrevBtn">上一步</button>
-      <span class="ds-count" id="deployCount" aria-live="polite">1 / 6</span>
+      <span class="ds-count" id="deployCount" aria-live="polite">1 / 5</span>
       <button type="button" class="ds-btn primary" id="deployNextBtn">下一步</button>
     </footer>
   </div>
 </div>
-<script src="config.js"></script><script src="rules.js"></script><script src="article.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="rundown.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="deploy.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="rules.js"></script><script src="article.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="rundown.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="installer.js"></script><script src="deploy.js"></script><script src="app.js"></script>
 </body></html>

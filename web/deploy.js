@@ -2,8 +2,9 @@
 // 把 Chrome 擴充功能的最新版檔案「準備」到你的電腦上，再一步步教你到 chrome://extensions 載入。
 //
 // 網頁沒辦法直接替瀏覽器安裝擴充功能，所以這裡只負責準備檔案：
-//   A. 寫入資料夾：讓使用者選一個空資料夾，把檔案直接寫進去（File System Access API）
-//   B. 下載 ZIP：不能選資料夾的瀏覽器／資料夾時的備案
+//   主要：下載一鍵安裝檔（web/installer.js，仿 videodownload）：檔案嵌在安裝檔裡，執行後放到固定資料夾、複製路徑、打開擴充功能頁
+//   備案 A. 寫入資料夾：讓使用者選一個空資料夾，把檔案直接寫進去（File System Access API）
+//   備案 B. 下載 ZIP：不能執行安裝檔、也不能選資料夾時
 // 檔案清單取自 GitHub main 分支 extension/ 資料夾的最新內容，每個檔案都用 git blob SHA 驗證。
 (function () {
   const REPO = { owner: 'unnn3ing-oss', repo: '-schedulenewnet', branch: 'main' };
@@ -161,6 +162,17 @@
     return new Blob([...local, ...central, end], { type: 'application/zip' });
   }
 
+  // 一鍵安裝檔：ZIP 不含最上層資料夾（安裝檔自己建 schedulenewnet-ext），版本取自 manifest.json
+  async function buildInstaller(os, onProgress) {
+    const files = await fetchExtensionFiles(onProgress);
+    onProgress('打包安裝檔…');
+    const manifest = files.find(f => f.path === 'manifest.json');
+    let version;
+    try { version = JSON.parse(new TextDecoder().decode(manifest.bytes)).version; } catch (e) { throw new Error('manifest.json 讀不懂，已停止'); }
+    const zip = new Uint8Array(await buildZip(files.map(f => ({ name: f.path, bytes: f.bytes }))).arrayBuffer());
+    return window.Installer.build(os, zip, version);
+  }
+
   async function buildZipOfExtension(onProgress) {
     const files = await fetchExtensionFiles(onProgress);
     onProgress('打包 ZIP…');
@@ -172,10 +184,11 @@
   if (!overlay) return;
   const openBtn = document.getElementById('deployBtn');
   const closeBtn = document.getElementById('deployCloseBtn');
+  const installBtn = document.getElementById('deployInstallBtn');
   const pickBtn = document.getElementById('deployPickBtn');
   const zipBtn = document.getElementById('deployZipBtn');
   const copyUrlBtn = document.getElementById('deployCopyUrl');
-  const copyNameBtn = document.getElementById('deployCopyName');
+  const copyCmdBtn = document.getElementById('deployCopyCmd');
   const statusEl = document.getElementById('deployStatus');
   const prevBtn = document.getElementById('deployPrevBtn');
   const nextBtn = document.getElementById('deployNextBtn');
@@ -202,8 +215,11 @@
   overlay.querySelectorAll('.k-mod').forEach(el => { el.textContent = isMac ? '⌘' : 'Ctrl'; });
   overlay.querySelectorAll('[data-only]').forEach(el => { el.hidden = el.dataset.only !== overlay.dataset.os; });
 
-  document.getElementById('deployFolderName').textContent = EXT_FOLDER;
-  loadFolderEl.textContent = EXT_FOLDER;
+  // 安裝檔放的固定位置（Installer.FOLDER）：Windows 是使用者資料夾，Mac 是家目錄
+  const installedPath = isMac ? `~/${window.Installer.FOLDER}` : `C:\\Users\\你的帳號\\${window.Installer.FOLDER}`;
+  document.getElementById('deployInstallName').textContent = window.Installer.FILES[overlay.dataset.os];
+  document.getElementById('deployMacCmd').textContent = window.Installer.macCommand;
+  loadFolderEl.textContent = installedPath;
 
   const setStatus = (msg, kind) => { statusEl.textContent = msg; statusEl.className = 'ds-status' + (kind ? ` ${kind}` : ''); };
   const refreshNav = () => {
@@ -212,7 +228,7 @@
     nextBtn.textContent = step === TOTAL ? '完成' : '下一步';
     countEl.textContent = `${step} / ${TOTAL}`;
   };
-  const setBusy = b => { busy = b; pickBtn.disabled = zipBtn.disabled = b; refreshNav(); };
+  const setBusy = b => { busy = b; installBtn.disabled = pickBtn.disabled = zipBtn.disabled = b; refreshNav(); };
 
   // 示意動畫：換到那一步時從頭播，播完停一下再重播；使用者設定「減少動態效果」就停在做完的畫面
   function stopReplay() { clearTimeout(replayTimer); replayTimer = null; }
@@ -254,7 +270,7 @@
   function open() {
     opener = document.activeElement;
     setStatus('');
-    loadFolderEl.textContent = EXT_FOLDER;
+    loadFolderEl.textContent = installedPath;
     overlay.hidden = false;
     html.classList.add('ds-lock');
     goTo(1, false);
@@ -286,12 +302,29 @@
     else if (e.key === 'ArrowLeft' && step > 1) goTo(step - 1);
   });
 
-  // 不支援選資料夾的瀏覽器（Firefox、Safari）只留 ZIP
-  if (typeof window.showDirectoryPicker !== 'function') {
-    pickBtn.hidden = true;
-    zipBtn.classList.add('primary');
-    zipBtn.textContent = '下載 ZIP';
+  // 不支援選資料夾的瀏覽器（Firefox、Safari）手動安裝只留 ZIP
+  if (typeof window.showDirectoryPicker !== 'function') pickBtn.hidden = true;
+
+  function save(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   }
+
+  installBtn.addEventListener('click', async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { name, text, type } = await buildInstaller(overlay.dataset.os, msg => setStatus(msg));
+      save(new Blob([text], { type }), name);
+      loadFolderEl.textContent = installedPath;
+      setStatus(`已下載安裝檔「${name}」。請按「下一步」執行它。`, 'ok');
+    } catch (err) {
+      setStatus(err.message || String(err), 'err');
+    } finally { setBusy(false); }
+  });
 
   pickBtn.addEventListener('click', async () => {
     if (busy) return;
@@ -302,7 +335,7 @@
     try {
       const { count, label } = await deployToFolder(dir, msg => setStatus(msg));
       loadFolderEl.textContent = label;
-      setStatus(`已把 ${count} 個檔案寫入「${label}」。請按「下一步」繼續。`, 'ok');
+      setStatus(`已把 ${count} 個檔案寫入「${label}」。請跳到步驟 3「開發人員模式」繼續（到擴充功能頁：chrome://extensions）。`, 'ok');
     } catch (err) {
       setStatus(err.message || String(err), 'err');
     } finally { setBusy(false); }
@@ -313,13 +346,9 @@
     setBusy(true);
     try {
       const { blob, count } = await buildZipOfExtension(msg => setStatus(msg));
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${EXT_FOLDER}.zip`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      save(blob, `${EXT_FOLDER}.zip`);
       loadFolderEl.textContent = EXT_FOLDER;
-      setStatus(`已下載 ZIP（${count} 個檔案）。請先解壓縮，解壓縮後的資料夾就是「${EXT_FOLDER}」，再按「下一步」。`, 'ok');
+      setStatus(`已下載 ZIP（${count} 個檔案）。請先解壓縮，解壓縮後的資料夾就是「${EXT_FOLDER}」，再跳到步驟 3「開發人員模式」（到擴充功能頁：chrome://extensions）。`, 'ok');
     } catch (err) {
       setStatus(err.message || String(err), 'err');
     } finally { setBusy(false); }
@@ -336,7 +365,7 @@
     });
   }
   bindCopy(copyUrlBtn, 'chrome://extensions');
-  bindCopy(copyNameBtn, EXT_FOLDER);
+  bindCopy(copyCmdBtn, window.Installer.macCommand);
 
-  window.Deploy = { fetchExtensionFiles, deployToFolder, buildZip, buildZipOfExtension, crc32, REPO, EXT_FOLDER, open, close, isOpen };
+  window.Deploy = { fetchExtensionFiles, deployToFolder, buildZip, buildZipOfExtension, buildInstaller, crc32, REPO, EXT_FOLDER, open, close, isOpen };
 })();
