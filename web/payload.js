@@ -96,11 +96,42 @@
   }
 
   // AI 小編文（§3）：generate 帶 title、summary；proofread 帶 text、titles
+  // generate 的 title 和官方發文台相同：標題各行直接接起來，不加空格
   function aiCaptionBody(kind, input) {
     const card = input.mode === 'text_card';
     const titles = card ? [cardTextOf(input)].filter(Boolean) : clean(input.lines).filter(Boolean);
-    if (kind === 'generate') return { ip: IP, mode: 'generate', title: titles.join(' '), summary: String(input.summary || '') };
+    if (kind === 'generate') return { ip: IP, mode: 'generate', title: titles.join(''), summary: String(input.summary || '') };
     return { ip: IP, mode: 'proofread', text: String(input.caption || ''), titles };
+  }
+
+  // AI 小編文回應 → { text, hashtags, note }
+  // 官方 generate 回 { versions: [文字…], hashtags: [不含 # 的標籤…], usedArticle, note }，取第一個版本；
+  // proofread 的格式還沒確認，沿用常見欄位名（caption、text…），並看一層 data／result
+  function aiCaptionResult(obj) {
+    if (typeof obj === 'string') return { text: obj.trim(), hashtags: [], note: '' };
+    const pools = [obj, obj && obj.data, obj && obj.result].filter(o => o && typeof o === 'object');
+    for (const o of pools) {
+      const v = Array.isArray(o.versions) ? o.versions.find(s => typeof s === 'string' && s.trim()) : '';
+      const text = v || ['caption', 'text', 'corrected', 'result', 'content', 'output'].map(k => o[k]).find(s => typeof s === 'string' && s.trim());
+      if (!text) continue;
+      const hashtags = (Array.isArray(o.hashtags) ? o.hashtags : []).map(s => String(s).replace(/^[#＃\s]+/, '').replace(/\s+/g, '')).filter(Boolean);
+      return { text: text.trim(), hashtags, note: typeof o.note === 'string' ? o.note.trim() : '' };
+    }
+    return { text: '', hashtags: [], note: '' };
+  }
+
+  // 把 AI 給的 hashtag 併進小編文：小編文原有的優先，AI 的只補到總共 MAX_TAGS 個、已經有的不重複；
+  // 最後一行是 hashtag 行就接在後面，否則另起一行
+  const MAX_TAGS = 3;
+  function mergeHashtags(caption, tags) {
+    const has = new Set((String(caption).match(/[#＃][^\s#＃]+/g) || []).map(s => s.slice(1)));
+    const add = [...new Set(tags)].filter(t => !has.has(t)).slice(0, Math.max(0, MAX_TAGS - has.size)).map(t => '#' + t);
+    if (!add.length) return caption;
+    const lines = String(caption).replace(/\s+$/, '').split('\n');
+    const last = lines[lines.length - 1];
+    if (/^\s*[#＃]\S/.test(last) && last.trim().split(/\s+/).every(w => /^[#＃]\S/.test(w))) lines[lines.length - 1] = last.trimEnd() + ' ' + add.join(' ');
+    else lines.push(add.join(' '));
+    return lines.join('\n');
   }
 
   // 送出前檢查（§6.6，順序照舊版）：回錯誤訊息或空字串
@@ -115,5 +146,5 @@
     return '';
   }
 
-  return { textCardFields, guardBody, guardKey, buildBase, forPage, endpointFor, buildRequests, previewRequest, aiCaptionBody, validateInput };
+  return { textCardFields, guardBody, guardKey, buildBase, forPage, endpointFor, buildRequests, previewRequest, aiCaptionBody, aiCaptionResult, mergeHashtags, validateInput };
 });

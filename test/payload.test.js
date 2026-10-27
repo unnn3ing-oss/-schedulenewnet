@@ -138,7 +138,7 @@ test('previewRequest：作圖框 /render、純文字 /render_text_card', () => {
 });
 
 test('aiCaptionBody', () => {
-  assert.deepEqual(P.aiCaptionBody('generate', frame({ summary: '摘要' })), { ip: 'newsnet', mode: 'generate', title: '颱風假 最新！北北基桃 明天照常上班上課', summary: '摘要' });
+  assert.deepEqual(P.aiCaptionBody('generate', frame({ summary: '摘要' })), { ip: 'newsnet', mode: 'generate', title: '颱風假 最新！北北基桃明天照常上班上課', summary: '摘要' });
   assert.deepEqual(P.aiCaptionBody('proofread', frame()), { ip: 'newsnet', mode: 'proofread', text: '北北基桃明天照常上班上課！\n#颱風', titles: ['颱風假 最新！北北基桃', '明天照常上班上課'] });
   assert.equal(P.aiCaptionBody('generate', card()).title, '【快訊】北市宣布\n明天停班停課');
 });
@@ -150,4 +150,21 @@ test('validateInput：順序與訊息照舊版（§6.6）', () => {
   assert.equal(P.validateInput(frame({ hasImage: false, lines: [] })), '需要照片');
   assert.equal(P.validateInput(frame({ lines: [' ', ''] })), '請填標題');
   assert.equal(P.validateInput(frame()), '');
+});
+
+test('aiCaptionResult：官方 generate 回應取 versions 第一個與 hashtags', () => {
+  const real = { versions: ['庫存去化終於告一段落，記憶體今天大回神啦！📈'], hashtags: ['記憶體', '南亞科'], usedArticle: false, note: '' };
+  assert.deepEqual(P.aiCaptionResult(real), { text: '庫存去化終於告一段落，記憶體今天大回神啦！📈', hashtags: ['記憶體', '南亞科'], note: '' });
+  assert.deepEqual(P.aiCaptionResult({ versions: ['', ' 第二版 '], hashtags: ['#颱風', ' 停 班 '] }), { text: '第二版', hashtags: ['颱風', '停班'], note: '' });
+  assert.equal(P.aiCaptionResult({ data: { text: '校對後' } }).text, '校對後');
+  assert.deepEqual(P.aiCaptionResult({ versions: [], note: '內容不足' }), { text: '', hashtags: [], note: '' });
+});
+
+test('mergeHashtags：原有的優先，AI 的只補到 3 個、併進最後的 hashtag 行、不重複', () => {
+  assert.equal(P.mergeHashtags('AI 文\n【標題】\n#南亞科 #股市', ['記憶體', '南亞科']), 'AI 文\n【標題】\n#南亞科 #股市 #記憶體');
+  assert.equal(P.mergeHashtags('【標題】\n#股市', ['南亞科', '記憶體', '旺宏']), '【標題】\n#股市 #南亞科 #記憶體');
+  assert.equal(P.mergeHashtags('【標題】\n#一 #二 #三', ['記憶體']), '【標題】\n#一 #二 #三');
+  assert.equal(P.mergeHashtags('AI 文\n【標題】', ['記憶體']), 'AI 文\n【標題】\n#記憶體');
+  assert.equal(P.mergeHashtags('AI 文 #記憶體', ['記憶體']), 'AI 文 #記憶體');
+  assert.equal(P.mergeHashtags('有 #標籤 的句子', ['新']), '有 #標籤 的句子\n#新');
 });

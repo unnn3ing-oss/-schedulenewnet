@@ -466,12 +466,6 @@
 
   // ---- AI 小編文（/ai_caption：generate 產生、proofread 校錯字）----
   const capHint = (msg, cls) => { $('capHint').textContent = msg || ''; $('capHint').className = 'hint' + (cls ? ' ' + cls : ''); };
-  function pickCaption(obj) {   // 回應格式未確認：接受常見欄位名，並看一層 data／result
-    if (typeof obj === 'string') return obj.trim();
-    const pools = [obj, obj && obj.data, obj && obj.result].filter(o => o && typeof o === 'object');
-    for (const o of pools) for (const k of ['caption', 'text', 'corrected', 'result', 'content', 'output']) if (typeof o[k] === 'string' && o[k].trim()) return o[k].trim();
-    return '';
-  }
   async function aiCaption(kind) {
     const input = currentInput(), body = Payload.aiCaptionBody(kind, input);
     if (kind === 'generate' && !body.title) { capHint('請先填標題', 'bad'); return; }
@@ -482,19 +476,19 @@
     try {
       const res = SendFlow.apiResult(await Ext.call('/ai_caption', 'POST', body));
       if (!res.ok) { capHint(res.error, 'bad'); return; }
-      const text = pickCaption(res.json || SendFlow.parseJson(res.text));
-      if (!text) { capHint('AI 回應格式不認得，請手動撰寫', 'bad'); return; }
+      const { text, hashtags, note } = Payload.aiCaptionResult(res.json || SendFlow.parseJson(res.text));
+      if (!text) { capHint(note || 'AI 回應格式不認得，請手動撰寫', 'bad'); return; }
       if ($('caption').value !== before) { capHint('等待期間小編文被改過，沒有套用 AI 結果', 'bad'); return; }
       if (kind === 'proofread' && text === before.trim()) { capHint('沒有找到錯字', 'ok'); return; }
       if (kind === 'generate') {   // AI 文字放最上面：上次 AI 產生的還在最上面就換掉，否則加在最前面；下面的【標題】、圖說、hashtag 不動
         const rest = cap.ai && (before === cap.ai || before.startsWith(cap.ai + '\n')) ? before.slice(cap.ai.length + 1) : before;
-        const next = rest ? text + '\n' + rest : text;
+        const next = Payload.mergeHashtags(rest ? text + '\n' + rest : text, hashtags);
         if (before === cap.auto) cap.auto = next;
         cap.ai = text;
         $('caption').value = next;
       } else $('caption').value = text;
       flowEdit();
-      capHint(kind === 'generate' ? '已產生（放在最上面），可以直接修改' : '已套用校對結果，請再看一次', 'ok');
+      capHint((kind === 'generate' ? '已產生（放在最上面），可以直接修改' : '已套用校對結果，請再看一次') + (note ? `（AI 備註：${note}）` : ''), 'ok');
     } finally { $('aiGenBtn').disabled = $('aiFixBtn').disabled = false; }
   }
   $('aiGenBtn').addEventListener('click', () => aiCaption('generate'));
