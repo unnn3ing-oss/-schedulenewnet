@@ -274,6 +274,13 @@
   // ---- 粉專按鈕：點名稱勾選；▾ 選立即／排程（排程才開時間視窗）----
   const now = () => new Date();
   const labelOf = code => Rules.pageByCode(code).label;
+  // Rundown 區段選單：沒手動選過就跟著勾選的第一個有區段的粉專
+  let rdPicked = false;
+  $('rdPage').append(...Object.entries(Rundown.PAGES).map(([v, t]) => new Option(t, v)));
+  function followRdPage() {
+    const c = Rundown.pickPage(C.pages.map(p => p.code).filter(c => state.pages[c].on));
+    if (!rdPicked && c) $('rdPage').value = c;
+  }
   const pgEls = {};
   function renderPage(code) {
     const st = state.pages[code], el = pgEls[code];
@@ -306,7 +313,7 @@
     main.addEventListener('click', () => {
       const st = state.pages[p.code];
       st.on = !st.on; st.status = ''; st.result = null;
-      closePops(); renderPage(p.code); flowEdit();
+      closePops(); renderPage(p.code); followRdPage(); flowEdit();
     });
     mode.addEventListener('click', e => {
       e.stopPropagation();
@@ -649,22 +656,22 @@
     sendMsg(base + (rd.msg ? '｜' + rd.msg : ''), failed.length || rd.bad ? 'bad' : 'ok');
   }
 
-  // 這次送成功的台寫進 FB RUNDOWN（設定裡開啟才做）；排程用排程時間、立即用送出當下。擠看看、氣象沒有區段，略過
+  // 這次送成功的台寫進 FB RUNDOWN（開關打開才做）：區段看 SLUG 上方選單；時間取該粉專的排程時間（立即＝送出當下），沒發那台就用第一台
   async function toRundown(reqs, info) {
     if (!Rundown.enabled()) return { msg: '' };
     const sent = reqs.filter(rq => state.pages[rq.code].status === 'ok').map(rq => ({ code: rq.code, at: rq.body.schedule || new Date() }));
-    const { entries } = Rundown.entries({ articleId: info.articleId, slug: info.slug, lines: info.lines }, sent);
+    const page = $('rdPage').value, label = Rundown.PAGES[page] || page;
+    const { entries, source } = Rundown.entries({ articleId: info.articleId, slug: info.slug, lines: info.lines }, sent, page);
     if (!entries.length) return { msg: '' };
     sendMsg('寫入 Rundown…');
     let j;
     try { j = await Rundown.add(entries); } catch (e) {
-      entries.forEach(en => Records.updatePage(flow.recordId, en.page, { rundown: { ok: false, error: e.message } }));
+      Records.updatePage(flow.recordId, source, { rundown: { ok: false, page, error: e.message } });
       return { msg: 'Rundown 沒寫入：' + e.message, bad: true };
     }
-    const res = Array.isArray(j && j.results) ? j.results : [];
-    entries.forEach((en, i) => { const r = res[i] || { ok: false, error: '沒有回應' };
-      Records.updatePage(flow.recordId, en.page, { rundown: { ok: !!r.ok, status: r.status || '', cell: r.cell || '', time: r.time || '', error: r.error || '' } }); });
-    return { msg: 'Rundown：' + entries.map((en, i) => Rundown.describe(res[i], labelOf(en.page))).join('；'), bad: entries.some((en, i) => !(res[i] && res[i].ok)) };
+    const r = (Array.isArray(j && j.results) && j.results[0]) || { ok: false, error: '沒有回應' };
+    Records.updatePage(flow.recordId, source, { rundown: { ok: !!r.ok, page, status: r.status || '', cell: r.cell || '', time: r.time || '', error: r.error || '' } });
+    return { msg: 'Rundown：' + Rundown.describe(r, label), bad: !r.ok };
   }
 
   // 失敗的台各自重送：內容沒改、燈號仍有效就直接送；否則先重新判讀（泡泡只列這一台）
@@ -688,7 +695,7 @@
   }
   const allSent = () => C.pages.some(p => state.pages[p.code].status === 'ok') && !pending().length;
   function resetAll() {
-    $('url').value = ''; $('caption').value = ''; titleEl.value = ''; $('slug').value = ''; hint(''); capHint('');
+    $('url').value = ''; $('caption').value = ''; titleEl.value = ''; $('slug').value = ''; rdPicked = false; $('rdPage').value = 'news'; hint(''); capHint('');
     state.articleId = ''; state.summary = '';
     cap.auto = cap.ai = ''; cap.title = null; Article.learnSeps('', []);
     Editor.reset();
@@ -737,12 +744,13 @@
 
   // Rundown 開關（存在這台瀏覽器）；Apps Script 網址與金鑰在 Worker Secrets
   const rdOn = $('rdOn');
-  const syncRd = v => { rdOn.checked = !!v.on; };
+  const syncRd = v => { rdOn.checked = !!v.on; $('rdPage').disabled = $('slug').disabled = !v.on; $('rdBox').classList.toggle('off', !v.on); };
   syncRd(Rundown.settings()); Rundown.onChange(syncRd);
   rdOn.addEventListener('change', () => {
     Rundown.save({ on: rdOn.checked });
     toast(rdOn.checked ? '送出成功後會自動排入 Rundown' : '已關閉 Rundown 自動排入');
   });
+  $('rdPage').addEventListener('change', () => { rdPicked = true; });
   $('rdSetBtn').addEventListener('click', () => Rundown.open());
   $('closeBtn').addEventListener('click', requestClose);
   $('cfStay').addEventListener('click', () => { $('confirm').hidden = true; $('closeBtn').focus(); });
