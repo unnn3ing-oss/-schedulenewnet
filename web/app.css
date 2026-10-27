@@ -52,7 +52,8 @@ body.locked{overflow:hidden}
 .hint{font-size:12px;color:var(--muted);margin:6px 0 0}.hint.bad{color:var(--danger);font-weight:700}.hint.ok{color:var(--ok)}
 
 /* 貼圖列與操作框（QPT .fx-*） */
-.fx-bar{margin-top:10px}
+.fx-bar{margin-top:8px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 12px 30px -18px rgba(0,43,102,.45)}.fx-bar[hidden]{display:none}
+#fxBtn[aria-expanded="true"]{background:var(--accent);color:#fff}
 .fx-row{display:flex;gap:8px;align-items:center;overflow-x:auto;padding:4px 2px}
 .fx-tile{flex:0 0 auto;margin:0;cursor:pointer;border:1px solid var(--border);background:#fff;border-radius:14px}
 .fx-tile:disabled{cursor:not-allowed;opacity:.5}
@@ -81,6 +82,12 @@ textarea{font-family:inherit;resize:vertical}
 .t-cnts{flex:0 0 52px;padding-top:11px;font-size:12px;line-height:var(--tlh);color:var(--muted);font-variant-numeric:tabular-nums}
 .t-cnts span{display:block;height:var(--tlh);white-space:nowrap}
 .t-cnts .over{color:var(--danger);font-weight:700}
+/* 網址與標題框小一號（側邊欄等窄畫面比較不擠）；手機觸控仍用 16px，免得 iOS 點進去自動放大 */
+#url{padding:7px 10px;font-size:14px}
+.title-box{--tlh:22px}
+#title{padding:7px 10px;font-size:14px}
+.t-cnts{padding-top:8px}
+@media (hover:none){#url,#title{font-size:16px}}
 .cap-head{display:flex;align-items:center;justify-content:space-between;margin-top:14px}.cap-head label{margin:0}
 .cap-btns{display:flex;gap:6px}
 
