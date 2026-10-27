@@ -7,19 +7,29 @@
 // - A 欄：粉專區段標題（主粉、娛樂粉、少康粉、國際＋粉、新聞脆）與時段（0800、0830…，4 碼）
 // - 時段區塊＝某個時段列往下到下一個區塊開頭；緊接在區塊開頭下面的時段列（0810、0820…）算同一區塊
 // - 分鐘碼寫在「右邊一欄」（也就是隔天那欄）：0＝:00、-5＝:05、1＝:10、15＝:15 … 5＝:50、55＝:55（個位數×10，兩位數照寫）
+//   不在 5 分格上的時間：-3＝:03、13＝:13（負號＝0X 分，兩位數照寫）
 // - 隔天那欄已經填了內容（分鐘碼被蓋掉）時，改用同區塊其他還留著分鐘碼的欄位；都沒有就只看 A 欄時段
-// - 插入時，隔天那欄的分鐘碼跟著稿子一起往下移（稿子的時間不變），新的那格補上目標時間往下取整的分鐘碼
+// - 插入時，隔天那欄的分鐘碼跟著稿子一起往下移（稿子的時間不變），新的那格補上目標時間的分鐘碼（15:13 → 13）
 
-var RD_CODE_MIN = { '0': 0, '-5': 5, '1': 10, '15': 15, '2': 20, '25': 25, '3': 30, '35': 35, '4': 40, '45': 45, '5': 50, '55': 55 };
-var RD_MIN_CODE = {};
-Object.keys(RD_CODE_MIN).forEach(function (k) { RD_MIN_CODE[RD_CODE_MIN[k]] = k; });
+// 填入的稿子一律用和現有「/圖文/」相同的樣式：字級 12、粗體、紫色
+var RD_STYLE = { size: 12, bold: true, color: '#9900ff' };
 var RD_SECTIONS = { news: ['主粉'], ent: ['娛樂粉'], shaokang: ['少康粉'], intl: ['國際＋粉', '國際+粉'] };
 var RD_DEFAULT_SHEET = '1OZOcobchhiFU6rf9jTJW00YNSHQXxNjurpudQdVl4Lo';
 
 function rdStr(v) { return String(v == null ? '' : v).trim(); }
 function rdIsLabel(v) { return /^\d{4}$/.test(rdStr(v)); }
 function rdLabelMin(v) { var s = rdStr(v); return +s.slice(0, 2) * 60 + +s.slice(2); }
-function rdIsCode(v) { return Object.prototype.hasOwnProperty.call(RD_CODE_MIN, rdStr(v)); }
+// 分鐘碼 → 分鐘；不是分鐘碼回 -1
+function rdCodeMin(v) {
+  var s = rdStr(v);
+  if (/^[0-5]$/.test(s)) return +s * 10;
+  if (/^-[1-9]$/.test(s)) return -s;
+  if (/^[1-5]\d$/.test(s)) return +s;
+  return -1;
+}
+function rdIsCode(v) { return rdCodeMin(v) >= 0; }
+// 分鐘 → 分鐘碼（0→0、5→-5、10→1、13→13）
+function rdMinCode(min) { return min % 10 === 0 ? String(min / 10) : min < 10 ? '-' + min : String(min); }
 // 可以填的格子：空白、前一天留下的分鐘碼、沒有 ID 與 SLUG 的「/文字/」「/圖文/」預留格
 function rdIsFree(v) { var s = rdStr(v).replace(/\s+/g, ''); return s === '' || rdIsCode(s) || s === '/文字/' || s === '/圖文/'; }
 function rdA1(row, col) {   // 0 起算 → A1
@@ -96,7 +106,7 @@ function rdRowTimes(V, blk, x) {
   var codeCol = rdCodeCol(V, blk, x);
   var hour = Math.floor(blk.min / 60) * 60, t = blk.min, out = [];
   for (var r = blk.start; r < blk.end; r++) {
-    if (codeCol >= 0 && rdIsCode(V[r][codeCol])) t = hour + RD_CODE_MIN[rdStr(V[r][codeCol])];
+    if (codeCol >= 0 && rdIsCode(V[r][codeCol])) t = hour + rdCodeMin(V[r][codeCol]);
     else if (rdIsLabel(V[r][0])) t = rdLabelMin(V[r][0]);
     out.push(t);
   }
@@ -106,7 +116,7 @@ function rdRowTimes(V, blk, x) {
 // 決定要寫哪一格（照時間順序排進去）：
 // 目標＝「時間 ≤ 目標時間」的最後一筆稿子的下一格，但不早於最接近目標的那個分鐘格（例：08:07 → :05 那格）
 // 目標格可填（空白／預留格）就直接填；已有稿子就插在這格，這個日期欄往下推到第一個可填的格子為止
-// 插入時隔天那欄若是分鐘碼，同一段分鐘碼也往下推一格（被推的稿子時間不變），新的那格寫 code（目標時間往下取整到 5 分）
+// 插入時隔天那欄若是分鐘碼，同一段分鐘碼也往下推一格（被推的稿子時間不變），新的那格寫 code（目標時間的分鐘碼，15:13 → 13）
 // 回傳 { status:'exists'|'write'|'insert', row, shiftTo?, codeCol?, code?, time } 或 { error }
 function rdPlan(V, x, page, hhmm, text) {
   var sec = rdFindSection(V, page);
@@ -133,7 +143,7 @@ function rdPlan(V, x, page, hhmm, text) {
     if (rdCodeCol(V, blk, x) === x + 1) {
       plan.codeCol = x + 1;
       var hour = Math.floor(blk.min / 60) * 60;
-      if (want >= hour && want < hour + 60) plan.code = RD_MIN_CODE[Math.floor((want - hour) / 5) * 5];
+      if (want >= hour && want < hour + 60) plan.code = rdMinCode(want - hour);
     }
     return plan;
   }
@@ -188,8 +198,8 @@ function rdAddOne(ss, names, en) {
       if (p.code != null) sh.getRange(p.row + 1, cc).setValue(p.code); else sh.getRange(p.row + 1, cc).clearContent();
     }
   }
-  sh.getRange(p.row + 1, x + 1).setValue(text);
+  sh.getRange(p.row + 1, x + 1).setValue(text).setFontSize(RD_STYLE.size).setFontWeight(RD_STYLE.bold ? 'bold' : 'normal').setFontColor(RD_STYLE.color);
   return { ok: true, page: en.page, status: p.status, cell: cell, time: p.time };
 }
 
-if (typeof module !== 'undefined') module.exports = { rdFindSheetName: rdFindSheetName, rdFindDateCol: rdFindDateCol, rdFindSection: rdFindSection, rdBlocks: rdBlocks, rdRowTimes: rdRowTimes, rdCodeCol: rdCodeCol, rdPlan: rdPlan, rdA1: rdA1 };
+if (typeof module !== 'undefined') module.exports = { rdFindSheetName: rdFindSheetName, rdFindDateCol: rdFindDateCol, rdFindSection: rdFindSection, rdBlocks: rdBlocks, rdRowTimes: rdRowTimes, rdCodeCol: rdCodeCol, rdCodeMin: rdCodeMin, rdMinCode: rdMinCode, RD_STYLE: RD_STYLE, rdPlan: rdPlan, rdA1: rdA1 };
