@@ -275,6 +275,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await prC(`http://localhost:${server.address().port}`);
   await fillBothModes(`http://localhost:${server.address().port}`);
   await captionFlow(`http://localhost:${server.address().port}`);
+  await installGuide(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -1092,5 +1093,96 @@ async function captionFlow(origin) {
   ok('舊外掛：提示更新到 0.6.0，標題與【標題】照樣帶入（' + await hintText() + '）');
 
   assert.deepStrictEqual(errors, [], errors.join('\n'));
+  await browser.close();
+}
+
+// ===== 安裝插件教學：沒外掛自動打開；檔案只取 GitHub 的 extension/ 並驗證 SHA；有外掛、手機不跳 =====
+async function installGuide(origin) {
+  console.log('\n  安裝插件教學');
+  const crypto = require('crypto');
+  const blobSha = buf => crypto.createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${buf.length}\0`), buf])).digest('hex');
+  const files = { 'extension/manifest.json': Buffer.from('{"name":"網新快速排程 連線驗證","version":"0.0.0"}'), 'extension/bridge.js': Buffer.from('// b'), 'web/index.html': Buffer.from('<p>') };
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const mockGitHub = async (ctx, bad) => {
+    const api = 'https://api.github.com/repos/unnn3ing-oss/-schedulenewnet';
+    await ctx.route(api + '/commits/main', r => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ sha: 'c0ffee', commit: { tree: { sha: 'tree1' } } }) }));
+    await ctx.route(api + '/git/trees/tree1?recursive=1', r => r.fulfill({ contentType: 'application/json',
+      body: JSON.stringify({ truncated: false, tree: Object.entries(files).map(([p, b]) => ({ path: p, type: 'blob', sha: blobSha(b) })) }) }));
+    await ctx.route('https://raw.githubusercontent.com/unnn3ing-oss/-schedulenewnet/c0ffee/**', r => {
+      const p = decodeURIComponent(new URL(r.request().url()).pathname.split('/c0ffee/')[1]);
+      r.fulfill({ body: bad && p.endsWith('bridge.js') ? Buffer.from('// 被改過') : files[p] });
+    });
+  };
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true });
+  await mockGitHub(ctx);
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  await page.goto(origin + '/index.html');
+  await page.waitForSelector('#deployOverlay:not([hidden])', { timeout: 8000 });
+  assert.match(await page.textContent('#extText'), /未偵測到外掛/);
+  assert.strictEqual(await page.evaluate(() => document.querySelector('#deployOverlay [data-style]').style.getPropertyValue('--d').trim() !== ''), true, '動畫時間由 data-style 套上');
+  ok('沒有外掛：重試後自動打開安裝教學，動畫時間有套上');
+  assert.match(await page.textContent('#deployCount'), /1 \/ 5/);
+  const [inst] = await Promise.all([page.waitForEvent('download'), page.click('#deployInstallBtn')]);
+  assert.strictEqual(inst.suggestedFilename(), 'schedulenewnet-install.cmd');
+  const cmd = fs.readFileSync(await inst.path(), 'utf8');
+  const embedded = Buffer.from(cmd.match(/FromBase64String\('([^']+)'\)/)[1], 'base64').toString('latin1');
+  assert(embedded.startsWith('PK') && embedded.includes('manifest.json') && embedded.includes('bridge.js') && !embedded.includes('schedulenewnet-ext/') && !embedded.includes('index.html'), '安裝檔嵌的 ZIP 只含 extension/ 的檔案、沒有最上層資料夾');
+  assert.match(cmd, /安裝程式 0\.0\.0/);
+  const zipFile = path.join(require('os').tmpdir(), 'snn-embedded.zip');
+  fs.writeFileSync(zipFile, Buffer.from(embedded, 'latin1'));
+  assert.match(require('child_process').execFileSync('unzip', ['-t', zipFile], { encoding: 'utf8' }), /No errors detected/, '網頁打包的 ZIP 解得開');
+  await page.waitForFunction(() => /已下載安裝檔/.test(document.getElementById('deployStatus').textContent));
+  ok('下載安裝檔：Windows .cmd，內嵌驗證過的插件 ZIP');
+  await page.click('#deployOverlay .ds-more summary');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#deployZipBtn')]);
+  const zip = fs.readFileSync(await dl.path()).toString('latin1');
+  assert.strictEqual(dl.suggestedFilename(), 'schedulenewnet-ext.zip');
+  assert(zip.includes('schedulenewnet-ext/manifest.json') && zip.includes('schedulenewnet-ext/bridge.js') && !zip.includes('index.html'), 'ZIP 只含 extension/ 的檔案');
+  await page.waitForFunction(() => /已下載 ZIP（2 個檔案）/.test(document.getElementById('deployStatus').textContent));
+  ok('下載 ZIP：只取 extension/、路徑去掉前綴（' + await page.textContent('#deployStatus') + '）');
+  await page.keyboard.press('Escape');
+  assert(await page.isHidden('#deployOverlay'));
+  await page.click('#deployBtn');
+  assert(await page.isVisible('#deployOverlay'));
+  await page.click('#deployNextBtn');
+  assert(await page.isHidden('#deployCopyCmd'), 'Windows 不顯示 Mac 終端機指令');
+  for (let i = 0; i < 3; i++) await page.click('#deployNextBtn');
+  assert.strictEqual(await page.textContent('#deployNextBtn'), '完成');
+  assert.match(await page.textContent('#dsh5'), /重新整理/);
+  await page.click('#deployNextBtn');
+  assert(await page.isHidden('#deployOverlay'));
+  ok('右上角「安裝插件」可再打開；Esc、完成可關閉；共 5 步');
+  assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
+  await ctx.close();
+
+  const bad = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await mockGitHub(bad, true);
+  const p2 = await bad.newPage();
+  await p2.goto(origin + '/index.html');
+  await p2.waitForSelector('#deployOverlay:not([hidden])', { timeout: 8000 });
+  await p2.click('#deployInstallBtn');
+  await p2.waitForFunction(() => /不一致，已取消/.test(document.getElementById('deployStatus').textContent));
+  ok('檔案內容和 GitHub SHA 不符：整批取消');
+  await bad.close();
+
+  const withExt = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await withExt.addInitScript(MOCK_BRIDGE);
+  const p3 = await withExt.newPage();
+  await p3.goto(origin + '/index.html');
+  await p3.waitForFunction(() => /外掛已連線/.test(document.getElementById('extText').textContent));
+  await p3.waitForTimeout(3500);
+  assert(await p3.isHidden('#deployOverlay'), '有外掛不跳');
+  await withExt.close();
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148' });
+  const p4 = await phone.newPage();
+  await p4.goto(origin + '/index.html');
+  await p4.waitForFunction(() => /未偵測到外掛/.test(document.getElementById('extText').textContent), null, { timeout: 8000 });
+  await p4.waitForTimeout(500);
+  assert(await p4.isHidden('#deployOverlay'), '手機不跳');
+  await phone.close();
+  ok('有外掛、手機都不自動跳出');
   await browser.close();
 }
