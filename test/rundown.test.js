@@ -64,7 +64,39 @@ test('照時間順序：填在 ≤ 目標時間最後一筆稿子的下一格；
 
 test('目標格已有稿子：插在這格，這個日期欄往下推到第一個可填的格子', () => {
   const g = rows.map(r => r.slice()); g[4][C] = '4041600/文字/甲'; g[5][C] = '4041601/文字/乙';
-  assert.deepEqual(RD.rdPlan(g, C, 'news', '08:07', '1234567/圖文/測試圖文'), { status: 'insert', row: 5, shiftTo: 7, time: '08:07' });
+  assert.deepEqual(RD.rdPlan(g, C, 'news', '08:07', '1234567/圖文/測試圖文'), { status: 'insert', row: 5, shiftTo: 7, codeCol: 3, code: '-5', time: '08:07' });
+});
+
+// 照 rdAddOne 的順序在陣列上套用（moveTo：整段往下一格、原本最上面那格清空）
+function apply(g, x, p, text) {
+  const move = col => { for (let r = p.shiftTo; r > p.row; r--) g[r][col] = g[r - 1][col]; g[p.row][col] = ''; };
+  move(x); g[p.row][x] = text;
+  if (p.codeCol != null) { move(p.codeCol); g[p.row][p.codeCol] = p.code != null ? p.code : ''; }
+  return g;
+}
+
+test('插入時隔天欄的分鐘碼跟著往下移：被推的稿子時間不變，新稿取目標時間往下取整的碼', () => {
+  // 仿 10/27 15:00 區塊：A 欄 1500/1515/1530/1545 疊在區塊開頭，分鐘碼在隔天欄，有些列沒碼（沿用上一列）
+  const H = [['', '1027', '1028'], ['主粉', '', '']];
+  const data = [['1500', '924/新加', '0'], ['1515', '966/鋼琴', '-5'], ['1530', '931/饗食', '1'], ['1545', '張雪機車', '15'], ['', '挖廢棄物', ''],
+    ['', '764/河口', '2'], ['', '超商包裏', '25'], ['', '882/河口', '3'], ['', '', '35'], ['', '', '']];
+  const g = H.concat(data.map(r => r.slice()));
+  const blk = () => RD.rdBlocks(g, RD.rdFindSection(g, 'news'))[0];
+  const timeOf = (grid, t) => { const b = blk(), ts = RD.rdRowTimes(grid, b, 1); return ts[grid.slice(b.start, b.end).findIndex(r => r[1] === t)]; };
+  const before = ['張雪機車', '挖廢棄物', '764/河口', '超商包裏', '882/河口'].map(t => timeOf(g, t));
+  const p = RD.rdPlan(g, 1, 'news', '15:13', '1234567/圖文/側視圖片');
+  assert.deepEqual(p, { status: 'insert', row: 5, shiftTo: 10, codeCol: 2, code: '1', time: '15:13' });
+  apply(g, 1, p, '1234567/圖文/側視圖片');
+  assert.deepEqual(['張雪機車', '挖廢棄物', '764/河口', '超商包裏', '882/河口'].map(t => timeOf(g, t)), before, '被推下去的稿子時間不變');
+  assert.equal(timeOf(g, '1234567/圖文/側視圖片'), 15 * 60 + 10, '15:13 → :10 那一碼');
+  assert.deepEqual(g.slice(2).map(r => r[2]), ['0', '-5', '1', '1', '15', '', '2', '25', '3', ''], '分鐘碼整段下移；被填掉的空格（:35）那一碼用掉');
+});
+
+test('隔天欄已填內容（分鐘碼在別欄）：只推這一欄，不動別天的分鐘碼', () => {
+  const g = rows.map(r => r.slice()); g[4][1] = '甲'; g[5][1] = '乙';
+  const p = RD.rdPlan(g, 1, 'news', '08:07', '1/圖文/x');   // B 的隔天欄 C 是內容
+  assert.equal(p.status, 'insert');
+  assert.equal('codeCol' in p, false);
 });
 
 test('同一天同區段已有同篇圖文就不重寫；文字稿不算重複', () => {

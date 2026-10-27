@@ -110,6 +110,7 @@ html.ds-lock, html.ds-lock body { overflow: hidden; }
   transition: border-color .15s ease, background .15s ease, color .15s ease, transform .15s ease;
 }
 .ds-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.ds-btn:active:not(:disabled) { transform: scale(.97); }
 .ds-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ds-btn.primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); color: #fff; }
 .ds-btn:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 2px; }

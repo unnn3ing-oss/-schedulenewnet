@@ -116,7 +116,7 @@
   $('modeSwitch').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) setMode(b.dataset.mode); });
   $('pickBtn').addEventListener('click', () => $('fileInput').click());
   $('clearImgBtn').addEventListener('click', () => Editor.clearImage());
-  Editor.onChange(() => { $('clearImgBtn').disabled = !Editor.hasImage(); });
+  Editor.onChange(() => { $('clearImgBtn').hidden = !Editor.hasImage(); });
   Editor.mountFxBar($('fxBar'), $('fxBtn'));
 
   // ---- 純文字底圖（示意：實際以後端 /render_text_card 為準）----
@@ -410,14 +410,34 @@
   modal.addEventListener('mousedown', e => { if (!menu.hidden || !pop.hidden) if (!e.target.closest('.menu,.timepop,.pg-mode')) closePops(); });
 
   // ---- 圖床：預覽與送出共用同一次上傳（照片／貼圖沒變就不重傳）----
-  let editorVer = 0, upCache = null;
-  async function ensureUploaded() {
-    if (upCache && upCache.ver === editorVer) return upCache.url;
+  // 背景預先上傳：照片／貼圖停手 PRE_UPLOAD_MS 後就先傳（已登入圖床才傳，不跳登入視窗），送出時直接用
+  const PRE_UPLOAD_MS = 1500, URL_MARGIN_MS = 10 * 60000;
+  let editorVer = 0, upCache = null, upPending = null, preTimer = 0;
+  const cacheOk = () => upCache && upCache.ver === editorVer && !(upCache.exp && Date.parse(upCache.exp) - Date.now() < URL_MARGIN_MS);
+  function uploadNow(silent) {
     const ver = editorVer;
-    const blob = await Editor.exportBlob();
-    const d = await ImgHost.ensureUpload(blob);
-    upCache = { ver, url: d.url, exp: d.expiresAt || '' };
-    return d.url;
+    if (upPending && upPending.ver === ver) return upPending.p;
+    const p = Editor.exportBlob()
+      .then(blob => (silent ? ImgHost.upload(blob) : ImgHost.ensureUpload(blob)))
+      .then(d => { if (ver === editorVer) upCache = { ver, url: d.url, exp: d.expiresAt || '' }; return d.url; })
+      .finally(() => { if (upPending && upPending.p === p) upPending = null; });
+    upPending = { ver, p };
+    return p;
+  }
+  async function ensureUploaded() {
+    if (cacheOk()) return upCache.url;
+    if (upPending && upPending.ver === editorVer) {
+      try { return await upPending.p; } catch (e) { /* 背景那次失敗：下面正式再傳一次（需要時跳登入） */ }
+      if (cacheOk()) return upCache.url;
+    }
+    return uploadNow(false);
+  }
+  function schedulePreUpload() {
+    clearTimeout(preTimer);
+    preTimer = setTimeout(() => {
+      if (overlay.hidden || state.mode === 'text' || !Editor.hasImage() || !ImgHost.session() || cacheOk()) return;
+      uploadNow(true).catch(() => { /* 背景失敗不打擾；送出時會再傳並顯示原因 */ });
+    }, PRE_UPLOAD_MS);
   }
   function renderImgPill() {
     const s = ImgHost.session();
@@ -460,7 +480,7 @@
       previewKey = key;
       previewHint(previewKey === previewKeyNow() ? '' : '內容已改，按「後端預覽」更新', previewKey === previewKeyNow() ? '' : 'bad');
     } finally {
-      previewing = false; $('previewBtn').disabled = !Editor.hasImage(); $('previewTextBtn').disabled = false;
+      previewing = false; $('previewBtn').disabled = false; $('previewTextBtn').disabled = false;
     }
   }
   $('previewBtn').addEventListener('click', preview);
@@ -518,6 +538,7 @@
     sendBtn.classList.toggle('arm', s === 'armed');
     sendBtn.textContent = s === 'checking' ? '判讀中…' : s === 'sending' ? '送出中…' : s === 'armed' ? '確認送出' : '全部送出' + (list.length ? `（${list.length} 台）` : '');
     sendBtn.disabled = s === 'checking' || s === 'sending' || (s !== 'armed' && !list.length);
+    $('sendTip').hidden = sendBtn.hidden || !/^(idle|done)$/.test(s) || list.length > 0;
     $('clearBtn').hidden = !C.pages.some(p => /^(ok|fail)$/.test(state.pages[p.code].status));
     renderBubble();
   }
@@ -561,7 +582,7 @@
     markPreviewStale();
   }
   modal.addEventListener('input', e => { if (!e.target.closest('#bubble,#timePop')) flowEdit(); });
-  Editor.onChange(() => { editorVer++; $('previewBtn').disabled = previewing || !Editor.hasImage(); flowEdit(); });
+  Editor.onChange(() => { editorVer++; $('previewBtn').hidden = !Editor.hasImage(); $('previewBtn').disabled = previewing; schedulePreUpload(); flowEdit(); });
   document.addEventListener('mousedown', e => {
     if (flow.state !== 'armed' || e.target.closest('#sendArea') || ImgHost.isOpen()) return;
     flow.seq++;

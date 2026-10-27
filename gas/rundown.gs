@@ -8,8 +8,11 @@
 // - 時段區塊＝某個時段列往下到下一個區塊開頭；緊接在區塊開頭下面的時段列（0810、0820…）算同一區塊
 // - 分鐘碼寫在「右邊一欄」（也就是隔天那欄）：0＝:00、-5＝:05、1＝:10、15＝:15 … 5＝:50、55＝:55（個位數×10，兩位數照寫）
 // - 隔天那欄已經填了內容（分鐘碼被蓋掉）時，改用同區塊其他還留著分鐘碼的欄位；都沒有就只看 A 欄時段
+// - 插入時，隔天那欄的分鐘碼跟著稿子一起往下移（稿子的時間不變），新的那格補上目標時間往下取整的分鐘碼
 
 var RD_CODE_MIN = { '0': 0, '-5': 5, '1': 10, '15': 15, '2': 20, '25': 25, '3': 30, '35': 35, '4': 40, '45': 45, '5': 50, '55': 55 };
+var RD_MIN_CODE = {};
+Object.keys(RD_CODE_MIN).forEach(function (k) { RD_MIN_CODE[RD_CODE_MIN[k]] = k; });
 var RD_SECTIONS = { news: ['主粉'], ent: ['娛樂粉'], shaokang: ['少康粉'], intl: ['國際＋粉', '國際+粉'] };
 var RD_DEFAULT_SHEET = '1OZOcobchhiFU6rf9jTJW00YNSHQXxNjurpudQdVl4Lo';
 
@@ -77,14 +80,20 @@ function rdIsCodeCol(V, blk, c) {
   return n >= 2;
 }
 
+// 分鐘碼欄：隔天那欄；被填掉就找最近、整個區塊只有分鐘碼的欄；沒有回 -1
+function rdCodeCol(V, blk, x) {
+  var width = V[blk.start].length;
+  if (x + 1 < width && rdIsCodeCol(V, blk, x + 1)) return x + 1;
+  for (var dist = 1; dist < width; dist++) {
+    if (x + 1 + dist < width && rdIsCodeCol(V, blk, x + 1 + dist)) return x + 1 + dist;
+    if (x + 1 - dist >= 1 && rdIsCodeCol(V, blk, x + 1 - dist)) return x + 1 - dist;
+  }
+  return -1;
+}
+
 // 區塊內每一列的時間（分鐘）：分鐘碼 > A 欄時段 > 沿用上一列
 function rdRowTimes(V, blk, x) {
-  var width = V[blk.start].length, codeCol = -1;
-  if (x + 1 < width && rdIsCodeCol(V, blk, x + 1)) codeCol = x + 1;
-  for (var dist = 1; codeCol < 0 && dist < width; dist++) {
-    if (x + 1 + dist < width && rdIsCodeCol(V, blk, x + 1 + dist)) codeCol = x + 1 + dist;
-    else if (x + 1 - dist >= 1 && rdIsCodeCol(V, blk, x + 1 - dist)) codeCol = x + 1 - dist;
-  }
+  var codeCol = rdCodeCol(V, blk, x);
   var hour = Math.floor(blk.min / 60) * 60, t = blk.min, out = [];
   for (var r = blk.start; r < blk.end; r++) {
     if (codeCol >= 0 && rdIsCode(V[r][codeCol])) t = hour + RD_CODE_MIN[rdStr(V[r][codeCol])];
@@ -96,8 +105,9 @@ function rdRowTimes(V, blk, x) {
 
 // 決定要寫哪一格（照時間順序排進去）：
 // 目標＝「時間 ≤ 目標時間」的最後一筆稿子的下一格，但不早於最接近目標的那個分鐘格（例：08:07 → :05 那格）
-// 目標格可填（空白／預留格）就直接填；已有稿子就插在這格，這個日期欄往下推到第一個可填的格子為止（只動這一欄）
-// 回傳 { status:'exists'|'write'|'insert', row, shiftTo?, time } 或 { error }
+// 目標格可填（空白／預留格）就直接填；已有稿子就插在這格，這個日期欄往下推到第一個可填的格子為止
+// 插入時隔天那欄若是分鐘碼，同一段分鐘碼也往下推一格（被推的稿子時間不變），新的那格寫 code（目標時間往下取整到 5 分）
+// 回傳 { status:'exists'|'write'|'insert', row, shiftTo?, codeCol?, code?, time } 或 { error }
 function rdPlan(V, x, page, hhmm, text) {
   var sec = rdFindSection(V, page);
   if (!sec) return { error: '找不到「' + (RD_SECTIONS[page] || [page])[0] + '」區段' };
@@ -118,7 +128,15 @@ function rdPlan(V, x, page, hhmm, text) {
   var free = -1;
   for (var r = target; r < blk.end; r++) if (rdIsFree(V[r][x])) { free = r; break; }
   if (free < 0) return { error: rdFmt(blk.min) + ' 時段在這天已經排滿' };
-  if (free > target) return { status: 'insert', row: target, shiftTo: free, time: hhmm };
+  if (free > target) {
+    var plan = { status: 'insert', row: target, shiftTo: free, time: hhmm };
+    if (rdCodeCol(V, blk, x) === x + 1) {
+      plan.codeCol = x + 1;
+      var hour = Math.floor(blk.min / 60) * 60;
+      if (want >= hour && want < hour + 60) plan.code = RD_MIN_CODE[Math.floor((want - hour) / 5) * 5];
+    }
+    return plan;
+  }
   return { status: 'write', row: free, time: hhmm };
 }
 
@@ -162,9 +180,16 @@ function rdAddOne(ss, names, en) {
   if (p.error) return { ok: false, page: en.page, error: p.error };
   var cell = name + '!' + rdA1(p.row, x);
   if (p.status === 'exists') return { ok: true, page: en.page, status: 'exists', cell: cell };
-  if (p.status === 'insert') sh.getRange(p.row + 1, x + 1, p.shiftTo - p.row, 1).moveTo(sh.getRange(p.row + 2, x + 1));
+  if (p.status === 'insert') {
+    sh.getRange(p.row + 1, x + 1, p.shiftTo - p.row, 1).moveTo(sh.getRange(p.row + 2, x + 1));
+    if (p.codeCol != null) {
+      var cc = p.codeCol + 1;
+      sh.getRange(p.row + 1, cc, p.shiftTo - p.row, 1).moveTo(sh.getRange(p.row + 2, cc));
+      if (p.code != null) sh.getRange(p.row + 1, cc).setValue(p.code); else sh.getRange(p.row + 1, cc).clearContent();
+    }
+  }
   sh.getRange(p.row + 1, x + 1).setValue(text);
   return { ok: true, page: en.page, status: p.status, cell: cell, time: p.time };
 }
 
-if (typeof module !== 'undefined') module.exports = { rdFindSheetName: rdFindSheetName, rdFindDateCol: rdFindDateCol, rdFindSection: rdFindSection, rdBlocks: rdBlocks, rdRowTimes: rdRowTimes, rdPlan: rdPlan, rdA1: rdA1 };
+if (typeof module !== 'undefined') module.exports = { rdFindSheetName: rdFindSheetName, rdFindDateCol: rdFindDateCol, rdFindSection: rdFindSection, rdBlocks: rdBlocks, rdRowTimes: rdRowTimes, rdCodeCol: rdCodeCol, rdPlan: rdPlan, rdA1: rdA1 };
