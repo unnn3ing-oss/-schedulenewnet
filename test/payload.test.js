@@ -138,7 +138,7 @@ test('previewRequest：作圖框 /render、純文字 /render_text_card', () => {
 });
 
 test('aiCaptionBody', () => {
-  assert.deepEqual(P.aiCaptionBody('generate', frame({ summary: '摘要' })), { ip: 'newsnet', mode: 'generate', title: '颱風假 最新！北北基桃 明天照常上班上課', summary: '摘要' });
+  assert.deepEqual(P.aiCaptionBody('generate', frame({ summary: '摘要' })), { ip: 'newsnet', mode: 'generate', title: '颱風假 最新！北北基桃明天照常上班上課', summary: '摘要' });
   assert.deepEqual(P.aiCaptionBody('proofread', frame()), { ip: 'newsnet', mode: 'proofread', text: '北北基桃明天照常上班上課！\n#颱風', titles: ['颱風假 最新！北北基桃', '明天照常上班上課'] });
   assert.equal(P.aiCaptionBody('generate', card()).title, '【快訊】北市宣布\n明天停班停課');
 });

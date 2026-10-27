@@ -411,7 +411,7 @@ async function prB(origin) {
   await page.click('#aiFixBtn');
   await page.waitForFunction(() => /上班上課/.test(document.getElementById('caption').value));
   const ai = (await calls()).filter(c => c.path === '/ai_caption').map(c => c.body);
-  assert.deepStrictEqual(ai[0], { ip: 'newsnet', mode: 'generate', title: '颱風假最新！北北基桃 明天照常上班上課', summary: '摘要' });
+  assert.deepStrictEqual(ai[0], { ip: 'newsnet', mode: 'generate', title: '颱風假最新！北北基桃明天照常上班上課', summary: '摘要' });
   assert.deepStrictEqual(ai[1].titles, ['颱風假最新！北北基桃', '明天照常上班上課']);
   assert.strictEqual(ai[1].mode, 'proofread');
   ok('AI 產生＋校錯字填入小編文');

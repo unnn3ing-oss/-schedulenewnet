@@ -96,10 +96,11 @@
   }
 
   // AI 小編文（§3）：generate 帶 title、summary；proofread 帶 text、titles
+  // generate 的 title 和官方發文台相同：標題各行直接接起來，不加空格
   function aiCaptionBody(kind, input) {
     const card = input.mode === 'text_card';
     const titles = card ? [cardTextOf(input)].filter(Boolean) : clean(input.lines).filter(Boolean);
-    if (kind === 'generate') return { ip: IP, mode: 'generate', title: titles.join(' '), summary: String(input.summary || '') };
+    if (kind === 'generate') return { ip: IP, mode: 'generate', title: titles.join(''), summary: String(input.summary || '') };
     return { ip: IP, mode: 'proofread', text: String(input.caption || ''), titles };
   }
 
