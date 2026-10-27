@@ -6,8 +6,24 @@
 <title>網新快速排程</title>
 <link rel="stylesheet" href="sidepanel.css">
 </head>
-<body>
-<div class="wrap">
+<body class="sp">
+<header class="top">
+  <div class="top-btns">
+    <a class="btn primary" href="https://unnn3ing-oss.github.io/-schedulenewnet/" target="_blank" rel="noopener" title="在新分頁開啟網新快速排程">網頁版</a>
+    <a class="btn" href="https://digi-social-post.tvbs.ai/ip/newsnet/" target="_blank" rel="noopener" title="在新分頁開啟原本的網新發文台">舊版</a>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="側邊欄">
+    <button type="button" role="tab" id="tabPost" aria-controls="panePost" aria-selected="true">發文</button>
+    <button type="button" role="tab" id="tabInfo" aria-controls="paneInfo" aria-selected="false">狀態與更新<span class="dot" id="infoDot" hidden>新</span></button>
+  </nav>
+</header>
+
+<!-- 發文：直接嵌入網頁版，流程和網頁版相同（bridge.js 也會注入這個 iframe） -->
+<main class="pane-post" id="panePost" role="tabpanel" aria-labelledby="tabPost">
+  <iframe id="app" src="https://unnn3ing-oss.github.io/-schedulenewnet/" title="網新快速排程" allow="clipboard-read; clipboard-write"></iframe>
+</main>
+
+<div class="wrap" id="paneInfo" role="tabpanel" aria-labelledby="tabInfo" hidden>
   <header>
     <h1 id="extName">網新快速排程</h1>
     <span class="muted" id="extVer"></span>
@@ -16,13 +32,11 @@
   <section class="card" id="loginCard">
     <h2>登入狀態</h2>
     <div class="status" id="loginStatus">檢查中…</div>
-    <div class="row"><a class="btn" href="https://digi-social-post.tvbs.ai/ip/newsnet/" target="_blank" rel="noopener">開啟網新發文台</a></div>
   </section>
 
   <section class="card">
     <h2>工具</h2>
     <div class="links">
-      <a class="btn" href="https://unnn3ing-oss.github.io/-schedulenewnet/" target="_blank" rel="noopener">網新快速排程</a>
       <a class="btn" href="https://unnn3ing-oss.github.io/-schedulenewnet/verify.html" target="_blank" rel="noopener">連線驗證</a>
       <a class="btn" href="https://unnn3ing-oss.github.io/-schedulenewnet/render-test.html" target="_blank" rel="noopener">自製圖測試</a>
     </div>

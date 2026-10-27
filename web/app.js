@@ -34,12 +34,15 @@
     text.textContent = '外掛已連線・' + (days === null ? '已登入' : `登入剩 ${days} 天`);
     return true;
   }
+  // 嵌在外掛側邊欄裡（iframe）：外掛一定已經裝好，不顯示「安裝插件」，也不自動跳安裝教學
+  const inPanel = window.self !== window.top;
+  if (inPanel) document.documentElement.classList.add('in-panel');
   // 首次載入：偵測不到外掛（再等一下重試一次，外掛的橋接可能晚一點才注入）就打開安裝教學；手機不能裝 Chrome 擴充功能，不跳
   async function checkExtOnLoad() {
     if (await refreshExt()) return;
     await new Promise(r => setTimeout(r, 1500));
     if (await refreshExt()) return;
-    if (/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent) || !overlay.hidden || Deploy.isOpen()) return;
+    if (inPanel || /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent) || !overlay.hidden || Deploy.isOpen()) return;
     Deploy.open();
   }
 
