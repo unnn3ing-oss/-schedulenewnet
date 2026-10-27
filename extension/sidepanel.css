@@ -17,6 +17,10 @@ h1{margin:0;font-size:18px;font-weight:800}h2{margin:0 0 8px;font-size:15px}
 .btn:hover{background:var(--surface);color:var(--accent);box-shadow:0 0 0 1px var(--border)}
 .btn.primary{background:var(--accent);color:#fff}.btn.primary:hover{background:var(--accent-dark);color:#fff}
 .btn[disabled]{opacity:.4;cursor:not-allowed}.btn[hidden]{display:none}
+/* 按下去馬上有反應：縮一點、暗一點 */
+.btn,.tabs button{transition:transform .08s ease,filter .08s ease}
+.btn:active:not([disabled]),.tabs button:active{transform:scale(.97);filter:brightness(.9)}
+@media (prefers-reduced-motion:reduce){.btn,.tabs button{transition:none}.btn:active:not([disabled]),.tabs button:active{transform:none}}
 .links .btn{flex:1 1 auto}
 .status{padding:6px 12px;border-radius:12px;background:var(--track);font-weight:600;font-size:13px}
 .status.ok{background:var(--ok-bg);color:var(--ok-fg)}.status.bad{background:var(--bad-bg);color:var(--bad-fg)}.status.warn{background:var(--warn-bg);color:var(--warn-fg)}

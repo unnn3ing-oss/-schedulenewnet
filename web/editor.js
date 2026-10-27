@@ -110,11 +110,11 @@
     redraw: render,
     onLayout: () => setFxDisabled()
   });
-  // T寶貼圖與馬賽克收在一顆按鈕裡：按了才彈出那一排，加一個、點外面或按 Esc 就收起來；沒有照片時按鈕停用
+  // T寶貼圖與馬賽克收在一顆按鈕裡：按了才彈出那一排，加一個、點外面或按 Esc 就收起來；沒有照片時按鈕隱藏
   let fxSlot = null, fxBtn = null;
   function setFxDisabled() {
     fxTiles.forEach(b => { b.disabled = !bg.image; });
-    if (fxBtn) { fxBtn.disabled = !bg.image; if (!bg.image) closeFx(); }
+    if (fxBtn) { fxBtn.hidden = !bg.image; if (!bg.image) closeFx(); }
   }
   const fxOpen = () => !!fxSlot && !fxSlot.hidden;
   function closeFx(focus) {

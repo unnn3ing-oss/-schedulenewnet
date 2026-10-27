@@ -82,9 +82,22 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert(near(await previewPx(page, 1060, 20), BLUE));
   ok('藍框／粉框切換預覽疊圖，畫布維持 1080×1080');
 
+  // UX 規範：沒照片時照片相關按鈕直接隱藏；送出鈕是主色且沒勾粉專時有提示；AI 兩顆分主副；按下去有縮放回饋
+  for (const id of ['#clearImgBtn', '#previewBtn', '#fxBtn']) assert(await page.isHidden(id), id + ' 沒照片時隱藏');
+  assert(await page.isVisible('#pickBtn'));
+  assert.match(await page.getAttribute('#sendBtn', 'class'), /\bprimary\b/);
+  assert(await page.locator('#sendBtn').isDisabled());
+  assert(await page.isVisible('#sendTip'), '沒勾粉專時說明為什麼不能送');
+  assert.doesNotMatch(await page.getAttribute('#aiGenBtn', 'class'), /ghost/);
+  assert.match(await page.getAttribute('#aiFixBtn', 'class'), /\bghost\b/);
+  const pressed = await page.evaluate(() => [...document.styleSheets].some(ss => { try { return [...ss.cssRules].some(r => /\.btn:active/.test(r.selectorText || '') && /scale/.test(r.cssText)); } catch (e) { return false; } }));
+  assert(pressed, '.btn:active 有按壓縮放');
+  ok('沒照片隱藏照片工具、送出鈕主色＋提示、AI 主副按鈕、按壓回饋');
+
   // 4 上傳照片、貼圖、馬賽克
   await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
   await page.waitForFunction(() => Editor.hasImage());
+  for (const id of ['#clearImgBtn', '#previewBtn', '#fxBtn']) assert(await page.isVisible(id), id + ' 有照片才出現');
   assert(await page.isHidden('#fxBar'), 'T寶／馬賽克平常收起來');
   await page.click('#fxBtn');
   await page.click('.fx-mosaic-tile');
@@ -567,6 +580,7 @@ async function prB(origin) {
 
   // 娛樂（粉框）：預覽換粉框，送出的每一台都是 newsnet_ent
   await page.evaluate(() => { window.__mock.guardLevel = 'green'; });
+  const upPick = worker.uploads;
   await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
   await page.waitForFunction(() => Editor.hasImage());
   await page.fill('#url', 'https://news.tvbs.com.tw/entertainment/3012399');
@@ -594,6 +608,8 @@ async function prB(origin) {
   ok('Rundown：開關直接存、⚙ 測試連線經 Worker（不帶金鑰）；SLUG 預設顯示標題前 4 字');
 
   for (const i of [0, 1, 3]) await pg(i).locator('button').first().click();
+  for (let i = 0; i < 40 && worker.uploads === upPick; i++) await page.waitForTimeout(100);
+  assert.strictEqual(worker.uploads, upPick + 1, '選好照片、還沒按送出就已在背景上傳');
   const sentBefore = (await sends()).length, upBefore = worker.uploads;
   await page.click('#sendBtn');
   await page.waitForSelector('#bubble:not([hidden])');
@@ -602,8 +618,8 @@ async function prB(origin) {
   const s3 = (await sends()).slice(sentBefore);
   assert.deepStrictEqual(s3.map(c => [c.body.page, c.body.template]), [['news', 'newsnet_ent'], ['ent', 'newsnet_ent'], ['jkk', 'newsnet_ent']]);
   assert.deepStrictEqual(s3[0].body.title_lines, ['金鐘61／《飢餓》10週年大禮！', '峮峮驚喜合體遭催回歸', '蔡黃汝羞謝「好友」閃瞎全場']);
-  assert.strictEqual(worker.uploads, upBefore + 1);
-  ok('粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
+  assert.strictEqual(worker.uploads, upBefore, '送出直接用背景上傳的網址，不重傳');
+  ok('背景預先上傳；粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
   const rdReq = gas.shift();
   assert.strictEqual(rdReq.action, 'add'); assert.strictEqual('token' in rdReq, false); assert.strictEqual('mode' in rdReq, false);
   assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['news', '3012399/圖文/金鐘61'], ['ent', '3012399/圖文/金鐘61']], '勾選的粉專各寫一筆，擠看看略過');
@@ -674,6 +690,8 @@ async function prC(origin) {
   await page.reload();
   await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
   assert(await page.isVisible('#recEmpty'));
+  assert.strictEqual(await page.locator('#recEmpty a').count(), 0, '空狀態只引導新增發文');
+  assert(await page.isVisible('.page-foot a[href="verify.html"]'), '工具連結移到頁尾');
   assert(!(await page.isVisible('#recTabs')));
   ok('沒有紀錄：顯示空狀態、不顯示分頁籤');
 
