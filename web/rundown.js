@@ -5,7 +5,7 @@
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api; else root.Rundown = Object.assign(root.Rundown || {}, api);
 })(typeof self !== 'undefined' ? self : this, function () {
-  const PAGES = { news: '主粉', ent: '娛樂粉', shaokang: '少康粉', intl: '國際＋粉' };   // 其他粉專在 Rundown 沒有區段
+  const PAGES = { news: '主粉（新聞粉）', ent: '娛樂粉', shaokang: '少康粉', intl: '國際＋粉' };   // Rundown A 欄的區段；選單選項與 gas RD_SECTIONS 對應
   const TYPE = '圖文';
   const pad = n => String(n).padStart(2, '0');
 
@@ -24,16 +24,16 @@
     return null;
   }
 
-  // sent：[{ code, at }]（at＝排程字串或送出時間）→ { entries, skipped:[code] }
-  function entries(info, sent) {
+  // 預設排入的區段：發文粉專裡第一個在 Rundown 有區段的（擠看看、氣象沒有區段）
+  const pickPage = codes => codes.find(c => PAGES[c]) || '';
+
+  // 寫一筆到選定區段 page；時間取該粉專這次的送出時間，沒發那台就用第一台
+  // sent：[{ code, at }]（at＝排程字串或送出時間）→ { entries:[0～1 筆], source:取時間的那台 }
+  function entries(info, sent, page) {
+    const src = sent.find(s => s.code === page) || sent[0], w = src && whenOf(src.at);
+    if (!PAGES[page] || !w) return { entries: [], source: '' };
     const slug = cleanSlug(info.slug) || defaultSlug(info.lines);
-    const text = entryText(info.articleId, slug), out = [], skipped = [];
-    sent.forEach(s => {
-      const w = whenOf(s.at);
-      if (!PAGES[s.code] || !w) { skipped.push(s.code); return; }
-      out.push({ page: s.code, date: w.date, time: w.time, text });
-    });
-    return { entries: out, skipped };
+    return { entries: [{ page, date: w.date, time: w.time, text: entryText(info.articleId, slug) }], source: src.code };
   }
 
   // GAS 回傳的單筆結果 → 給人看的一句
@@ -45,7 +45,7 @@
     return `${label} ${r.time || ''} → ${cell}${r.status === 'insert' ? '（插入）' : ''}`;
   }
 
-  return { PAGES, TYPE, defaultSlug, cleanSlug, entryText, whenOf, entries, describe };
+  return { PAGES, TYPE, defaultSlug, cleanSlug, entryText, whenOf, pickPage, entries, describe };
 });
 
 // ---- 瀏覽器：開關（localStorage）、經圖床 Worker 轉送、設定小視窗 ----

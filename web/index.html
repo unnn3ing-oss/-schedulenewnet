@@ -84,12 +84,16 @@
           <span class="cap-btns"><button class="btn sm" id="aiGenBtn" type="button" title="依標題（與帶入的文章摘要）產生小編文">✨ AI 產生</button><button class="btn sm" id="aiFixBtn" type="button" title="校對小編文錯字">🔍 校錯字</button></span></div>
         <textarea id="caption" rows="7" placeholder="小編文（含 hashtag）"></textarea>
         <div class="hint" id="capHint" role="status"></div>
-        <div class="slug-row" id="slugRow"><label for="slug">Rundown SLUG</label><input id="slug" type="text" maxlength="20" autocomplete="off" placeholder="空白＝標題前 4 字"></div>
+        <div class="rd-panel" id="rdBox">
+          <div class="rd-head"><label class="switch" title="送出成功後自動寫進 FB RUNDOWN"><input type="checkbox" role="switch" id="rdOn"><span>排入 Rundown</span></label>
+            <select id="rdPage" aria-label="排入 Rundown 的粉專"></select>
+            <button class="btn sm ghost" id="rdSetBtn" type="button" aria-label="Rundown 設定" title="Rundown 設定">⚙</button></div>
+          <div class="slug-row" id="slugRow"><label for="slug">SLUG</label><input id="slug" type="text" maxlength="20" autocomplete="off" placeholder="空白＝標題前 4 字"></div>
+        </div>
       </div>
     </div>
     <footer class="m-foot">
       <div class="pages" id="pages"></div>
-      <div class="rd-sw"><label class="rd-on" title="送出成功後自動寫進 FB RUNDOWN"><input type="checkbox" id="rdOn"><span>排入 Rundown</span></label><button class="btn sm ghost" id="rdSetBtn" type="button" aria-label="Rundown 設定" title="Rundown 設定">⚙</button></div>
       <div class="send" id="sendArea">
         <span class="muted guard" id="sendMsg" role="status">🛡 送出時自動判讀</span>
         <button class="btn" id="clearBtn" type="button" hidden>清空頁面</button>
@@ -120,8 +124,8 @@
 </div>
 <div class="login" id="rdDlg" role="dialog" aria-modal="true" aria-labelledby="rdTitle" hidden>
   <form class="cf-box rd-box" id="rdForm"><h3 id="rdTitle">Rundown 自動排入</h3>
-    <p class="muted">送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、粉專、時段（新聞＝主粉、娛樂、少康、國際＋；擠看看、氣象沒有區段會略過）。</p>
-    <label class="ck"><input type="checkbox" id="rdDlgOn"><span>開啟自動排入</span></label>
+    <p class="muted">送出成功後，把「文章ID/圖文/SLUG」寫進 FB RUNDOWN 對應日期、時段，粉專區段依 SLUG 上方的選單（預設跟著勾選的第一個粉專；擠看看、氣象沒有區段）。</p>
+    <label class="switch"><input type="checkbox" role="switch" id="rdDlgOn"><span>自動排入</span></label>
     <p class="hint">照時間順序排進去：該時間的格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格，這天這個時段下面往下推（不覆蓋）。</p>
     <p class="hint">Apps Script 網址與金鑰放在圖床 Worker 的 Secrets（RUNDOWN_URL、RUNDOWN_TOKEN），這裡不用填；寫入時用圖床登入。</p>
     <p class="hint" id="rdHint" role="status"></p>
