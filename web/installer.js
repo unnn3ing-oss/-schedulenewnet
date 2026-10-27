@@ -1,6 +1,7 @@
 // 一鍵安裝檔（仿 videodownload 的 install-windows.cmd / install-mac.sh）：
 // 網頁先從 GitHub 抓好、驗證過的插件檔案打包成 ZIP，再把 ZIP 以 base64 嵌進安裝檔，所以安裝檔執行時不用再連網。
-// 安裝檔只做三件事：把插件放到固定資料夾（家目錄下的 schedulenewnet-ext）、把資料夾路徑複製到剪貼簿、打開 chrome://extensions。
+// 安裝檔只做三件事：把插件放到固定資料夾（「文件」裡的 schedulenewnet-ext）、把資料夾路徑複製到剪貼簿、打開 chrome://extensions。
+// 舊版安裝檔放在家目錄（%USERPROFILE%／~）；舊位置還有插件時只提醒改載入新位置，不刪（Chrome 可能正在用）。
 // 「開發人員模式」和「載入未封裝項目」Chrome 不允許程式代按，仍要使用者自己點。
 // 純函式，Node 可 require 測試；瀏覽器掛在 window.Installer。
 (function (root, factory) {
@@ -38,15 +39,18 @@
       "$ErrorActionPreference = 'Stop'",
       "$ProgressPreference = 'SilentlyContinue'",
       '[Console]::OutputEncoding = [Text.Encoding]::UTF8',
-      `$Dir = Join-Path $env:USERPROFILE '${FOLDER}'`,
+      '# 「文件」資料夾：GetFolderPath 會跟著 OneDrive 等重新導向；拿不到才退回使用者資料夾',
+      "$Docs = [Environment]::GetFolderPath('MyDocuments')",
+      'if (-not $Docs) { $Docs = $env:USERPROFILE }',
+      `$Dir = Join-Path $Docs '${FOLDER}'`,
+      `$OldDir = Join-Path $env:USERPROFILE '${FOLDER}'`,
       `$Name = '${EXT_NAME}'`,
       "function Step($t) { Write-Host ''; Write-Host \"==> $t\" -ForegroundColor Cyan }",
+      "function IsOurs($d) { $m = Join-Path $d 'manifest.json'; if (-not (Test-Path $m)) { return $false }; try { return ((Get-Content -Raw -Encoding UTF8 $m | ConvertFrom-Json).name -eq $Name) } catch { return $false } }",
       'try {',
       "    Step '檢查資料夾'",
       '    if (Test-Path $Dir) {',
-      '        $ours = $false',
-      "        $m = Join-Path $Dir 'manifest.json'",
-      '        if (Test-Path $m) { try { $ours = ((Get-Content -Raw -Encoding UTF8 $m | ConvertFrom-Json).name -eq $Name) } catch { } }',
+      '        $ours = IsOurs $Dir',
       '        $empty = -not (Get-ChildItem -Force $Dir | Select-Object -First 1)',
       '        if (-not ($ours -or $empty)) { throw "「$Dir」已經存在，但裡面不是這個插件。請把它改名或移走，再執行一次安裝檔。" }',
       '        # 舊版的檔案整批換掉，免得留下新版已經刪掉的檔案',
@@ -59,6 +63,7 @@
       '    Expand-Archive -Force -Path $zip -DestinationPath $Dir',
       '    Remove-Item -Force $zip',
       '    Write-Host "    $Dir"',
+      '    $hasOld = ($OldDir -ne $Dir) -and (Test-Path $OldDir) -and (IsOurs $OldDir)',
       "    Step '複製資料夾路徑'",
       '    try { Set-Clipboard -Value $Dir; Write-Host \'    已複製，等一下在 Chrome 選資料夾時直接貼上\' } catch { Write-Host \'    無法複製，請自己記下上面的路徑\' }',
       "    Step '開啟 Chrome 擴充功能頁'",
@@ -67,7 +72,13 @@
       "    Write-Host '安裝檔完成！接著回到 Chrome：' -ForegroundColor Green",
       "    Write-Host '  1. 打開擴充功能頁右上角的「開發人員模式」'",
       "    Write-Host '  2. 按左上角「載入未封裝項目」，在「資料夾」欄位按 Ctrl+V 貼上路徑，再按「選擇資料夾」'",
-      "    Write-Host '  （已經載入過的話，不用重新載入，到擴充功能頁按插件上的重新整理圖示即可）'",
+      "    Write-Host '  （已經載入過這個位置的話，不用重新載入，到擴充功能頁按插件上的重新整理圖示即可）'",
+      '    if ($hasOld) {',
+      "        Write-Host ''",
+      "        Write-Host '提醒：舊位置還有一份插件（以前的安裝檔放的）：' -ForegroundColor Yellow",
+      '        Write-Host "  $OldDir"',
+      "        Write-Host '  請在擴充功能頁先「移除」舊的那個，再照上面步驟載入新位置；確認新的能用後，舊資料夾可以刪掉。'",
+      '    }',
       '} catch {',
       "    Write-Host ''",
       '    Write-Host "安裝失敗：$($_.Exception.Message)" -ForegroundColor Red',
@@ -85,7 +96,8 @@
       `# ${EXT_NAME} 安裝程式 ${version}`,
       'set -euo pipefail',
       '',
-      `DIR="$HOME/${FOLDER}"`,
+      `DIR="$HOME/Documents/${FOLDER}"`,
+      `OLD="$HOME/${FOLDER}"`,
       `NAME='${EXT_NAME}'`,
       `PAYLOAD='${zipB64}'`,
       '',
@@ -106,7 +118,8 @@
       'fi',
       '',
       "step '寫入插件檔案'",
-      'mkdir -p "$DIR"',
+      '# 第一次寫「文件」資料夾，macOS 會問要不要讓終端機取用：要按「好」',
+      'mkdir -p "$DIR" 2>/dev/null || fail "沒辦法寫入「文件」資料夾。macOS 問終端機能不能取用「文件」時請按「好」；按過不允許的話，到 系統設定 → 隱私權與安全性 → 檔案與資料夾 → 終端機，打開「文件資料夾」再執行一次。"',
       'ZIP="$(mktemp -t schedulenewnet-ext.XXXXXX)"',
       '# macOS 12 以前的 base64 只認 -D，13 以後兩個都認',
       "if printf 'QQ==' | base64 -d >/dev/null 2>&1; then DEC=-d; else DEC=-D; fi",
@@ -131,7 +144,11 @@
       "printf '\\n安裝檔完成！接著回到 Chrome：\\n'",
       "echo '  1. 打開擴充功能頁右上角的「開發人員模式」'",
       "echo '  2. 按左上角「載入未封裝項目」，按 ⌘⇧G 貼上路徑後按 Enter，再按「選取」'",
-      "echo '  （已經載入過的話，不用重新載入，到擴充功能頁按插件上的重新整理圖示即可）'",
+      "echo '  （已經載入過這個位置的話，不用重新載入，到擴充功能頁按插件上的重新整理圖示即可）'",
+      'if [ "$OLD" != "$DIR" ] && [ -f "$OLD/manifest.json" ] && grep -qF "\"$NAME\"" "$OLD/manifest.json"; then',
+      "  printf '\n提醒：舊位置還有一份插件（以前的安裝檔放的）：\n  %s\n' \"$OLD\"",
+      "  echo '  請在擴充功能頁先「移除」舊的那個，再照上面步驟載入新位置；確認新的能用後，舊資料夾可以刪掉。'",
+      'fi',
       '',
     ].join('\n');
   }
