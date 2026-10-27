@@ -585,17 +585,7 @@ async function prB(origin) {
   assert.match(await page.getAttribute('#slug', 'placeholder'), /金鐘61/);
   ok('Rundown：開關直接存、⚙ 測試連線經 Worker（不帶金鑰）；SLUG 預設顯示標題前 4 字');
 
-  assert.deepStrictEqual(await page.$$eval('#rdPage option', os => os.map(o => o.textContent)), ['主粉（新聞粉）', '娛樂粉', '少康粉', '國際＋粉']);
-  await pg(3).locator('button').first().click();
-  assert.strictEqual(await page.inputValue('#rdPage'), 'news', '擠看看沒有區段，選單不動');
-  await pg(1).locator('button').first().click();
-  assert.strictEqual(await page.inputValue('#rdPage'), 'ent', '跟著勾選的第一個有區段的粉專');
-  await pg(0).locator('button').first().click();
-  assert.strictEqual(await page.inputValue('#rdPage'), 'news');
-  await page.selectOption('#rdPage', 'ent');
-  await pg(0).locator('button').first().click(); await pg(0).locator('button').first().click();
-  assert.strictEqual(await page.inputValue('#rdPage'), 'ent', '手動選過就不再自動改');
-  ok('Rundown 選單：四個區段、預設跟著勾選的粉專、手動選過就固定');
+  for (const i of [0, 1, 3]) await pg(i).locator('button').first().click();
   const sentBefore = (await sends()).length, upBefore = worker.uploads;
   await page.click('#sendBtn');
   await page.waitForSelector('#bubble:not([hidden])');
@@ -608,23 +598,22 @@ async function prB(origin) {
   ok('粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
   const rdReq = gas.shift();
   assert.strictEqual(rdReq.action, 'add'); assert.strictEqual('token' in rdReq, false); assert.strictEqual('mode' in rdReq, false);
-  assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['ent', '3012399/圖文/金鐘61']], '只寫選單選的區段');
+  assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['news', '3012399/圖文/金鐘61'], ['ent', '3012399/圖文/金鐘61']], '勾選的粉專各寫一筆，擠看看略過');
   assert.match(rdReq.entries[0].date, /^\d{4}-\d{2}-\d{2}$/); assert.match(rdReq.entries[0].time, /^\d{2}:\d{2}$/);
   const rdMsg = await page.textContent('#sendMsg');
-  assert.match(rdMsg, /Rundown：娛樂粉 \d{2}:\d{2} → AB107/);
-  const rdRec = await page.evaluate(() => Records.list()[0].pages.find(p => p.code === 'ent').rundown);
-  assert.deepStrictEqual([rdRec.ok, rdRec.page, rdRec.cell], [true, 'ent', '2026/10!AB107']);
+  assert.match(rdMsg, /Rundown：主粉（新聞粉） \d{2}:\d{2} → AB107；娛樂粉：08:00 時段在這天已經排滿/);
+  const rdRec = await page.evaluate(() => Records.list()[0].pages.find(p => p.code === 'news').rundown);
+  assert.deepStrictEqual([rdRec.ok, rdRec.cell], [true, '2026/10!AB107']);
   ok('Rundown：送出成功後寫入（' + rdMsg.split('｜')[1] + '）');
   await page.fill('#slug', '自訂 SLUG');
   await page.click('#clearBtn');
   assert.strictEqual(await page.inputValue('#slug'), '');
-  assert.strictEqual(await page.inputValue('#rdPage'), 'news', '清空後選單回預設');
   await page.click('#rdOn');
   assert.strictEqual(await page.evaluate(() => Rundown.enabled()), false);
-  assert(await page.isDisabled('#rdPage') && await page.isDisabled('#slug'), '關閉時選單與 SLUG 停用');
+  assert(await page.isDisabled('#slug'), '關閉時 SLUG 停用');
   await page.click('#rdOn'); assert(await page.isEnabled('#slug')); await page.click('#rdOn');
   await page.click('[data-frame="news"]');
-  ok('Rundown 開關可關閉（選單、SLUG 跟著停用）；清空頁面一併清 SLUG、選單回預設');
+  ok('Rundown 開關可關閉（SLUG 跟著停用）；清空頁面一併清 SLUG');
 
   // 手機：純文字底圖 → 預覽 /render_text_card → 泡泡
   await page.setViewportSize({ width: 390, height: 844 });
