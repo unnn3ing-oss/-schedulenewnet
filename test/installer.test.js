@@ -36,6 +36,31 @@ test('Windows .cmd：CRLF、#PS-START 之後是 PowerShell，嵌入的 ZIP 原�
   assert(!/\/schedule|\/publish/.test(text), '安裝檔不碰後台');
 });
 
+test('Windows .cmd：安裝視窗（WinForms）＋開不起來時退回文字模式', () => {
+  const text = I.windows('QUJD', '0.8.1');
+  const cmd = text.slice(0, text.lastIndexOf('#PS-START'));
+  const ps = text.slice(text.lastIndexOf('#PS-START'));
+  assert.match(cmd, /powershell -NoProfile -STA /, 'WinForms 要 STA');
+  assert.match(cmd, /\r\nif errorlevel 1 pause\r\nexit \/b\r\n$/, '只有文字模式（結束碼 1）才停下來');
+  assert.match(ps, /Add-Type -AssemblyName System\.Windows\.Forms, System\.Drawing/);
+  for (const t of ['開始安裝', '檔案已經放好了！', '打開「開發人員模式」', '按「載入未封裝項目」', '再複製一次路徑', '重新打開 Chrome 擴充功能頁', '沒辦法安裝', '複製錯誤訊息', '重試', '你的電腦還有一份舊位置的插件']) assert(ps.includes(t), t);
+  assert.match(ps, /\} catch \{\r\n    Run-Text\r\n\}/, '視窗做不出來改用文字模式');
+  assert.match(ps, /function Run-Text \{[\s\S]*安裝檔完成！[\s\S]*exit 1\r\n\}/);
+  assert.match(ps, /exit 0\r\n$/);
+  assert(!/\$\{|`|__(ZIP|NAME|VERSION|FOLDER)__/.test(ps), '佔位字都換掉、沒有 JS 樣板殘留');
+  // 去掉字串和註解後括號要成對（本機沒有 PowerShell 可以實際跑，先擋最常見的打錯）
+  const stack = []; let q = null;
+  for (let i = 0; i < ps.length; i++) {
+    const c = ps[i];
+    if (q) { if (c === q) { if (ps[i + 1] === q) i++; else q = null; } continue; }
+    if (c === "'" || c === '"') q = c;
+    else if (c === '#') { while (i < ps.length && ps[i] !== '\n') i++; }
+    else if ('([{'.includes(c)) stack.push(c);
+    else if (')]}'.includes(c)) assert.equal(stack.pop(), { ')': '(', ']': '[', '}': '{' }[c]);
+  }
+  assert.equal(q, null); assert.deepEqual(stack, []);
+});
+
 test('嵌入內容與版本號格式不對就不產生', () => {
   assert.throws(() => I.windows("AAA'; rm", '1.0.0'), /格式不對/);
   assert.throws(() => I.mac('QQ==', '1.0'), /版本號/);
@@ -87,4 +112,71 @@ test('Mac .sh：舊位置（~/schedulenewnet-ext）還有插件就提醒移除�
   assert(fs.existsSync(path.join(home, 'Documents', 'schedulenewnet-ext', 'bridge.js')));
   assert.match(r.stdout, /提醒：舊位置還有一份插件/);
   assert(fs.existsSync(path.join(old, 'manifest.json')), '舊位置不刪');
+});
+
+// 假的 osascript：照順序回答按鈕，並記下每個對話框的圖示、訊息和按鈕
+function fakeDialogs(home, answers) {
+  const bin = path.join(home, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(home, 'answers'), answers.join('\n') + '\n');
+  fs.writeFileSync(path.join(bin, 'osascript'), [
+    '#!/bin/bash',
+    'cat >/dev/null',
+    'shift',
+    'printf \'%s\\n\' "$*" | tr \'\\n\' \'|\' >> "$HOME/dialogs"; echo >> "$HOME/dialogs"',
+    'head -n1 "$HOME/answers"; sed -i 1d "$HOME/answers"',
+  ].join('\n'), { mode: 0o755 });
+  return { PATH: `${bin}:/usr/bin:/bin`, HOME: home, LANG: 'C.UTF-8' };
+}
+
+test('Mac .sh：有 osascript 就跳系統對話框：開始 → 完成頁可再複製／重開，最後按完成', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'snn-home-'));
+  const script = path.join(home, I.FILES.mac);
+  fs.writeFileSync(script, I.build('mac', zipOf(FILES), '0.7.0').text);
+  const env = fakeDialogs(home, ['開始安裝', '再複製一次路徑', '重新打開擴充功能頁', '完成']);
+  const r = spawnSync('bash', [script], { env, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert(fs.existsSync(path.join(home, 'Documents', 'schedulenewnet-ext', 'bridge.js')));
+  const d = fs.readFileSync(path.join(home, 'dialogs'), 'utf8').trim().split('\n');
+  assert.equal(d.length, 4);
+  assert.match(d[0], /^note 這個安裝程式會幫你把.*Documents\/schedulenewnet-ext.* 取消 開始安裝\|$/);
+  assert.match(d[1], /檔案已經放好了！.*開發人員模式.*載入未封裝項目.*再複製一次路徑 重新打開擴充功能頁 完成/);
+  assert.match(d[1], /請在 Chrome 網址列輸入 chrome:\/\/extensions/, '沒有 open（Linux）就提示自己打開');
+  assert.match(d[2], /路徑沒有複製成功/, '沒有 pbcopy 複製不了就照實說');
+});
+
+test('Mac .sh：開始時按取消就什麼都不裝', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'snn-home-'));
+  const script = path.join(home, I.FILES.mac);
+  fs.writeFileSync(script, I.build('mac', zipOf(FILES), '0.7.0').text);
+  const r = spawnSync('bash', [script], { env: fakeDialogs(home, ['取消']), encoding: 'utf8' });
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /已取消/);
+  assert(!fs.existsSync(path.join(home, 'Documents', 'schedulenewnet-ext')));
+});
+
+test('Mac .sh：失敗跳錯誤對話框，重試會重跑一次，關閉就結束；舊位置先跳提醒', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'snn-home-'));
+  const script = path.join(home, I.FILES.mac);
+  fs.writeFileSync(script, I.build('mac', zipOf(FILES), '0.7.0').text);
+  const dir = path.join(home, 'Documents', 'schedulenewnet-ext');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'mine.txt'), 'keep');
+  let r = spawnSync('bash', [script], { env: fakeDialogs(home, ['開始安裝', '重試', '開始安裝', '關閉']), encoding: 'utf8' });
+  assert.equal(r.status, 1);
+  let d = fs.readFileSync(path.join(home, 'dialogs'), 'utf8').trim().split('\n');
+  assert.equal(d.length, 4, '開始 → 錯誤（重試）→ 開始 → 錯誤（關閉）');
+  assert.match(d[1], /^stop 沒辦法安裝.*裡面不是這個插件.* 複製錯誤訊息 關閉 重試\|$/);
+  assert.deepEqual(fs.readdirSync(dir), ['mine.txt']);
+
+  // 舊位置還有一份：先跳提醒再到完成頁
+  fs.rmSync(dir, { recursive: true });
+  fs.rmSync(path.join(home, 'dialogs'));
+  fs.mkdirSync(path.join(home, 'schedulenewnet-ext'));
+  fs.writeFileSync(path.join(home, 'schedulenewnet-ext', 'manifest.json'), `{"name": "${I.EXT_NAME}"}`);
+  r = spawnSync('bash', [script], { env: fakeDialogs(home, ['開始安裝', '下一步', '完成']), encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  d = fs.readFileSync(path.join(home, 'dialogs'), 'utf8').trim().split('\n');
+  assert.match(d[1], /^caution .*你的電腦還有一份舊位置的插件.* 下一步\|$/);
+  assert.match(d[2], /^note .*檔案已經放好了！/);
 });
