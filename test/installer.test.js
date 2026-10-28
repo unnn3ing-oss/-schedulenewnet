@@ -36,6 +36,31 @@ test('Windows .cmd：CRLF、#PS-START 之後是 PowerShell，嵌入的 ZIP 原�
   assert(!/\/schedule|\/publish/.test(text), '安裝檔不碰後台');
 });
 
+test('Windows .cmd：安裝視窗（WinForms）＋開不起來時退回文字模式', () => {
+  const text = I.windows('QUJD', '0.8.1');
+  const cmd = text.slice(0, text.lastIndexOf('#PS-START'));
+  const ps = text.slice(text.lastIndexOf('#PS-START'));
+  assert.match(cmd, /powershell -NoProfile -STA /, 'WinForms 要 STA');
+  assert.match(cmd, /\r\nif errorlevel 1 pause\r\nexit \/b\r\n$/, '只有文字模式（結束碼 1）才停下來');
+  assert.match(ps, /Add-Type -AssemblyName System\.Windows\.Forms, System\.Drawing/);
+  for (const t of ['開始安裝', '檔案已經放好了！', '打開「開發人員模式」', '按「載入未封裝項目」', '再複製一次路徑', '重新打開 Chrome 擴充功能頁', '沒辦法安裝', '複製錯誤訊息', '重試', '你的電腦還有一份舊位置的插件']) assert(ps.includes(t), t);
+  assert.match(ps, /\} catch \{\r\n    Run-Text\r\n\}/, '視窗做不出來改用文字模式');
+  assert.match(ps, /function Run-Text \{[\s\S]*安裝檔完成！[\s\S]*exit 1\r\n\}/);
+  assert.match(ps, /exit 0\r\n$/);
+  assert(!/\$\{|`|__(ZIP|NAME|VERSION|FOLDER)__/.test(ps), '佔位字都換掉、沒有 JS 樣板殘留');
+  // 去掉字串和註解後括號要成對（本機沒有 PowerShell 可以實際跑，先擋最常見的打錯）
+  const stack = []; let q = null;
+  for (let i = 0; i < ps.length; i++) {
+    const c = ps[i];
+    if (q) { if (c === q) { if (ps[i + 1] === q) i++; else q = null; } continue; }
+    if (c === "'" || c === '"') q = c;
+    else if (c === '#') { while (i < ps.length && ps[i] !== '\n') i++; }
+    else if ('([{'.includes(c)) stack.push(c);
+    else if (')]}'.includes(c)) assert.equal(stack.pop(), { ')': '(', ']': '[', '}': '{' }[c]);
+  }
+  assert.equal(q, null); assert.deepEqual(stack, []);
+});
+
 test('嵌入內容與版本號格式不對就不產生', () => {
   assert.throws(() => I.windows("AAA'; rm", '1.0.0'), /格式不對/);
   assert.throws(() => I.mac('QQ==', '1.0'), /版本號/);
