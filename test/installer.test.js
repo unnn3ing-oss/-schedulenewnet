@@ -27,7 +27,10 @@ test('Windows .cmd：CRLF、#PS-START 之後是 PowerShell，嵌入的 ZIP 原�
   const ps = text.slice(text.lastIndexOf('#PS-START') + '#PS-START'.length);
   assert.match(ps, /^\r\n\$ErrorActionPreference = 'Stop'/, '.cmd 用 LastIndexOf 找到的是 PowerShell 開頭');
   assert.equal(ps.match(/FromBase64String\('([^']+)'\)/)[1], Buffer.from(zip).toString('base64'));
-  assert.match(ps, /Join-Path \$env:USERPROFILE 'schedulenewnet-ext'/);
+  assert.match(ps, /\$Docs = \[Environment\]::GetFolderPath\('MyDocuments'\)/, '放在「文件」（跟著 OneDrive 重新導向）');
+  assert.match(ps, /\$Dir = Join-Path \$Docs 'schedulenewnet-ext'/);
+  assert.match(ps, /\$OldDir = Join-Path \$env:USERPROFILE 'schedulenewnet-ext'/, '舊位置只用來提醒');
+  assert(!/Remove-Item[^\r\n]*\$OldDir/.test(ps), '不刪舊位置');
   assert.match(ps, /Start-Process 'chrome\.exe' 'chrome:\/\/extensions'/);
   assert.match(text, /安裝程式 0\.7\.0/);
   assert(!/\/schedule|\/publish/.test(text), '安裝檔不碰後台');
@@ -38,7 +41,7 @@ test('嵌入內容與版本號格式不對就不產生', () => {
   assert.throws(() => I.mac('QQ==', '1.0'), /版本號/);
 });
 
-test('Mac .sh：bash 執行後放到 ~/schedulenewnet-ext；只覆蓋自己的資料夾', () => {
+test('Mac .sh：bash 執行後放到 ~/Documents/schedulenewnet-ext；只覆蓋自己的資料夾', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'snn-home-'));
   const script = path.join(home, I.FILES.mac);
   const { name, text } = I.build('mac', zipOf(FILES), '0.7.0');
@@ -50,7 +53,8 @@ test('Mac .sh：bash 執行後放到 ~/schedulenewnet-ext；只覆蓋自己的�
   const run = () => spawnSync('bash', [script], { env, encoding: 'utf8' });
   let r = run();
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const dir = path.join(home, 'schedulenewnet-ext');
+  const dir = path.join(home, 'Documents', 'schedulenewnet-ext');
+  assert(!/提醒：舊位置/.test(r.stdout), '沒有舊位置就不提醒');
   assert.equal(fs.readFileSync(path.join(dir, 'bridge.js'), 'utf8'), '// b');
   assert(fs.existsSync(path.join(dir, 'icons/icon16.png')));
   assert.match(r.stdout, /安裝檔完成/);
@@ -69,4 +73,18 @@ test('Mac .sh：bash 執行後放到 ~/schedulenewnet-ext；只覆蓋自己的�
   assert.notEqual(r.status, 0);
   assert.match(r.stdout, /裡面不是這個插件/);
   assert.deepEqual(fs.readdirSync(dir), ['mine.txt']);
+});
+
+test('Mac .sh：舊位置（~/schedulenewnet-ext）還有插件就提醒移除，但不刪', () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'snn-home-'));
+  const old = path.join(home, 'schedulenewnet-ext');
+  fs.mkdirSync(old);
+  fs.writeFileSync(path.join(old, 'manifest.json'), `{"name": "${I.EXT_NAME}"}`);
+  const script = path.join(home, I.FILES.mac);
+  fs.writeFileSync(script, I.build('mac', zipOf(FILES), '0.7.0').text);
+  const r = spawnSync('bash', [script], { env: { PATH: '/usr/bin:/bin', HOME: home, LANG: 'C.UTF-8' }, encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert(fs.existsSync(path.join(home, 'Documents', 'schedulenewnet-ext', 'bridge.js')));
+  assert.match(r.stdout, /提醒：舊位置還有一份插件/);
+  assert(fs.existsSync(path.join(old, 'manifest.json')), '舊位置不刪');
 });

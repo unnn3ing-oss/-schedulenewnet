@@ -215,8 +215,8 @@
   overlay.querySelectorAll('.k-mod').forEach(el => { el.textContent = isMac ? '⌘' : 'Ctrl'; });
   overlay.querySelectorAll('[data-only]').forEach(el => { el.hidden = el.dataset.only !== overlay.dataset.os; });
 
-  // 安裝檔放的固定位置（Installer.FOLDER）：Windows 是使用者資料夾，Mac 是家目錄
-  const installedPath = isMac ? `~/${window.Installer.FOLDER}` : `C:\\Users\\你的帳號\\${window.Installer.FOLDER}`;
+  // 安裝檔放的固定位置（Installer.FOLDER）：「文件」資料夾裡（Windows 有 OneDrive 時實際路徑會不同，安裝檔會把真正的路徑複製好）
+  const installedPath = isMac ? `~/Documents/${window.Installer.FOLDER}` : `C:\\Users\\你的帳號\\Documents\\${window.Installer.FOLDER}`;
   document.getElementById('deployInstallName').textContent = window.Installer.FILES[overlay.dataset.os];
   document.getElementById('deployMacCmd').textContent = window.Installer.macCommand;
   loadFolderEl.textContent = installedPath;
