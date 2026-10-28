@@ -7,7 +7,7 @@ body{overflow-x:hidden}
 body.locked{overflow:hidden}
 [hidden]{display:none!important}
 .topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:12px;padding:12px 28px;background:var(--surface);border-bottom:1px solid var(--border)}
-.brand{font-size:18px;font-weight:800}.brand b{color:var(--accent)}
+.brand{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:800}.brand-ic{width:28px;height:28px;border-radius:7px;flex:none}.brand b{color:var(--accent)}
 .spacer{flex:1}
 .pill{display:inline-flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 .pill .dot{width:9px;height:9px;border-radius:50%;background:#8b95a8}
