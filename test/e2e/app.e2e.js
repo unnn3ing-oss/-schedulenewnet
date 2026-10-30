@@ -84,7 +84,9 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
 
   // UX 規範：沒照片時照片相關按鈕直接隱藏；送出鈕是主色且沒勾粉專時有提示；AI 兩顆分主副；按下去有縮放回饋
   for (const id of ['#clearImgBtn', '#previewBtn', '#fxBtn']) assert(await page.isHidden(id), id + ' 沒照片時隱藏');
-  assert(await page.isVisible('#pickBtn'));
+  assert.equal(await page.locator('#pickBtn').count(), 0, '不另外放「選照片」鈕，點預覽就能選');
+  assert(await page.isVisible('#ph'));
+  assert(await page.isHidden('#titleOverlay'), '沒照片時預覽上的標題編輯框隱藏（點預覽照常選照片）');
   assert.match(await page.getAttribute('#sendBtn', 'class'), /\bprimary\b/);
   assert(await page.locator('#sendBtn').isDisabled());
   assert(await page.isVisible('#sendTip'), '沒勾粉專時說明為什麼不能送');
@@ -119,6 +121,37 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert(Math.abs(b2.x - b.x - 40) < 3, '貼圖可拖曳 ' + JSON.stringify([b, b2]));
   await page.mouse.wheel(0, -300);
   ok('貼圖拖曳、滾輪縮放');
+
+  // 預覽上直接編輯標題（同 QPT）：點兩下畫布 → 透明輸入框疊在標題上，打字寫回標題框、Enter 換行；Esc 只離開編輯
+  const titleBand = () => page.evaluate(() => { const d = document.getElementById('editorCanvas').getContext('2d').getImageData(40, 790, 1000, 180).data; let h = 0; for (let i = 0; i < d.length; i += 7) h = (h * 31 + d[i]) >>> 0; return h; });
+  const dbl = await page.evaluate(() => {   // 找一個沒被貼圖蓋住的畫布點
+    const r = document.getElementById('editorCanvas').getBoundingClientRect();
+    for (const [fx, fy] of [[.1, .5], [.9, .5], [.1, .3], [.5, .1], [.3, .6]]) {
+      const x = r.left + r.width * fx, y = r.top + r.height * fy;
+      if (document.elementFromPoint(x, y) === document.getElementById('editorCanvas')) return [x, y];
+    }
+  });
+  assert(dbl, '找得到沒被貼圖蓋住的點');
+  assert(await page.isVisible('#titleOverlay'), '有照片才出現標題編輯框');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('titleOverlay')).pointerEvents), 'none', '平常不吃滑鼠（拖曳、滾輪照常作用在照片）');
+  const band0 = await titleBand();
+  await page.mouse.dblclick(dbl[0], dbl[1]);
+  assert(await page.evaluate(() => document.activeElement.id === 'titleOverlay' && document.getElementById('titleOverlay').classList.contains('editing')), '點兩下進入編輯並取得焦點');
+  await page.keyboard.type('預覽上打標題');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('第二行');
+  assert.strictEqual(await page.inputValue('#title'), '預覽上打標題\n第二行', '打的字（含換行）寫回標題框');
+  assert.deepStrictEqual(await page.evaluate(() => App.getLines()), ['預覽上打標題', '第二行']);
+  assert.notStrictEqual(await titleBand(), band0, '畫布標題跟著重畫');
+  const ovFont = await page.evaluate(() => { const o = document.getElementById('titleOverlay'), c = document.getElementById('editorCanvas'); return [parseFloat(getComputedStyle(o).fontSize), c.clientWidth]; });
+  assert(Math.abs(ovFont[0] - 66 * ovFont[1] / 1080) < 0.5, '編輯框字級＝畫布標題字級 ' + ovFont);
+  await page.keyboard.press('Escape');
+  assert(await page.isHidden('#confirm') && await page.isVisible('#modal'), 'Esc 只離開標題編輯，不關新增發文（也不跳確認視窗）');
+  assert(await page.evaluate(() => document.activeElement.id !== 'titleOverlay' && !document.getElementById('titleOverlay').classList.contains('editing')));
+  await page.fill('#title', '右邊改\n預覽跟著');
+  assert.strictEqual(await page.inputValue('#titleOverlay'), '右邊改\n預覽跟著', '標題框改了，預覽上的編輯框同步');
+  await page.fill('#title', '');
+  ok('預覽上點兩下直接編輯標題：Enter 換行、寫回標題框、畫布重畫、Esc 不關彈窗');
 
   // 5 匯出（上傳圖床的圖）：不含疊圖、不含標題
   await page.fill('#title', TITLE3);
@@ -228,7 +261,12 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await page.screenshot({ path: path.join(SHOTS, 'prB2-desktop-ent.png') });
   await page.click('[data-frame="news"]');
   ok('已截圖 prB2-desktop-news.png、prB2-desktop-ent.png');
-  const order = () => page.evaluate(() => [...document.querySelectorAll('.m-right input, .m-right textarea')].filter(e => e.offsetParent).map(e => e.id));
+  const wideGeo = await page.evaluate(() => Object.fromEntries(['url', 'title', 'canvasWrap'].map(id => [id, document.getElementById(id).getBoundingClientRect()])));
+  assert(wideGeo.url.left > wideGeo.canvasWrap.right, '寬版：文章網址在右欄');
+  assert(wideGeo.url.bottom < wideGeo.title.top, '寬版：文章網址在標題上面');
+  assert(Math.abs(wideGeo.url.top - wideGeo.canvasWrap.top) < 40, '寬版：文章網址在右欄頂端');
+  ok('寬版：文章網址維持在右欄頂端、標題上面');
+  const order = () => page.evaluate(() => [...document.querySelectorAll('.url-block input, .m-right input, .m-right textarea')].filter(e => e.offsetParent).map(e => e.id));
   const frameOrder = await order();
   await page.click('[data-mode="text"]');
   assert(await page.isVisible('#textCanvas') && !(await page.isVisible('#editorCanvas')));
@@ -275,6 +313,9 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert.strictEqual(sw[0], sw[1], '沒有橫向捲動');
   assert.strictEqual(sw[2], '16px');
   assert.strictEqual(sw[3], 390);
+  const narrowGeo = await page.evaluate(() => [document.getElementById('url').getBoundingClientRect().top, document.getElementById('canvasWrap').getBoundingClientRect().top, document.getElementById('title').getBoundingClientRect().top]);
+  assert(narrowGeo[0] < narrowGeo[1] && narrowGeo[1] < narrowGeo[2], '窄版：文章網址在預覽上面 ' + JSON.stringify(narrowGeo));
+  ok('窄版（手機、外掛側邊欄）：文章網址排在最上面、預覽上面');
   await page.evaluate(() => { document.querySelector('.m-body').scrollTop = 0; });
   await page.screenshot({ path: path.join(SHOTS, 'prA-mobile.png') });
   await page.fill('#title', TITLE3);
@@ -604,6 +645,7 @@ async function prB(origin) {
   assert.match(await pg(0).locator('.pg-mode').textContent(), /已發布 ↗/);
   assert.match(await pg(2).locator('.pg-mode').textContent(), /✓ 排程/);
   assert(await page.isVisible('#clearBtn'));
+  assert(await page.isHidden('#doneDlg'), '有台失敗：不跳送出成功彈窗');
   await page.screenshot({ path: path.join(SHOTS, 'prB-result-fail.png') });
   ok('逐台送出 payload 正確；氣象 502 HTML 顯示精簡錯誤與重送鈕；已截圖 prB-result-fail.png');
 
@@ -615,6 +657,7 @@ async function prB(origin) {
   assert.strictEqual(worker.uploads, 1);
   assert.strictEqual((await calls()).filter(c => c.path === '/guard/check').length, 3, '內容沒改：重送不重判');
   assert.match(await page.textContent('#sendMsg'), /3 台成功/);
+  assert(!/清空頁面/.test(await page.textContent('#sendMsg')), '成功訊息不再叫人按清空頁面');
   assert.strictEqual(await page.locator('.pg .retry:visible').count(), 0);
   const recs = await page.evaluate(() => JSON.parse(localStorage.getItem('snn.records.v1')));
   assert.strictEqual(recs.length, 1);
@@ -622,6 +665,20 @@ async function prB(origin) {
   assert.strictEqual(recs[0].pages[0].link, 'https://www.facebook.com/123_news');
   assert.strictEqual(recs[0].pages[1].schedule, tomorrow + 'T21:30');
   ok('只重送失敗的台；本機紀錄 1 筆、3 台都成功');
+
+  // 全部成功：跳「送出成功」彈窗，焦點在「再發一篇」；Esc 只關彈窗、內容留著
+  await page.waitForSelector('#doneDlg:not([hidden])');
+  assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'dnAgain', '預設按鈕是再發一篇');
+  assert.match(await page.textContent('#dnBody'), /3 台成功/);
+  assert.deepStrictEqual(await page.$$eval('#doneDlg button', bs => bs.map(b => b.textContent)), ['回到列表', '再發一篇']);
+  await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
+  assert(await page.evaluate(() => document.getElementById('doneDlg').contains(document.activeElement)), 'Tab 焦點鎖在彈窗內');
+  await page.screenshot({ path: path.join(SHOTS, 'done-dialog.png') });
+  await page.keyboard.press('Escape');
+  assert(await page.isHidden('#doneDlg'));
+  assert(await page.isVisible('#modal'));
+  assert.notStrictEqual(await page.inputValue('#url'), '', 'Esc 不清內容');
+  ok('全部成功跳「送出成功」彈窗、焦點在再發一篇、Tab 鎖在彈窗內；Esc 只關彈窗不清內容；已截圖 done-dialog.png');
 
   // 全部成功：清空頁面不需確認
   await page.click('#clearBtn');
@@ -690,15 +747,26 @@ async function prB(origin) {
   const rdRec = await page.evaluate(() => Records.list()[0].pages.find(p => p.code === 'news').rundown);
   assert.deepStrictEqual([rdRec.ok, rdRec.cell], [true, '2026/10!AB107']);
   ok('Rundown：送出成功後寫入（' + rdMsg.split('｜')[1] + '）');
-  await page.fill('#slug', '自訂 SLUG');
-  await page.click('#clearBtn');
-  assert.strictEqual(await page.inputValue('#slug'), '');
+  // Rundown 沒全寫好但各台都成功：照樣跳彈窗，Rundown 訊息寫在彈窗裡；Enter＝再發一篇
+  await page.waitForSelector('#doneDlg:not([hidden])');
+  assert.match(await page.textContent('#dnBody'), /3 台成功｜Rundown：.*已經排滿/);
+  assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'dnAgain');
+  const recN = await page.evaluate(() => Records.list().length);
+  await page.keyboard.press('Enter');
+  assert(await page.isHidden('#doneDlg'));
+  assert(await page.isVisible('#modal'), '再發一篇：新增發文留著');
+  assert.deepStrictEqual([await page.inputValue('#url'), await page.inputValue('#title'), await page.inputValue('#caption'), await page.inputValue('#slug')], ['', '', '', '']);
+  assert.strictEqual(await page.locator('.pg.done').count(), 0);
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), false, '照片也清掉');
+  assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'url', '游標回到文章網址');
+  assert.strictEqual(await page.evaluate(() => Records.list().length), recN, '清空不影響送出紀錄');
+  ok('Rundown 沒全寫好也跳彈窗並附 Rundown 訊息；Enter＝再發一篇：清空內容、留在新增發文、紀錄還在');
   await page.click('#rdOn');
   assert.strictEqual(await page.evaluate(() => Rundown.enabled()), false);
   assert(await page.isDisabled('#slug'), '關閉時 SLUG 停用');
   await page.click('#rdOn'); assert(await page.isEnabled('#slug')); await page.click('#rdOn');
   await page.click('[data-frame="news"]');
-  ok('Rundown 開關可關閉（SLUG 跟著停用）；清空頁面一併清 SLUG');
+  ok('Rundown 開關可關閉（SLUG 跟著停用）；再發一篇一併清 SLUG');
 
   // 手機：純文字底圖 → 預覽 /render_text_card → 泡泡
   await page.setViewportSize({ width: 390, height: 844 });
@@ -729,6 +797,14 @@ async function prB(origin) {
   assert.deepStrictEqual(last.guard, { check_id: 'chk-1', level: 'yellow', ack: false });
   assert.strictEqual(worker.uploads, upText, '純文字不上傳圖床');
   ok('手機：純文字預覽、黃燈泡泡在畫面內、送出 text_card；已截圖 prB-mobile.png');
+  // 回到列表：關閉新增發文並清空
+  await page.waitForSelector('#doneDlg:not([hidden])');
+  await page.click('#dnList');
+  assert(!(await page.isVisible('#modal')), '回到列表：關閉新增發文');
+  assert(await page.isHidden('#doneDlg'));
+  assert.deepStrictEqual([await page.inputValue('#url'), await page.inputValue('#title'), await page.inputValue('#caption')], ['', '', '']);
+  assert.strictEqual(await page.evaluate(() => App.flow.state), 'idle');
+  ok('送出成功按「回到列表」：關閉新增發文並清空內容');
 
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   ok('PR B 沒有 page error / console error');

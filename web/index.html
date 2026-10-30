@@ -39,10 +39,16 @@
       <button class="x" id="closeBtn" type="button" aria-label="關閉">✕</button>
     </header>
     <div class="m-body">
+      <div class="url-block">
+          <label for="url">⚡ 文章網址</label>
+          <div class="urlrow"><input id="url" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/life/3012345" autocomplete="off"><button class="btn" id="fillBtn" type="button">帶入</button></div>
+          <div class="hint" id="urlHint" role="status"></div>
+      </div>
       <div class="m-left">
         <div id="framePane">
           <div class="canvas-wrap" id="canvasWrap" tabindex="0">
             <canvas id="editorCanvas" width="1080" height="1080"></canvas>
+            <textarea class="title-overlay" id="titleOverlay" placeholder="點兩下輸入標題" spellcheck="false" tabindex="-1" aria-label="在預覽上編輯標題" hidden></textarea>
             <div class="ph" id="ph"><b>點一下選照片</b><span>也可以拖曳照片進來，或按 Ctrl+V 貼上</span></div>
           </div>
           <input type="file" id="fileInput" accept="image/*" hidden>
@@ -50,10 +56,9 @@
             <div class="bg-toggle tpl" id="frameSwitch" role="group" aria-label="版型（所有粉專共用）">
               <button type="button" class="active" data-frame="news">新聞（藍框）</button><button type="button" data-frame="ent">娛樂（粉框）</button>
             </div>
-            <p class="hint">預覽已套上邊框與標題，僅供確認；上傳的圖只有照片與貼圖，由後端套版</p>
+            <p class="hint">預覽已套上邊框與標題，僅供確認；點兩下預覽可直接改標題、Enter 換行。上傳的圖只有照片與貼圖，由後端套版</p>
           </div>
           <div class="tools">
-            <button class="btn sm" id="pickBtn" type="button">選照片</button>
             <button class="btn sm" id="clearImgBtn" type="button" hidden>移除照片</button>
             <button class="btn sm" id="previewBtn" type="button" hidden title="上傳照片後請後端套版，確認實際發出的樣子">🖼 後端預覽</button>
             <button class="btn sm" id="fxBtn" type="button" hidden aria-controls="fxBar" aria-expanded="false" title="加 T寶貼圖或馬賽克">😊 T寶／馬賽克</button>
@@ -73,9 +78,6 @@
         </figure>
       </div>
       <div class="m-right">
-        <label for="url">⚡ 文章網址</label>
-        <div class="urlrow"><input id="url" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/life/3012345" autocomplete="off"><button class="btn" id="fillBtn" type="button">帶入</button></div>
-        <div class="hint" id="urlHint" role="status"></div>
         <div id="titleBlock">
           <label for="title">標題 <small class="muted" id="limitNote"></small></label>
           <div class="title-box">
@@ -118,6 +120,10 @@
     <div class="confirm" id="confirm" role="alertdialog" aria-modal="true" aria-labelledby="cfTitle" hidden>
       <div class="cf-box"><h3 id="cfTitle">關閉新增發文？</h3><p class="muted" id="cfBody">目前填的內容還沒送出，關閉後會清掉。</p>
         <div class="row"><button class="btn" id="cfStay" type="button">繼續編輯</button><button class="btn primary" id="cfLeave" type="button">放棄並關閉</button></div></div>
+    </div>
+    <div class="confirm" id="doneDlg" role="alertdialog" aria-modal="true" aria-labelledby="dnTitle" aria-describedby="dnBody" hidden>
+      <div class="cf-box"><h3 id="dnTitle">送出成功</h3><p class="muted" id="dnBody"></p>
+        <div class="row"><button class="btn" id="dnList" type="button">回到列表</button><button class="btn primary" id="dnAgain" type="button">再發一篇</button></div></div>
     </div>
   </div>
 </div>
