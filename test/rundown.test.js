@@ -75,6 +75,7 @@ test('目標格已有稿子：插在這格，這個日期欄往下推到第一�
 
 // 照 rdAddOne 的順序在陣列上套用（moveTo：整段往下一格、原本最上面那格清空）
 function apply(g, x, p, text) {
+  if (p.addRow != null) g.splice(p.addRow, 0, g[0].map(() => ''));   // 整列插入（sh.insertRowAfter）
   const move = col => { for (let r = p.shiftTo; r > p.row; r--) g[r][col] = g[r - 1][col]; g[p.row][col] = ''; };
   if (p.status === 'insert') { move(x); if (p.codeCol != null) move(p.codeCol); }
   g[p.row][x] = text;
@@ -126,9 +127,21 @@ test('15:13：候選格分鐘碼 1（:10）→ 往下；下一格 2（:20）比�
   assert.deepEqual(g.slice(2).map(r => [r[1], r[2]]), [['924/新加', '0'], ['', '1'], [T55, '13'], ['764/河口', '2']]);
 });
 
-test(':50 格在區塊最後一列、底下沒空間 → 回排滿，不硬填在 :50', () => {
-  const g = grid15([['', '', '5']]);
-  assert.match(RD.rdPlan(g, 1, 'news', '15:55', T55).error, /15:00 時段.*排滿/);
+test(':50 格在區塊最後一列、底下沒空間 → 下面插入一整列，填在新列並補 55，不硬填在 :50', () => {
+  const g = grid15([['', '', '5'], ['1600', '下一個時段', '0']]);
+  const p = RD.rdPlan(g, 1, 'news', '15:55', T55);
+  assert.deepEqual(p, { status: 'write', row: 6, addRow: 6, codeCol: 2, code: '55', time: '15:55' });
+  apply(g, 1, p, T55);
+  assert.deepEqual(g.slice(5).map(r => r.slice(0, 3)), [['', '', '5'], ['', T55, '55'], ['1600', '下一個時段', '0']]);
+});
+
+test('區塊滿了、要插入的稿子後面推不下去 → 插入一整列，推到新列，不動下一個時段', () => {
+  const g = H15.concat([['1500', '924/新加', '0'], ['', '931/饗食', '3'], ['', '張雪機車', '45'], ['1600', '下一個時段', '0']]).map(r => r.slice());
+  const p = RD.rdPlan(g, 1, 'news', '15:40', T55);
+  assert.deepEqual(p, { status: 'insert', row: 4, shiftTo: 5, codeCol: 2, code: '4', addRow: 5, time: '15:40' });
+  apply(g, 1, p, T55);
+  assert.deepEqual(g.slice(2).map(r => r.slice(0, 3)),
+    [['1500', '924/新加', '0'], ['', '931/饗食', '3'], ['', T55, '4'], ['', '張雪機車', '45'], ['1600', '下一個時段', '0']]);
 });
 
 test('插入時隔天欄的分鐘碼跟著往下移：被推的稿子時間不變，新稿補上目標時間的分鐘碼', () => {
@@ -170,11 +183,11 @@ test('同一天同區段已有同篇圖文就不重寫；文字稿不算重複',
   assert.notEqual(RD.rdPlan(rows, C, 'news', '08:40', '4041477/圖文/手錶').status, 'exists');
 });
 
-test('區段尾端的 0000 不會搶走白天的時間；排滿回錯誤', () => {
+test('區段尾端的 0000 不會搶走白天的時間；排滿就在區塊下面插一整列', () => {
   assert.deepEqual(RD.rdPlan(rows, C, 'ent', '08:15', '1/圖文/x'), { status: 'write', row: 18, time: '08:15' });   // 接在現有稿子後面
   assert.equal(RD.rdPlan(rows, 3, 'ent', '07:40', '1/圖文/x').status, 'write');
   const full = rows.map(r => r.slice()); full[15][C] = 'z';
-  assert.match(RD.rdPlan(full, C, 'ent', '07:30', '1/圖文/x').error, /07:30 時段.*排滿/);
+  assert.deepEqual(RD.rdPlan(full, C, 'ent', '07:30', '1/圖文/x'), { status: 'write', row: 16, addRow: 16, time: '07:30' });   // 0800 那列不動
 });
 
 test('A1 位址', () => {
@@ -205,6 +218,7 @@ test('網站端：有區段的粉專各寫一筆；排程用排程時間、立�
 test('網站端：結果文字', () => {
   assert.equal(W.describe({ ok: true, status: 'write', cell: '2026/10!AB107', time: '08:10' }, '新聞'), '新聞 08:10 → AB107');
   assert.equal(W.describe({ ok: true, status: 'insert', cell: '2026/10!AB107', time: '08:10' }, '新聞'), '新聞 08:10 → AB107（插入）');
+  assert.equal(W.describe({ ok: true, status: 'write', cell: '2026/10!AE256', time: '15:55', addedRow: true }, '新聞'), '新聞 15:55 → AE256（新增一列）');
   assert.equal(W.describe({ ok: true, status: 'exists', cell: '2026/10!AB109' }, '新聞'), '新聞：已在 AB109（不重複寫）');
   assert.equal(W.describe({ ok: false, error: '08:00 時段在這天已經排滿' }, '娛樂'), '娛樂：08:00 時段在這天已經排滿');
 });

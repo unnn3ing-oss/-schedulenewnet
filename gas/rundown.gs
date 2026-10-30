@@ -12,6 +12,7 @@
 // - 插入時，隔天那欄的分鐘碼跟著稿子一起往下移（稿子的時間不變），新的那格補上目標時間的分鐘碼（15:13 → 13）
 // - 稿子只落在分鐘碼相符的格子：15:55 遇到 5（:50）或沒寫分鐘碼的格子就往下一格，必要時把底下的稿子往下推，並在右邊補上 55
 //   （避免預排 :55 的稿子落在 5 那格被看成 15:50）；分鐘碼在別欄或整個區塊都沒有分鐘碼時照舊，不寫分鐘碼
+// - 區塊底下沒空格（再推就會碰到下一個時段或粉專）時，在區塊最後一列下面插入一整列再填（AE255 滿了 → 多一列，AE256 可填）
 
 // 填入的稿子一律用和現有「/圖文/」相同的樣式：字級 12、粗體、紫色
 var RD_STYLE = { size: 12, bold: true, color: '#9900ff' };
@@ -119,11 +120,12 @@ function rdRowTimes(V, blk, x) {
 // 目標＝「時間 ≤ 目標時間」的最後一筆稿子的下一格，但不早於最接近目標的那個分鐘格（例：08:07 → :05 那格）
 // 隔天那欄是分鐘碼時，目標格的分鐘碼必須等於目標時間的分鐘碼（15:55 → 55）：
 //   分鐘碼比目標早（5＝:50）→ 往下一格；分鐘碼空白而且可填 → 填這格並在隔天欄補上分鐘碼；
-//   分鐘碼比目標晚、或格子有稿 → 插在這格（空的 :20 格也一起往下推，不蓋掉）；底下沒空格就回排滿，不硬填
+//   分鐘碼比目標晚、或格子有稿 → 插在這格（空的 :20 格也一起往下推，不蓋掉）
+// 區塊裡沒有可填的格子了：addRow＝在區塊結尾（下一個時段／粉專開頭）前插入一整列，那列當作空格使用
 // 目標格可填（空白／預留格）就直接填；已有稿子就插在這格，這個日期欄往下推到第一個可填的格子為止
 // 插入時隔天那欄若是分鐘碼，同一段分鐘碼也往下推一格（被推的稿子時間不變），新的那格寫 code（目標時間的分鐘碼，15:13 → 13）
 // 分鐘碼在別欄（隔天欄已填內容）或整個區塊沒有分鐘碼時照舊只看時間順序，不寫分鐘碼（別天的欄不能動）
-// 回傳 { status:'exists'|'write'|'insert', row, shiftTo?, codeCol?, code?, time } 或 { error }
+// 回傳 { status:'exists'|'write'|'insert', row, shiftTo?, codeCol?, code?, addRow?, time } 或 { error }
 function rdPlan(V, x, page, hhmm, text) {
   var sec = rdFindSection(V, page);
   if (!sec) return { error: '找不到「' + (RD_SECTIONS[page] || [page])[0] + '」區段' };
@@ -148,20 +150,24 @@ function rdPlan(V, x, page, hhmm, text) {
   var mismatch = false;
   if (code != null) {
     while (target < blk.end && rdIsCode(V[target][cc]) && rdCodeMin(V[target][cc]) < want - hour) target++;
-    if (target >= blk.end) return { error: rdFmt(blk.min) + ' 時段在這天已經排滿' };
+    if (target >= blk.end) return { status: 'write', row: blk.end, addRow: blk.end, codeCol: cc, code: code, time: hhmm };
     var tc = rdStr(V[target][cc]);
     if (tc === '' && rdIsFree(V[target][x])) return { status: 'write', row: target, codeCol: cc, code: code, time: hhmm };
     mismatch = tc !== code;
   }
   var free = -1;
   for (var r = mismatch ? target + 1 : target; r < blk.end; r++) if (rdIsFree(V[r][x])) { free = r; break; }
-  if (free < 0) return { error: rdFmt(blk.min) + ' 時段在這天已經排滿' };
+  var addRow = free < 0 ? blk.end : null;
+  if (free < 0) free = blk.end;   // 插入的新列
   if (free > target) {
     var plan = { status: 'insert', row: target, shiftTo: free, time: hhmm };
     if (cc >= 0) { plan.codeCol = cc; if (code != null) plan.code = code; }
+    if (addRow != null) plan.addRow = addRow;
     return plan;
   }
-  return { status: 'write', row: free, time: hhmm };
+  var w = { status: 'write', row: free, time: hhmm };
+  if (addRow != null) { w.addRow = addRow; if (code != null) { w.codeCol = cc; w.code = code; } }
+  return w;
 }
 
 // ---- 以下只在 Apps Script 執行 ----
@@ -204,6 +210,7 @@ function rdAddOne(ss, names, en) {
   if (p.error) return { ok: false, page: en.page, error: p.error };
   var cell = name + '!' + rdA1(p.row, x);
   if (p.status === 'exists') return { ok: true, page: en.page, status: 'exists', cell: cell };
+  if (p.addRow != null) sh.insertRowAfter(p.addRow);   // 在區塊最後一列（1 起算＝p.addRow）下面插一整列，格式沿用上一列
   if (p.status === 'insert') {
     sh.getRange(p.row + 1, x + 1, p.shiftTo - p.row, 1).moveTo(sh.getRange(p.row + 2, x + 1));
     if (p.codeCol != null) {
@@ -213,7 +220,7 @@ function rdAddOne(ss, names, en) {
     }
   } else if (p.codeCol != null && p.code != null) sh.getRange(p.row + 1, p.codeCol + 1).setValue(p.code);   // 沒碼的空格就地補分鐘碼（那格原本是空的）
   sh.getRange(p.row + 1, x + 1).setValue(text).setFontSize(RD_STYLE.size).setFontWeight(RD_STYLE.bold ? 'bold' : 'normal').setFontColor(RD_STYLE.color);
-  return { ok: true, page: en.page, status: p.status, cell: cell, time: p.time };
+  return { ok: true, page: en.page, status: p.status, cell: cell, time: p.time, addedRow: p.addRow != null };
 }
 
 if (typeof module !== 'undefined') module.exports = { rdFindSheetName: rdFindSheetName, rdFindDateCol: rdFindDateCol, rdFindSection: rdFindSection, rdBlocks: rdBlocks, rdRowTimes: rdRowTimes, rdCodeCol: rdCodeCol, rdCodeMin: rdCodeMin, rdMinCode: rdMinCode, RD_STYLE: RD_STYLE, rdPlan: rdPlan, rdA1: rdA1 };

@@ -43,7 +43,7 @@
     if (!r.ok) return `${label}：${r.error || '失敗'}`;
     const cell = String(r.cell || '').replace(/^.*!/, '');
     if (r.status === 'exists') return `${label}：已在 ${cell}（不重複寫）`;
-    return `${label} ${r.time || ''} → ${cell}${r.status === 'insert' ? '（插入）' : ''}`;
+    return `${label} ${r.time || ''} → ${cell}${r.status === 'insert' ? '（插入）' : ''}${r.addedRow ? '（新增一列）' : ''}`;
   }
 
   return { PAGES, TYPE, defaultSlug, cleanSlug, entryText, whenOf, entries, describe };
