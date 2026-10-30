@@ -55,8 +55,17 @@
       <button type="button" class="btn primary" id="upApplyBtn" hidden>更新到最新版</button>
     </div>
     <div class="hint" id="upHint"></div>
+    <div class="up-folder" id="upFolder" hidden>更新位置：已記住<button type="button" class="up-link" id="upRepick">更換資料夾</button></div>
   </section>
 </div>
+
+<!-- 更新彈窗：有新版、選資料夾、確認權限變動、進度、完成／失敗都在這裡，不用瀏覽器的對話框 -->
+<dialog class="up-dlg" id="upDlg" aria-labelledby="upDlgTitle">
+  <h2 id="upDlgTitle"></h2>
+  <div class="up-dlg-body" id="upDlgBody"></div>
+  <div class="up-dlg-prog" id="upDlgProg" hidden><i id="upDlgBar"></i></div>
+  <div class="up-dlg-btns" id="upDlgBtns"></div>
+</dialog>
 <script src="updater.js"></script>
 <script src="sidepanel.js"></script>
 </body>

@@ -46,3 +46,15 @@ body.sp{height:100vh;min-height:0;display:flex;flex-direction:column;overflow:hi
 .pane-post[hidden],.wrap[hidden]{display:none}
 .pane-post iframe{flex:1 1 auto;width:100%;border:0;background:var(--bg)}
 body.sp .wrap{flex:1 1 auto;overflow:auto}
+/* 更新彈窗 */
+.up-folder{margin-top:8px;font-size:12px;color:var(--muted);display:flex;gap:8px;align-items:center}.up-folder[hidden]{display:none}
+.up-dlg{width:min(340px,calc(100vw - 32px));border:0;border-radius:18px;padding:18px;background:var(--surface);color:var(--text);box-shadow:0 24px 60px -20px rgba(0,30,80,.45)}
+.up-dlg::backdrop{background:rgba(10,20,40,.45)}
+.up-dlg h2{margin:0 0 8px;font-size:16px}
+.up-dlg-body{font-size:13px;line-height:1.65;word-break:break-word}
+.up-dlg-body p{margin:0 0 8px}.up-dlg-body ul{margin:4px 0 8px;padding-left:18px}
+.up-dlg-body code{display:block;margin:6px 0;padding:6px 10px;border-radius:10px;background:var(--track);font-size:12px;word-break:break-all}
+.up-dlg-body .bad{color:var(--danger);font-weight:600}
+.up-dlg-prog{height:6px;margin:10px 0 2px;border-radius:3px;background:var(--track);overflow:hidden}.up-dlg-prog[hidden]{display:none}
+.up-dlg-prog i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px}
+.up-dlg-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}.up-dlg-btns:empty{display:none}
