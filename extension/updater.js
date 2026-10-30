@@ -235,7 +235,8 @@
 
   // 要在按鈕點擊中呼叫（選資料夾需要使用者操作）
   async function pickFolder() {
-    const dir = await root.showDirectoryPicker({ id: 'snn-extension', mode: 'readwrite' });
+    // 安裝檔放在「文件」裡，第一次從「文件」開始找；之後 Chrome 會記住上次的位置（id）
+    const dir = await root.showDirectoryPicker({ id: 'snn-extension', mode: 'readwrite', startIn: 'documents' });
     await verifyFolder(dir);
     await kv('readwrite', s => s.put(dir, 'folder'));
     return dir;
