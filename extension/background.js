@@ -1,4 +1,4 @@
-// 點工具列圖示開啟側邊欄；每小時問 GitHub 有沒有新版，有就在圖示顯示「新」（更新要在側邊欄按，見 updater.js）。
+// 點工具列圖示開啟側邊欄；每小時（以及 Chrome 啟動、外掛安裝或重新載入時）問 GitHub 有沒有新版，有就在圖示顯示「新」（更新要在側邊欄按，見 updater.js）。
 importScripts('updater.js');
 
 // 驗證三種送法：
@@ -176,15 +176,26 @@ function setup() {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   ensureCheckAlarm();
 }
-setup();
-chrome.runtime.onInstalled.addListener(setup);
-chrome.runtime.onStartup.addListener(setup);
-
-chrome.alarms.onAlarm.addListener(async alarm => {
-  if (alarm.name !== 'check-update') return;
+// 檢查一次並更新圖示上的「新」。Chrome 啟動、安裝／重新載入外掛時也會馬上查，
+// 但距離上次檢查不到 5 分鐘就跳過，免得常開關 Chrome 或重新載入時一直問 GitHub。
+const MIN_GAP_MS = 5 * 60 * 1000;
+const CHECKED_KEY = 'snn-update-checked-at';
+async function checkNow() {
+  try {
+    const last = (await chrome.storage.local.get(CHECKED_KEY))[CHECKED_KEY] || 0;
+    if (Date.now() - last < MIN_GAP_MS) return;
+    await chrome.storage.local.set({ [CHECKED_KEY]: Date.now() });
+  } catch (e) { /* 存不了就照樣查 */ }
   try {
     const info = await Updater.checkLatest();
     await chrome.action.setBadgeText({ text: info.hasUpdate ? '新' : '' });
     if (info.hasUpdate) await chrome.action.setBadgeBackgroundColor({ color: '#d92d20' });
   } catch (e) { /* 離線或被限流：下次鬧鐘再試 */ }
+}
+setup();
+chrome.runtime.onInstalled.addListener(() => { setup(); checkNow(); });
+chrome.runtime.onStartup.addListener(() => { setup(); checkNow(); });
+
+chrome.alarms.onAlarm.addListener(alarm => {
+  if (alarm.name === 'check-update') return checkNow();
 });
