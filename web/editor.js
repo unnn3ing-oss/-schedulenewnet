@@ -50,7 +50,7 @@
     im.src = `frames/${k}.png`;
     frames[k] = im;
   });
-  let frame = 'news', titleLines = [];
+  let frame = 'news', titleLines = [], titleRaw = '';
 
   // ===== 標題畫法：底子複製自 quickpatterntool/app.js，字級與位置改成量自後端 /render 實際產圖（2026-10-26，1／2／3 行樣本）=====
   // 後端：同為 WHZ-Heavy、66px、白字置中、行距 93px，最後一行固定在 y≈931，往上疊（不是整塊置中）
@@ -97,7 +97,48 @@
     const ov = frames[frame];
     if (ov && ov.complete && ov.naturalWidth) ctx.drawImage(ov, 0, 0, W, H);
     drawTitle(ctx, titleLines, TITLE_PX, LAST_LINE_Y);
+    layoutTitleOverlay();
   }
+
+  // ---- 預覽上直接編輯標題（QPT layoutTitleOverlay／singlePreviewTitleInput）----
+  // 透明的輸入框疊在畫布標題的位置（字級、行距、最後一行 y 都和 drawTitle 一樣），游標落在畫面的字上；它是 DOM，不會被匯出。
+  // 平常不吃滑鼠（單擊、滾輪、拖曳照常作用在照片上），點兩下才進入編輯；打的字經 onTitleInput 寫回右邊的標題框（同一條路徑）
+  const titleOverlay = $('titleOverlay');
+  const TITLE_PAD_X = 30, TITLE_BOX_PAD_Y = 12;
+  let onTitleInput = () => {};
+  function layoutTitleOverlay() {
+    titleOverlay.hidden = !bg.image;
+    if (document.activeElement !== titleOverlay) titleOverlay.value = titleRaw;
+    const k = canvas.clientWidth / SIZE;
+    if (!k || titleOverlay.hidden) return;
+    ctx.save();
+    const fontSize = fitFontSize(ctx, titleLines.length ? titleLines : ['點兩下輸入標題'], SIZE - TITLE_PAD_X * 2, TITLE_PX);
+    ctx.restore();
+    const lineHeight = LINE_HEIGHT * fontSize / TITLE_PX;
+    // 畫布只畫有字的行、最後一行固定在 LAST_LINE_Y：輸入框讓最後一行有字的那一行對準它，前面的行往上、結尾的空行往下長
+    const rs = titleOverlay.value.replace(/\r/g, '').split('\n');
+    let last = rs.length - 1;
+    while (last > 0 && !rs[last].trim()) last--;
+    const top = LAST_LINE_Y - last * lineHeight - lineHeight / 2 - TITLE_BOX_PAD_Y, border = 2;
+    const st = titleOverlay.style;
+    st.left = `${canvas.offsetLeft + TITLE_PAD_X * k}px`;
+    st.top = `${canvas.offsetTop + top * k}px`;
+    st.width = `${(SIZE - TITLE_PAD_X * 2) * k}px`;
+    st.height = `${(rs.length * lineHeight + TITLE_BOX_PAD_Y * 2) * k}px`;
+    st.paddingTop = st.paddingBottom = `${Math.max(0, TITLE_BOX_PAD_Y * k - border)}px`;
+    st.fontSize = `${fontSize * k}px`;
+    st.lineHeight = `${lineHeight * k}px`;
+  }
+  canvas.addEventListener('dblclick', () => {
+    if (titleOverlay.hidden) return;
+    titleOverlay.classList.add('editing');
+    titleOverlay.focus();
+    titleOverlay.setSelectionRange(titleOverlay.value.length, titleOverlay.value.length);
+  });
+  titleOverlay.addEventListener('blur', () => { titleOverlay.classList.remove('editing'); layoutTitleOverlay(); });
+  titleOverlay.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); wrap.focus(); } });   // 焦點交回預覽框（留在彈窗裡），不關新增發文
+  titleOverlay.addEventListener('input', () => onTitleInput(titleOverlay.value));
+  if (typeof ResizeObserver === 'function') new ResizeObserver(() => layoutTitleOverlay()).observe(canvas);
   const changed = () => { render(); if (fxEditor) fxEditor.layout(); emit(); };
 
   // ---- 貼圖／馬賽克 ----
@@ -183,7 +224,12 @@
 
   // ---- 預覽的框（news 藍框／ent 粉框）與標題：只重畫畫面，不算「改了照片」（不觸發重新上傳）----
   function setFrame(f) { frame = f === 'ent' ? 'ent' : 'news'; render(); }
-  function setTitleLines(lines) { titleLines = (lines || []).map(l => String(l).trim()).filter(Boolean); render(); }
+  // raw＝標題框原文（含空行與換行），給預覽上的編輯框用
+  function setTitleLines(lines, raw) {
+    titleLines = (lines || []).map(l => String(l).trim()).filter(Boolean);
+    titleRaw = raw != null ? String(raw) : titleLines.join('\n');
+    render();
+  }
 
   // ---- 匯出：JPEG q0.92，只有照片＋馬賽克＋貼圖（另開一張畫布畫，不含預覽的疊圖與標題）----
   function exportBlob() {
@@ -302,6 +348,7 @@
     size: () => [W, H],
     frame: () => frame,
     onChange: fn => listeners.push(fn),
+    onTitleInput: fn => { onTitleInput = fn; },
     reset: () => { clearImage(); bg.view = { zoom: 1, x: 0, y: 0 }; },
     active: () => true,          // app.js 依目前模式覆寫：只有「作圖框」模式才吃貼上的圖
     onError: err => console.warn(err)   // app.js 覆寫成顯示提示

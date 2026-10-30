@@ -86,6 +86,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   for (const id of ['#clearImgBtn', '#previewBtn', '#fxBtn']) assert(await page.isHidden(id), id + ' 沒照片時隱藏');
   assert.equal(await page.locator('#pickBtn').count(), 0, '不另外放「選照片」鈕，點預覽就能選');
   assert(await page.isVisible('#ph'));
+  assert(await page.isHidden('#titleOverlay'), '沒照片時預覽上的標題編輯框隱藏（點預覽照常選照片）');
   assert.match(await page.getAttribute('#sendBtn', 'class'), /\bprimary\b/);
   assert(await page.locator('#sendBtn').isDisabled());
   assert(await page.isVisible('#sendTip'), '沒勾粉專時說明為什麼不能送');
@@ -120,6 +121,37 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   assert(Math.abs(b2.x - b.x - 40) < 3, '貼圖可拖曳 ' + JSON.stringify([b, b2]));
   await page.mouse.wheel(0, -300);
   ok('貼圖拖曳、滾輪縮放');
+
+  // 預覽上直接編輯標題（同 QPT）：點兩下畫布 → 透明輸入框疊在標題上，打字寫回標題框、Enter 換行；Esc 只離開編輯
+  const titleBand = () => page.evaluate(() => { const d = document.getElementById('editorCanvas').getContext('2d').getImageData(40, 790, 1000, 180).data; let h = 0; for (let i = 0; i < d.length; i += 7) h = (h * 31 + d[i]) >>> 0; return h; });
+  const dbl = await page.evaluate(() => {   // 找一個沒被貼圖蓋住的畫布點
+    const r = document.getElementById('editorCanvas').getBoundingClientRect();
+    for (const [fx, fy] of [[.1, .5], [.9, .5], [.1, .3], [.5, .1], [.3, .6]]) {
+      const x = r.left + r.width * fx, y = r.top + r.height * fy;
+      if (document.elementFromPoint(x, y) === document.getElementById('editorCanvas')) return [x, y];
+    }
+  });
+  assert(dbl, '找得到沒被貼圖蓋住的點');
+  assert(await page.isVisible('#titleOverlay'), '有照片才出現標題編輯框');
+  assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('titleOverlay')).pointerEvents), 'none', '平常不吃滑鼠（拖曳、滾輪照常作用在照片）');
+  const band0 = await titleBand();
+  await page.mouse.dblclick(dbl[0], dbl[1]);
+  assert(await page.evaluate(() => document.activeElement.id === 'titleOverlay' && document.getElementById('titleOverlay').classList.contains('editing')), '點兩下進入編輯並取得焦點');
+  await page.keyboard.type('預覽上打標題');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('第二行');
+  assert.strictEqual(await page.inputValue('#title'), '預覽上打標題\n第二行', '打的字（含換行）寫回標題框');
+  assert.deepStrictEqual(await page.evaluate(() => App.getLines()), ['預覽上打標題', '第二行']);
+  assert.notStrictEqual(await titleBand(), band0, '畫布標題跟著重畫');
+  const ovFont = await page.evaluate(() => { const o = document.getElementById('titleOverlay'), c = document.getElementById('editorCanvas'); return [parseFloat(getComputedStyle(o).fontSize), c.clientWidth]; });
+  assert(Math.abs(ovFont[0] - 66 * ovFont[1] / 1080) < 0.5, '編輯框字級＝畫布標題字級 ' + ovFont);
+  await page.keyboard.press('Escape');
+  assert(await page.isHidden('#confirm') && await page.isVisible('#modal'), 'Esc 只離開標題編輯，不關新增發文（也不跳確認視窗）');
+  assert(await page.evaluate(() => document.activeElement.id !== 'titleOverlay' && !document.getElementById('titleOverlay').classList.contains('editing')));
+  await page.fill('#title', '右邊改\n預覽跟著');
+  assert.strictEqual(await page.inputValue('#titleOverlay'), '右邊改\n預覽跟著', '標題框改了，預覽上的編輯框同步');
+  await page.fill('#title', '');
+  ok('預覽上點兩下直接編輯標題：Enter 換行、寫回標題框、畫布重畫、Esc 不關彈窗');
 
   // 5 匯出（上傳圖床的圖）：不含疊圖、不含標題
   await page.fill('#title', TITLE3);

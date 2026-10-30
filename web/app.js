@@ -81,13 +81,15 @@
     $('titleCnts').replaceChildren(...spans);
     titleEl.classList.toggle('over', bad);
     titleEl.setAttribute('aria-invalid', String(bad));
-    Editor.setTitleLines(getLines());
+    Editor.setTitleLines(getLines(), titleEl.value);
     if (state.mode === 'text') drawTextCard();
     const ds = Rundown.defaultSlug(getLines());
     $('slug').placeholder = ds ? `空白＝${ds}（標題前 4 字）` : '空白＝標題前 4 字';
   }
   function setLines(lines) { titleEl.value = lines.join('\n'); updateCounters(); }
   titleEl.addEventListener('input', updateCounters);
+  // 預覽上的標題編輯框打的字寫回標題框，走標題框自己的 input（計數、判讀作廢、【標題】同步都同一條路）
+  Editor.onTitleInput(v => { titleEl.value = v; titleEl.dispatchEvent(new Event('input')); });
 
   // ---- 小編文的【標題】那一行跟著標題框走（QPT 的 learnSeps／titleAsOneLine：沒改過的相鄰兩行照文章原本的接法，新的用空格接）----
   // auto：上次自動填進去的小編文（之後自動改【標題】、AI 產生也會跟著更新）；小編自己改過就對不上，帶入時不覆蓋
