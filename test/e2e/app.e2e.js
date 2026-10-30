@@ -345,7 +345,7 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
         window.__mock.failOnce[code]--;
         return json(502, '<!doctype html><html><body><h1>502 Bad Gateway</h1>' + 'x'.repeat(3000) + '</body></html>', 'text/html');
       }
-      return json(200, p.path === '/publish' ? { post_url: 'https://www.facebook.com/123_' + code, post_id: '123_' + code } : { message: '已排程' });
+      return json(200, p.path === '/publish' ? { post_url: 'https://www.facebook.com/123_' + code, post_id: '123_' + code } : { message: '已排程', post_id: '456_789' });   // 排程回的 id 是推論格式（粉專ID_貼文ID）
     }
     return json(404, { detail: 'not found' });
   }
@@ -793,6 +793,22 @@ async function prC(origin) {
   assert.deepStrictEqual(stored.guard, { checkId: 'chk-1', level: 'red', reasons: ['標題用語較聳動'] });
   assert.strictEqual(stored.frame, 'news');
   ok('送 3 台、1 台失敗 → 列表顯示縮圖、標題、模式、版型與各台狀態；分頁籤數量正確');
+  assert.strictEqual(stored.pages[1].postId, '456_789', '排程也存後端回的 post_id');
+  assert.strictEqual(await row0.locator('a.chip').count(), 1, '排程時間還沒到：不給連結');
+  // 時間過了（把少康的排程改成 1 分鐘前）→ 變成「已發布 ↗」連到 post_id 推出的貼文；之後還原
+  const md1 = await page.evaluate(() => {
+    const raw = localStorage.getItem(Records.KEY), all = JSON.parse(raw), at = new Date(Date.now() - 60000);
+    all[0].pages[1].schedule = Sched.toScheduleString(at);
+    localStorage.setItem(Records.KEY, JSON.stringify(all)); RecList.render(); window.__recRaw = raw;
+    return Records.fmtMD(Records.parseSchedule(Sched.toScheduleString(at)));
+  });
+  assert.strictEqual((await chips(row0))[1], `少康・已發布 ${md1} ↗`);
+  assert.strictEqual(await row0.locator('a.chip', { hasText: '少康' }).getAttribute('href'), 'https://www.facebook.com/456_789');
+  assert.strictEqual(await row0.locator('a.chip', { hasText: '少康' }).getAttribute('rel'), 'noopener noreferrer');
+  assert.deepStrictEqual(await tabs(), ['全部 1', '已排程', '已發布 1', '失敗 1']);
+  await page.evaluate(() => { localStorage.setItem(Records.KEY, window.__recRaw); RecList.render(); });
+  assert.strictEqual((await chips(row0))[1], `少康・排程 ${md}`);
+  ok('排程成功的台：時間到了且後端有回 post_id，列表顯示「已發布 ↗」連結；時間沒到不給連結');
 
   // 從列表重送氣象：沿用紀錄裡的紅燈，要再勾「我知道風險」
   const guards = (await calls()).filter(c => c.path === '/guard/check').length;

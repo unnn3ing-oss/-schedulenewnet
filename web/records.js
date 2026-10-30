@@ -51,6 +51,18 @@
     return at && at.getTime() <= now.getTime() ? 'due' : 'scheduled';
   }
 
+  // 貼文連結（列表的「↗」）：後端回的 post_url（https）優先；沒有就用 post_id 推 https://www.facebook.com/<post_id>，
+  // 只收 FB Graph「粉專ID_貼文ID」的純數字格式（排程回的 id 發出後就是貼文 id，這是推論，後端文件沒寫）。
+  // 排程的台時間還沒到不給連結（貼文還沒上線）；拿不到就回 ''，不硬湊
+  function postLink(p, now) {
+    if (!p || p.status !== 'ok') return '';
+    const st = pageState(p, now);
+    if (st !== 'published' && st !== 'due') return '';
+    if (/^https:\/\//.test(p.link || '')) return p.link;
+    const id = String(p.postId || '');
+    return /^\d{1,20}_\d{1,20}$/.test(id) ? 'https://www.facebook.com/' + id : '';
+  }
+
   // ---- 分頁籤：全部／已排程／已發布（含推測已發布）／失敗 ----
   const TABS = ['all', 'sched', 'pub', 'fail'];
   function matches(rec, tab, now) {
@@ -246,7 +258,7 @@
   }
 
   const api = { KEY, MAX, PAGE_SIZE, THUMB_DAYS, THUMB_KEEP, THUMB_CHARS, TABS, create, parseSchedule, fmtMD, titleParts, modeLabel, frameLabel,
-    pageState, matches, filter, counts, pageCount, clampPage, slicePage, pageWindow, imageExpiry, resendCheck, validateAt, resendRequest,
+    pageState, postLink, matches, filter, counts, pageCount, clampPage, slicePage, pageWindow, imageExpiry, resendCheck, validateAt, resendRequest,
     guardBodyOf, copyInput, titleText, renderRequest, copyImageCheck, imageFileName, prune, okThumb };
   if (typeof window !== 'undefined') {
     let ls = null;

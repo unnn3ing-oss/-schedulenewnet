@@ -22,7 +22,7 @@
     if (view.busy.has(key)) { const c = make('span', 'chip busy', `${label}・重送中…`); return c; }
     const st = Records.pageState(p, n);
     if (st === 'published') {
-      const link = /^https:\/\//.test(p.link || '') ? p.link : '';
+      const link = Records.postLink(p, n);
       const t = p.sentAt ? new Date(p.sentAt) : null, when = t && !isNaN(t) ? ' ' + Records.fmtMD(t) : '';   // 立即發布＝送出成功的時間
       if (!link) return make('span', 'chip ok', `${label}・已發布${when}`);
       const a = make('a', 'chip ok', `${label}・已發布${when} ↗`);
@@ -32,6 +32,13 @@
     const at = Records.parseSchedule(p.schedule);
     if (st === 'scheduled') return make('span', 'chip', `${label}・排程 ${Records.fmtMD(at)}`);
     if (st === 'due') {
+      const link = Records.postLink(p, n);   // 後端有回貼文連結／編號：時間到了就能點開（每分鐘重畫一次，見 mount）
+      if (link) {
+        const a = make('a', 'chip ok', `${label}・已發布 ${Records.fmtMD(at)} ↗`);
+        a.href = link; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.title = `開啟貼文（排程 ${Records.fmtMD(at)}；本機無法確認是否真的發出，打不開請到粉專確認）`;
+        return a;
+      }
       const c = make('span', 'chip due', `${label}・應已發布 ${Records.fmtMD(at)}（推測）`);
       c.title = `排程時間 ${Records.fmtMD(at)} 已過；本機無法確認是否真的發出，請到粉專確認`;
       return c;
@@ -356,7 +363,7 @@
     opts = Object.assign(opts, o || {});
     Records.onChange(render);
     window.addEventListener('storage', e => { if (e.key === Records.KEY) render(); });   // 其他分頁送出
-    setInterval(render, 60000);                                                          // 排程時間到了改成「應已發布（推測）」
+    setInterval(render, 60000);                                                          // 排程時間到了改成「已發布 ↗」或「應已發布（推測）」
     document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
     render();
   }

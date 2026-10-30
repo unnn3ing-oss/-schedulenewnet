@@ -342,7 +342,7 @@
     mode.addEventListener('click', e => {
       e.stopPropagation();
       const st = state.pages[p.code];
-      if (st.status === 'ok') { if (st.result && st.result.link) window.open(st.result.link, '_blank', 'noopener'); return; }
+      if (st.status === 'ok') { if (!st.sched && st.result && st.result.link) window.open(st.result.link, '_blank', 'noopener'); return; }   // 排程的貼文還沒上線，不開連結
       openMenu(p.code);
     });
     retry.addEventListener('click', () => resend(p.code));
