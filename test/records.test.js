@@ -25,6 +25,24 @@ test('pageState：已發布／排程中／排程時間已過（推測）／失�
   assert.equal(R.parseSchedule('bad'), null);
 });
 
+test('postLink：post_url 優先、post_id 只收「數字_數字」；排程時間到了才給連結', () => {
+  const ok = (extra) => Object.assign({ status: 'ok', kind: 'now' }, extra);
+  assert.equal(R.postLink(ok({ link: 'https://www.facebook.com/p/1', postId: '1_2' }), NOW), 'https://www.facebook.com/p/1');
+  assert.equal(R.postLink(ok({ link: '', postId: '123_456' }), NOW), 'https://www.facebook.com/123_456');
+  assert.equal(R.postLink(ok({ link: 'http://x/1', postId: '' }), NOW), '', '非 https 不收');
+  ['', '123', 'abc_1', '1_2/../x', '1_2?x', ' 1_2', '1_2_3'].forEach(id => assert.equal(R.postLink(ok({ postId: id }), NOW), '', id));
+  assert.equal(R.postLink({ kind: 'now', status: 'fail', postId: '1_2' }, NOW), '');
+  // 排程：時間沒到不給，過了才給；舊紀錄沒有連結／編號維持空字串
+  const s = (min, extra) => Object.assign({ status: 'ok', kind: 'sched', schedule: sch(min) }, extra);
+  assert.equal(R.postLink(s(30, { postId: '123_456' }), NOW), '');
+  assert.equal(R.postLink(s(30, { link: 'https://www.facebook.com/123_456' }), NOW), '');
+  assert.equal(R.postLink(s(0, { postId: '123_456' }), NOW), 'https://www.facebook.com/123_456', '剛好到時間');
+  assert.equal(R.postLink(s(-5, { link: 'https://www.facebook.com/p/9', postId: '123_456' }), NOW), 'https://www.facebook.com/p/9');
+  assert.equal(R.postLink(s(-5, {}), NOW), '');
+  assert.equal(R.postLink(s(-5, { postId: '已排程' }), NOW), '');
+  assert.equal(R.postLink(null, NOW), '');
+});
+
 test('分頁籤篩選與數量：一筆可同時屬於多個分頁籤', () => {
   const list = [
     { id: 'a', pages: [{ status: 'ok', kind: 'now' }, { status: 'ok', kind: 'sched', schedule: sch(60) }, { status: 'fail', kind: 'now' }] },

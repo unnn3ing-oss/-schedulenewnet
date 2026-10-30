@@ -218,8 +218,9 @@ test('CORS：OPTIONS 預檢與 Origin 比對', async () => {
 
 test('設定不完整 → 500 misconfigured，不丟例外', async () => {
   const cases = [
-    ['/login', { APP_PASSWORD: undefined }], ['/login', { APP_PASSWORD: 'short' }],
-    ['/login', { SESSION_SECRET: undefined }], ['/login', { SESSION_SECRET: 's'.repeat(31) }]
+    ['/login', { APP_PASSWORD: 'short' }],
+    ['/login', { SESSION_SECRET: undefined }], ['/login', { SESSION_SECRET: 's'.repeat(31) }],
+    ['/login', { APP_PASSWORD: undefined, SESSION_SECRET: undefined }], ['/login', { APP_PASSWORD: '', SESSION_SECRET: 's'.repeat(31) }]
   ];
   for (const [p, extra] of cases) {
     const env = mkEnv(extra);
@@ -249,6 +250,58 @@ test('回應不含 Secret 值', async () => {
     const body = await res.text();
     assert.equal(body.includes(env.APP_PASSWORD) || body.includes(env.SESSION_SECRET), false);
   }
+});
+
+/* ---------- 免密碼模式：沒設 APP_PASSWORD 就不檢查密碼，其餘照舊 ---------- */
+const getConfig = (env, headers) => call('/config', { headers }, env);
+
+test('GET /config 回報要不要密碼（含 CORS）', async () => {
+  const on = await getConfig(mkEnv());
+  assert.deepEqual(await parse(on), { ok: true, data: { password: true } });
+  assert.equal(on.headers.get('access-control-allow-origin'), ORIGIN);
+  for (const APP_PASSWORD of [undefined, '']) {
+    assert.deepEqual(await parse(await getConfig(mkEnv({ APP_PASSWORD }))), { ok: true, data: { password: false } });
+  }
+  const evil = await getConfig(mkEnv(), { origin: 'https://evil.test' });
+  assert.equal(evil.headers.get('access-control-allow-origin'), null);
+  assert.equal((await call('/config', { method: 'POST', body: '{}' })).status, 404);
+});
+
+test('免密碼模式：login 不看密碼（空 body 也行）就簽發，憑證能上傳', async () => {
+  const { verifySession } = await load();
+  for (const APP_PASSWORD of [undefined, '']) {
+    const env = mkEnv({ APP_PASSWORD, FAIL_DELAY_MS: '5000' });
+    const t = Date.now();
+    const bodies = [await parse(await login('', env)), await parse(await login('anything', env)),
+      await parse(await call('/login', { method: 'POST', body: '' }, env))];
+    assert.ok(Date.now() - t < 2000, '不套用失敗延遲');
+    const now = Math.floor(Date.now() / 1000);
+    for (const b of bodies) {
+      assert.equal(b.ok, true);
+      assert.equal(b.data.ttl, 43200);
+      assert.equal(await verifySession(env.SESSION_SECRET, b.data.session, now), true);
+    }
+    const { res } = await upload(JPG, { env, session: bodies[0].data.session });
+    assert.equal(res.status, 200);
+    assert.equal(env.IMAGES.store.size, 1);
+  }
+});
+
+test('免密碼模式：上傳仍要憑證、仍檢查檔頭與大小，LOGIN_LIMITER 照擋', async () => {
+  const env = mkEnv({ APP_PASSWORD: undefined, MAX_BYTES: '10' });
+  assert.equal((await upload(JPG, { env, session: null })).res.status, 401);
+  assert.equal((await upload(PNG, { env, type: 'image/jpeg' })).res.status, 415);
+  assert.equal((await upload(new Uint8Array(11).fill(0xff), { env })).res.status, 413);
+  assert.equal(env.IMAGES.store.size, 0);
+  const limited = mkEnv({ APP_PASSWORD: undefined, LOGIN_LIMITER: { limit: async () => ({ success: false }) } });
+  assert.equal((await parse(await login('', limited))).code, 'rate_limited');
+});
+
+test('重新設回 APP_PASSWORD：恢復要密碼', async () => {
+  const env = mkEnv();
+  assert.equal((await parse(await login('', env))).code, 'unauthorized');
+  assert.equal((await parse(await call('/login', { method: 'POST', body: '' }, env))).code, 'bad_request');
+  assert.equal((await parse(await login(env.APP_PASSWORD, env))).ok, true);
 });
 
 /* ---------- /rundown：網址與金鑰只在 Worker ---------- */

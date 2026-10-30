@@ -1,10 +1,13 @@
 /* Cloudflare Worker：暫存圖床（R2），圖片 3 天後自動失效。
- * POST /login  {password}                 → 通過後簽發 12 小時憑證
+ * POST /login  {password}                 → 通過後簽發 12 小時憑證（免密碼模式：不看密碼直接簽發）
+ * GET /config                             → { ok, data:{ password:true|false } }，網頁靠這個決定要不要跳密碼視窗
  * POST /upload（Authorization: Bearer 憑證，內容為圖片原始位元組）→ 存進 R2，回公開網址
  * GET|HEAD /i/<key>                       → 公開讀取（不需登入，網址本身不可猜）
  * POST /rundown（Authorization: Bearer 憑證，{action:'ping'|'add', entries}）→ 轉送給 FB RUNDOWN 的 Apps Script（gas/rundown.gs）
  *   網址與金鑰只放在 Worker：RUNDOWN_URL（Apps Script 網頁應用程式 /exec 網址）、RUNDOWN_TOKEN（同 Apps Script 的 TOKEN，至少 12 字）
  * 必要 Secrets：APP_PASSWORD（至少 8 字元，建議 12 以上）、SESSION_SECRET（至少 32 字元）
+ *   免密碼模式：刪掉 APP_PASSWORD（或設成空字串）→ /login 不檢查密碼；重新設回 APP_PASSWORD 就恢復要密碼。
+ *   其餘檢查不變：仍要 SESSION_SECRET 簽憑證、上傳仍要 Bearer 憑證、檔頭／大小／ALLOWED_ORIGIN 照舊。
  * 必要綁定：IMAGES（R2 bucket）
  * 選用 Variables：ALLOWED_ORIGIN（預設 https://unnn3ing-oss.github.io）、MAX_AGE_DAYS（預設 3）、MAX_BYTES（預設 8388608）、FAIL_DELAY_MS（登入失敗延遲，預設 1000）
  * 選用綁定：LOGIN_LIMITER（Rate Limiting；登入以 IP、上傳以憑證當 key）
@@ -85,6 +88,7 @@ async function passwordMatches(input, expected) {
 /* ---------- 設定與回應 ---------- */
 const allowedOrigin = (env) => env.ALLOWED_ORIGIN || DEFAULT_ORIGIN;
 const longEnough = (v, min = MIN_SECRET) => typeof v === 'string' && v.length >= min;
+const passwordOff = (env) => env.APP_PASSWORD === undefined || env.APP_PASSWORD === null || env.APP_PASSWORD === '';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function posInt(v, dflt) {
   const n = Number(v);
@@ -132,11 +136,12 @@ async function underLimit(env, key) {
 
 /* ---------- 端點 ---------- */
 async function handleLogin(request, env) {
-  if (!longEnough(env.APP_PASSWORD, MIN_PASSWORD) || !longEnough(env.SESSION_SECRET)) return misconfigured(request, env);
+  const open = passwordOff(env);   // 免密碼模式：不看 body，直接簽發（仍受 LOGIN_LIMITER 限制）
+  if ((!open && !longEnough(env.APP_PASSWORD, MIN_PASSWORD)) || !longEnough(env.SESSION_SECRET)) return misconfigured(request, env);
   if (!(await underLimit(env, request.headers.get('cf-connecting-ip') || 'unknown'))) return fail(request, env, 'rate_limited');
-  const body = await readJson(request);
-  if (!body || typeof body.password !== 'string') return fail(request, env, 'bad_request');
-  if (!(await passwordMatches(body.password, env.APP_PASSWORD))) {
+  const body = open ? null : await readJson(request);
+  if (!open && (!body || typeof body.password !== 'string')) return fail(request, env, 'bad_request');
+  if (!open && !(await passwordMatches(body.password, env.APP_PASSWORD))) {
     const ms = env.FAIL_DELAY_MS === undefined ? 1000 : Number(env.FAIL_DELAY_MS);
     if (ms > 0) await sleep(ms);
     return fail(request, env, 'unauthorized');
@@ -244,6 +249,7 @@ export default {
         return new Response(null, { status: 204, headers: h });
       }
       if (request.method === 'POST' && path === '/login') return await handleLogin(request, env);
+      if (request.method === 'GET' && path === '/config') return reply(request, env, { ok: true, data: { password: !passwordOff(env) } });
       if (request.method === 'POST' && path === '/upload') return await handleUpload(request, env);
       if (request.method === 'POST' && path === '/rundown') return await handleRundown(request, env);
       if ((request.method === 'GET' || request.method === 'HEAD') && path.startsWith('/i/')) {

@@ -296,6 +296,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await fillBothModes(`http://localhost:${server.address().port}`);
   await captionFlow(`http://localhost:${server.address().port}`);
   await installGuide(`http://localhost:${server.address().port}`);
+  await noPasswordFlow(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -345,7 +346,7 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
         window.__mock.failOnce[code]--;
         return json(502, '<!doctype html><html><body><h1>502 Bad Gateway</h1>' + 'x'.repeat(3000) + '</body></html>', 'text/html');
       }
-      return json(200, p.path === '/publish' ? { post_url: 'https://www.facebook.com/123_' + code, post_id: '123_' + code } : { message: '已排程' });
+      return json(200, p.path === '/publish' ? { post_url: 'https://www.facebook.com/123_' + code, post_id: '123_' + code } : { message: '已排程', post_id: '456_789' });   // 排程回的 id 是推論格式（粉專ID_貼文ID）
     }
     return json(404, { detail: 'not found' });
   }
@@ -359,18 +360,20 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
   });
 };
 
-// 模擬圖床 Worker（/login、/upload），回傳計數
-async function mockWorker(ctx, origin) {
-  const worker = { logins: 0, uploads: 0, auths: [], rundown: [] };
+// 模擬圖床 Worker（/login、/upload），回傳計數；noPassword：模擬沒設 APP_PASSWORD（/config 回 password:false，/login 不看密碼）
+// 預設沒有 /config（404），網頁照要密碼處理
+async function mockWorker(ctx, origin, { noPassword } = {}) {
+  const worker = { logins: 0, configs: 0, uploads: 0, auths: [], rundown: [] };
   await ctx.route(IMG_BASE + '/**', async route => {
     const req = route.request(), u = new URL(req.url());
     const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Vary': 'Origin' };
     const send = (status, obj) => route.fulfill({ status, headers: Object.assign({ 'Content-Type': 'application/json;charset=utf-8' }, cors), body: JSON.stringify(obj) });
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (u.pathname === '/config' && noPassword) { worker.configs++; return send(200, { ok: true, data: { password: false } }); }
     if (u.pathname === '/login') {
       worker.logins++;
       const b = JSON.parse(req.postData() || '{}');
-      if (b.password !== 'right-password') return send(200, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
+      if (!noPassword && b.password !== 'right-password') return send(200, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
       return send(200, { ok: true, data: { session: 'sess-1', exp: Math.floor(Date.now() / 1000) + 43200, ttl: 43200 } });
     }
     if (u.pathname === '/upload') {
@@ -533,9 +536,29 @@ async function prB(origin) {
   await page.mouse.click(700, 120);
   assert(!(await page.isVisible('#bubble')));
   ok('第 1 次按自動判讀、泡泡列 3 台；改內容或點外面回第 1 步');
+  const gCount = async () => (await calls()).filter(c => c.path === '/guard/check').length;
+  assert.strictEqual(await gCount(), 2, '點外面再按：內容沒改，沿用剛才的燈號');
+
+  // 背景預先判讀：停手 2.5 秒就先判；按送出直接沿用、不再等
+  await page.type('#caption', '。');
+  await page.waitForFunction(() => /已先判讀/.test(document.getElementById('sendMsg').textContent), null, { timeout: 8000 });
+  assert.strictEqual(await gCount(), 3);
+  assert.match(await page.textContent('#sendMsg'), /守則紅燈/);
+  await page.type('#caption', '！');
+  assert.match(await page.textContent('#sendMsg'), /送出時自動判讀/, '內容一改，預先判讀的提示收掉');
+  await page.keyboard.press('Backspace');
+  // 勾粉專後 1 秒就先判（這裡內容沒變，沿用剛才的燈號，不重打）
+  await pg(0).locator('button').first().click();
+  await pg(0).locator('button').first().click();
+  const t0 = Date.now();
+  await page.waitForFunction(() => /已先判讀/.test(document.getElementById('sendMsg').textContent), null, { timeout: 2200 });
+  assert(Date.now() - t0 < 2000, '勾粉專後不用等 2.5 秒');
+  assert.strictEqual(await gCount(), 3);
+  ok('背景預先判讀：停手後先判，內容一改提示就收掉；勾粉專後 1 秒就判');
 
   await page.click('#sendBtn');
   await page.waitForSelector('#ackChk');
+  assert.strictEqual(await gCount(), 3, '內容跟背景判讀時一樣：直接用那次的燈號');
   await page.check('#ackChk');
   assert(!(await page.locator('#sendBtn').isDisabled()));
   await page.screenshot({ path: path.join(SHOTS, 'prB-bubble-red.png') });
@@ -773,6 +796,22 @@ async function prC(origin) {
   assert.deepStrictEqual(stored.guard, { checkId: 'chk-1', level: 'red', reasons: ['標題用語較聳動'] });
   assert.strictEqual(stored.frame, 'news');
   ok('送 3 台、1 台失敗 → 列表顯示縮圖、標題、模式、版型與各台狀態；分頁籤數量正確');
+  assert.strictEqual(stored.pages[1].postId, '456_789', '排程也存後端回的 post_id');
+  assert.strictEqual(await row0.locator('a.chip').count(), 1, '排程時間還沒到：不給連結');
+  // 時間過了（把少康的排程改成 1 分鐘前）→ 變成「已發布 ↗」連到 post_id 推出的貼文；之後還原
+  const md1 = await page.evaluate(() => {
+    const raw = localStorage.getItem(Records.KEY), all = JSON.parse(raw), at = new Date(Date.now() - 60000);
+    all[0].pages[1].schedule = Sched.toScheduleString(at);
+    localStorage.setItem(Records.KEY, JSON.stringify(all)); RecList.render(); window.__recRaw = raw;
+    return Records.fmtMD(Records.parseSchedule(Sched.toScheduleString(at)));
+  });
+  assert.strictEqual((await chips(row0))[1], `少康・已發布 ${md1} ↗`);
+  assert.strictEqual(await row0.locator('a.chip', { hasText: '少康' }).getAttribute('href'), 'https://www.facebook.com/456_789');
+  assert.strictEqual(await row0.locator('a.chip', { hasText: '少康' }).getAttribute('rel'), 'noopener noreferrer');
+  assert.deepStrictEqual(await tabs(), ['全部 1', '已排程', '已發布 1', '失敗 1']);
+  await page.evaluate(() => { localStorage.setItem(Records.KEY, window.__recRaw); RecList.render(); });
+  assert.strictEqual((await chips(row0))[1], `少康・排程 ${md}`);
+  ok('排程成功的台：時間到了且後端有回 post_id，列表顯示「已發布 ↗」連結；時間沒到不給連結');
 
   // 從列表重送氣象：沿用紀錄裡的紅燈，要再勾「我知道風險」
   const guards = (await calls()).filter(c => c.path === '/guard/check').length;
@@ -1257,5 +1296,64 @@ async function installGuide(origin) {
   assert(await f5.isHidden('#deployBtn') && await f5.isHidden('#deployOverlay'), '嵌在側邊欄：不顯示安裝插件、不跳教學');
   await panel.close();
   ok('嵌在外掛側邊欄（iframe）：不顯示「安裝插件」、不自動跳教學');
+  await browser.close();
+}
+
+// ===== 圖床免密碼模式（Worker 沒設 APP_PASSWORD）：自動登入，不跳密碼視窗 =====
+async function noPasswordFlow(origin) {
+  console.log('\n  圖床免密碼模式');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  // 密碼視窗只要打開過一次就記下來
+  await ctx.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {
+    const box = document.getElementById('imgLogin');
+    new MutationObserver(() => { if (!box.hidden) window.__dlgShown = true; }).observe(box, { attributes: true });
+  }));
+  const worker = await mockWorker(ctx, origin, { noPassword: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  await page.goto(origin + '/index.html');
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  await page.waitForFunction(() => document.getElementById('imgText').textContent === '圖床已連線');
+  assert(await page.evaluate(() => document.getElementById('imgPill').classList.contains('ok')));
+  assert.strictEqual(worker.logins, 0, '還沒要上傳就不先登入');
+  ok('免密碼模式：圖床顯示「已連線」，不用點');
+
+  // 留著舊憑證（例如 Worker 換過 SESSION_SECRET）→ 背景上傳 401 → 自動重拿憑證再傳
+  await page.evaluate(() => localStorage.setItem('snn.imghost.v1', JSON.stringify({ session: 'sess-old', exp: Math.floor(Date.now() / 1000) + 43200 })));
+  await page.reload();
+  await page.waitForFunction(() => document.getElementById('imgText').textContent === '圖床已連線');
+  await page.click('#newBtn');
+  await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
+  await page.waitForFunction(() => Editor.hasImage());
+  await page.fill('#title', '免密碼模式測試\n背景上傳');
+  for (let i = 0; i < 40 && worker.uploads === 0; i++) await page.waitForTimeout(100);
+  assert.strictEqual(worker.uploads, 1, '沒按任何東西就在背景上傳');
+  assert.deepStrictEqual(worker.auths, ['Bearer sess-old', 'Bearer sess-1'], '舊憑證 401 後自動重拿');
+  assert.strictEqual(worker.logins, 1);
+  ok('免密碼模式：背景上傳自動登入，憑證失效自動重拿');
+
+  // 登出（或過期）後按預覽：直接登入上傳，不跳視窗
+  await page.evaluate(() => ImgHost.logout());
+  await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
+  await page.waitForFunction(() => Editor.hasImage());
+  await page.click('#previewBtn');
+  await page.waitForSelector('#bePrevImg:not([hidden])');
+  for (let i = 0; i < 40 && worker.uploads < 2; i++) await page.waitForTimeout(100);
+  assert.strictEqual(worker.uploads, 2);
+  assert.strictEqual(worker.logins, 2);
+  const render = (await page.evaluate(() => window.__calls)).filter(c => c.path === '/render').pop().body;
+  assert.strictEqual(render.image_url, `${IMG_BASE}/i/${'2'.repeat(32)}.jpg`);
+  // 點圖床狀態也只是安靜地拿憑證（新增發文視窗蓋住頂列，直接觸發 click）
+  await page.evaluate(() => { ImgHost.logout(); document.getElementById('imgPill').click(); });
+  await page.waitForFunction(() => !!ImgHost.session());
+  assert.strictEqual(await page.textContent('#imgText'), '圖床已連線');
+  assert.strictEqual(await page.evaluate(() => !!window.__dlgShown), false, '從頭到尾沒跳密碼視窗');
+  assert(await page.isHidden('#imgLogin'));
+  ok('免密碼模式：預覽、點狀態都直接登入，不跳密碼視窗');
+  assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   await browser.close();
 }
