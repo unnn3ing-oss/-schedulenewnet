@@ -54,15 +54,15 @@ async function upload(bytes, { type = 'image/jpeg', session, env, headers } = {}
   return { env, res: await call('/upload', { method: 'POST', headers: h, body: bytes }, env) };
 }
 
-test('login 成功：回 session 與約 12 小時後的 exp', async () => {
+test('login 成功：回 session 與約 30 天後的 exp', async () => {
   const { verifySession } = await load();
   const env = mkEnv();
   const res = await login(env.APP_PASSWORD, env);
   const body = await parse(res);
   assert.equal(body.ok, true);
-  assert.equal(body.data.ttl, 43200);
+  assert.equal(body.data.ttl, 30 * 86400);
   const now = Math.floor(Date.now() / 1000);
-  assert.ok(Math.abs(body.data.exp - now - 43200) <= 1);
+  assert.ok(Math.abs(body.data.exp - now - 30 * 86400) <= 1);
   assert.equal(await verifySession(env.SESSION_SECRET, body.data.session, now), true);
   assert.equal(res.headers.get('access-control-allow-origin'), ORIGIN);
 });
@@ -278,7 +278,7 @@ test('免密碼模式：login 不看密碼（空 body 也行）就簽發，憑�
     const now = Math.floor(Date.now() / 1000);
     for (const b of bodies) {
       assert.equal(b.ok, true);
-      assert.equal(b.data.ttl, 43200);
+      assert.equal(b.data.ttl, 30 * 86400);
       assert.equal(await verifySession(env.SESSION_SECRET, b.data.session, now), true);
     }
     const { res } = await upload(JPG, { env, session: bodies[0].data.session });
@@ -349,12 +349,16 @@ test('rundown 轉送：Worker 補上金鑰，回傳 results／ping 資訊，不�
   const p = await rundown({ action: 'ping', token: 'from-web' }, { env });
   assert.equal(p.seen[0].url, RD_URL);
   assert.deepEqual(JSON.parse(p.seen[0].init.body), { token: env.RUNDOWN_TOKEN, action: 'ping' });
-  assert.deepEqual(await parse(p.res), { ok: true, data: { title: 'T', sheets: ['2026/10'] } });
+  const pb = await parse(p.res);
+  assert.ok(pb.data.renew, '測試憑證只剩 10 分鐘：回應附續期憑證');
+  delete pb.data.renew;
+  assert.deepEqual(pb, { ok: true, data: { title: 'T', sheets: ['2026/10'] } });
   const results = [{ ok: true, page: 'news', status: 'write', cell: '2026/10!AB106', time: '08:07' }];
   const a = await rundown({ action: 'add', entries: [ENTRY] }, { env, gas: () => new Response(JSON.stringify({ ok: true, results })) });
   assert.deepEqual(JSON.parse(a.seen[0].init.body), { token: env.RUNDOWN_TOKEN, action: 'add', entries: [ENTRY] });
   const text = await a.res.text();
-  assert.deepEqual(JSON.parse(text), { ok: true, data: { results } });
+  const ab = JSON.parse(text); delete ab.data.renew;
+  assert.deepEqual(ab, { ok: true, data: { results } });
   assert(!text.includes(env.RUNDOWN_TOKEN) && !text.includes(RD_URL));
 });
 
@@ -365,4 +369,37 @@ test('rundown：Apps Script 回非 JSON 或 ok:false → 502', async () => {
   assert.equal(b.res.status, 502); assert.match((await parse(b.res)).error, /金鑰不對/);
   const c = await rundown({ action: 'ping' }, { gas: () => { throw new Error('net'); } });
   assert.equal(c.res.status, 502);
+});
+
+test('SESSION_DAYS 改登入天數；不合理的值退回 30 天', async () => {
+  const { sessionTtl } = await load();
+  assert.equal(sessionTtl({}), 30 * 86400);
+  assert.equal(sessionTtl({ SESSION_DAYS: '7' }), 7 * 86400);
+  assert.equal(sessionTtl({ SESSION_DAYS: '365' }), 365 * 86400);
+  for (const v of ['0', '400', 'abc', '', '-3']) assert.equal(sessionTtl({ SESSION_DAYS: v }), 30 * 86400, v);
+  const body = await parse(await login('p'.repeat(20), mkEnv({ SESSION_DAYS: '7' })));
+  assert.equal(body.data.ttl, 7 * 86400);
+});
+
+test('自動續期：憑證剩不到一半效期，上傳成功就附一張新的；還很新就不附', async () => {
+  const { signSession, verifySession } = await load();
+  const env = mkEnv();
+  const now = Math.floor(Date.now() / 1000);
+  // 剩 10 分鐘：續
+  let { res } = await upload(JPG, { env, session: await signSession(env.SESSION_SECRET, now + 600) });
+  let body = await parse(res);
+  assert.equal(res.status, 200);
+  assert.ok(body.data.renew, '快到期要續');
+  assert.ok(Math.abs(body.data.renew.exp - now - 30 * 86400) <= 2);
+  assert.equal(body.data.renew.ttl, 30 * 86400);
+  assert.equal(await verifySession(env.SESSION_SECRET, body.data.renew.session, now), true);
+  // 剩 20 天（超過一半）：不續
+  ({ res } = await upload(JPG, { env, session: await signSession(env.SESSION_SECRET, now + 20 * 86400) }));
+  body = await parse(res);
+  assert.equal(res.status, 200);
+  assert.equal(body.data.renew, undefined);
+  // 過期的不能拿來續
+  ({ res } = await upload(JPG, { env, session: await signSession(env.SESSION_SECRET, now - 1) }));
+  assert.equal(res.status, 401);
+  assert.equal((await parse(res)).data, undefined);
 });

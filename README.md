@@ -56,7 +56,7 @@ GitHub Pages 介面 ──postMessage──▶ 外掛 bridge.js ──▶ 外掛
 
 PR B（送出）：
 
-- **圖床登入**：頂列「圖床未登入／已登入」可點開登入；第一次預覽或送出作圖框時也會自動跳出。輸入圖床密碼（Worker 的 `APP_PASSWORD`）換 12 小時憑證，存在本機 localStorage（不存密碼）；過期或上傳回 401 會再跳出登入。**免密碼模式**（Worker 沒設 `APP_PASSWORD`，見下方「圖床」）：頂列顯示「圖床已連線」，預覽、送出、背景預先上傳都自動拿憑證，不跳密碼視窗；網頁開啟時打 `GET /config` 判斷，查不到（網路錯或舊版 Worker）就照要密碼處理。圖床網址寫在 `web/imghost.js`；Worker 的 `ALLOWED_ORIGIN` 必須是介面所在網址（GitHub Pages 是 `https://unnn3ing-oss.github.io`），本機 localhost 測試時要暫時改這個變數，否則瀏覽器會擋 CORS。
+- **圖床登入**：頂列「圖床未登入／已登入」可點開登入；第一次預覽或送出作圖框時也會自動跳出。輸入圖床密碼（Worker 的 `APP_PASSWORD`）換憑證，預設 30 天有效（Worker 的 `SESSION_DAYS` 可改），存在本機 localStorage（不存密碼）；上傳或 Rundown 成功時，憑證剩不到一半效期，Worker 會附一張新的、網頁自動換上，所以常用的人不用再登入，超過效期沒用才要重登。過期或上傳回 401 會再跳出登入。要讓所有人立刻登出：更換 `SESSION_SECRET`。**免密碼模式**（Worker 沒設 `APP_PASSWORD`，見下方「圖床」）：頂列顯示「圖床已連線」，預覽、送出、背景預先上傳都自動拿憑證，不跳密碼視窗；網頁開啟時打 `GET /config` 判斷，查不到（網路錯或舊版 Worker）就照要密碼處理。圖床網址寫在 `web/imghost.js`；Worker 的 `ALLOWED_ORIGIN` 必須是介面所在網址（GitHub Pages 是 `https://unnn3ing-oss.github.io`），本機 localhost 測試時要暫時改這個變數，否則瀏覽器會擋 CORS。
 - **作圖框送出**：`Editor.exportBlob()` 的 JPEG（不含疊圖與標題）上傳圖床，網址當 `image_url`、`crop: null`；勾選的每一台都送同一個 `template`：藍框 `newsnet_news`、粉框 `newsnet_ent`。純文字底圖不上傳，由後端依 `text_card` 欄位產圖（`title_lines` 空陣列、`line1`／`line2` 空字串，照交接文件 §4、§5）。
 - **🖼 後端預覽**：作圖框打 `/render`（目前選的藍框／粉框）、純文字打 `/render_text_card`，顯示後端實際產的圖。預覽和送出共用同一次上傳（照片／貼圖沒改就不重傳）。
 - **✨ AI 產生／🔍 校錯字**：`/ai_caption`（`generate` 帶標題（各行直接接起來，同官方發文台）與帶入的文章摘要，回應 `{ versions, hashtags, usedArticle, note }` 取第一個版本放最上面、hashtag 併進最後一行（原有的優先，AI 的只補到總共 3 個、不重複）；`proofread` 帶小編文與標題），結果填入小編文。
@@ -122,7 +122,7 @@ PR C（送出紀錄）：
 
 網頁在瀏覽器內產生 1080×1080 的 JPEG／PNG，上傳到這個圖床取得公開、無法猜到的網址，再把網址當作 `image_url` 交給後端抓取。圖片 3 天後自動失效。程式在 `worker/index.js`（單一檔案，無相依套件），測試用 `npm test`（只需要 Node 22，不必安裝任何套件）。
 
-端點：`GET /config`（回 `{"ok":true,"data":{"password":true|false}}`，網頁據此決定要不要跳密碼視窗）、`POST /login`（密碼換 12 小時憑證；免密碼模式不看密碼）、`POST /upload`（`Authorization: Bearer 憑證`，內容為圖片原始位元組，檢查檔頭與大小）、`GET /i/<key>`（公開讀取，過期即刪除並回 404）。
+端點：`GET /config`（回 `{"ok":true,"data":{"password":true|false}}`，網頁據此決定要不要跳密碼視窗）、`POST /login`（密碼換憑證，預設 30 天；免密碼模式不看密碼）、`POST /upload`（`Authorization: Bearer 憑證`，內容為圖片原始位元組，檢查檔頭與大小；憑證剩不到一半效期時回應附 `data.renew` 新憑證，`/rundown` 也一樣）、`GET /i/<key>`（公開讀取，過期即刪除並回 404）。
 
 ### 部署步驟（約 10 分鐘，一次性）
 
@@ -143,6 +143,7 @@ PR C（送出紀錄）：
    | `ALLOWED_ORIGIN` | Text | `https://unnn3ing-oss.github.io` |
    | `RUNDOWN_URL` | Secret（選用） | Rundown 的 Apps Script `/exec` 網址（見「Rundown 自動排入」） |
    | `RUNDOWN_TOKEN` | Secret（選用） | 與 Apps Script 指令碼屬性 `TOKEN` 相同（至少 12 字） |
+   | `SESSION_DAYS` | Text（選用） | 登入有效天數，`1`～`365`，預設 `30` |
    | `MAX_AGE_DAYS` | Text（選用） | `3`（預設就是 3） |
    | `MAX_BYTES` | Text（選用） | 預設 8388608（8 MB） |
 
@@ -155,7 +156,7 @@ PR C（送出紀錄）：
 
    ```bash
    curl -s -X POST https://snn-images.19jpz-3.workers.dev/login -H 'Content-Type: text/plain' -d '{"password":"你的登入密碼"}'
-   # 預期：{"ok":true,"data":{"session":"…","exp":…,"ttl":43200}}
+   # 預期：{"ok":true,"data":{"session":"…","exp":…,"ttl":2592000}}（2592000 秒＝30 天）
    ```
 
    回 `misconfigured`（HTTP 500）代表 Secret、綁定或名稱有漏設或打錯。
@@ -176,6 +177,6 @@ PR C（送出紀錄）：
 
 - **先更新 Worker**：免密碼模式需要新版 `worker/index.js`（有 `GET /config`）。到 Worker → Edit code，把 `worker/index.js` 整份重新貼上 → Deploy。舊版 Worker 刪掉 `APP_PASSWORD` 只會回「Worker 尚未設定完成。」。
 - **拿掉密碼**：Worker → Settings → Variables and Secrets → 刪除 `APP_PASSWORD`（或設成空字串）→ 儲存／Deploy。網頁重新整理後頂列顯示「圖床已連線」，不再跳密碼視窗。
-- **恢復密碼**：重新新增 `APP_PASSWORD`（Secret，至少 8 字元）→ 儲存／Deploy。網頁重新整理後就回到要密碼；已經拿到的憑證到期前（最多 12 小時）仍可上傳，要立刻作廢就同時更換 `SESSION_SECRET`。
+- **恢復密碼**：重新新增 `APP_PASSWORD`（Secret，至少 8 字元）→ 儲存／Deploy。網頁重新整理後就回到要密碼；已經拿到的憑證到期前（最多 30 天，或 `SESSION_DAYS` 設的天數）仍可上傳，要立刻作廢就同時更換 `SESSION_SECRET`。
 - 其餘不變：仍需要 `SESSION_SECRET`，上傳仍要憑證，檔頭（只收 JPEG／PNG／WebP）、大小上限、`ALLOWED_ORIGIN`、`LOGIN_LIMITER` 照舊；`/rundown` 也用同一張憑證。
 - **風險**：沒有密碼時，任何知道 Worker 網址的人都能直接拿憑證上傳圖片（`ALLOWED_ORIGIN` 只擋瀏覽器跨站，擋不了 `curl` 之類的直接呼叫），也能經 `/rundown` 寫入 FB RUNDOWN（若有設 `RUNDOWN_URL`／`RUNDOWN_TOKEN`）。上傳的圖 3 天後失效、限制類型與大小，但仍可能被拿來放別的圖或吃掉 R2 額度。建議只短期使用，有綁 `LOGIN_LIMITER` 更好，用完盡快設回 `APP_PASSWORD`。
