@@ -84,7 +84,8 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
 
   // UX 規範：沒照片時照片相關按鈕直接隱藏；送出鈕是主色且沒勾粉專時有提示；AI 兩顆分主副；按下去有縮放回饋
   for (const id of ['#clearImgBtn', '#previewBtn', '#fxBtn']) assert(await page.isHidden(id), id + ' 沒照片時隱藏');
-  assert(await page.isVisible('#pickBtn'));
+  assert.equal(await page.locator('#pickBtn').count(), 0, '不另外放「選照片」鈕，點預覽就能選');
+  assert(await page.isVisible('#ph'));
   assert.match(await page.getAttribute('#sendBtn', 'class'), /\bprimary\b/);
   assert(await page.locator('#sendBtn').isDisabled());
   assert(await page.isVisible('#sendTip'), '沒勾粉專時說明為什麼不能送');

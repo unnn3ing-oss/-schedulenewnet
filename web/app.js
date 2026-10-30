@@ -124,7 +124,6 @@
   }
   $('frameSwitch').addEventListener('click', e => { const b = e.target.closest('button[data-frame]'); if (b) setFrame(b.dataset.frame); });
   $('modeSwitch').addEventListener('click', e => { const b = e.target.closest('button[data-mode]'); if (b) setMode(b.dataset.mode); });
-  $('pickBtn').addEventListener('click', () => $('fileInput').click());
   $('clearImgBtn').addEventListener('click', () => Editor.clearImage());
   Editor.onChange(() => { $('clearImgBtn').hidden = !Editor.hasImage(); });
   Editor.mountFxBar($('fxBar'), $('fxBtn'));
