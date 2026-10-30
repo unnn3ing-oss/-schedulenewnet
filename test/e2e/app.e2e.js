@@ -544,7 +544,14 @@ async function prB(origin) {
   await page.type('#caption', '！');
   assert.match(await page.textContent('#sendMsg'), /送出時自動判讀/, '內容一改，預先判讀的提示收掉');
   await page.keyboard.press('Backspace');
-  ok('背景預先判讀：停手後先判，內容一改提示就收掉');
+  // 勾粉專後 1 秒就先判（這裡內容沒變，沿用剛才的燈號，不重打）
+  await pg(0).locator('button').first().click();
+  await pg(0).locator('button').first().click();
+  const t0 = Date.now();
+  await page.waitForFunction(() => /已先判讀/.test(document.getElementById('sendMsg').textContent), null, { timeout: 2200 });
+  assert(Date.now() - t0 < 2000, '勾粉專後不用等 2.5 秒');
+  assert.strictEqual(await gCount(), 3);
+  ok('背景預先判讀：停手後先判，內容一改提示就收掉；勾粉專後 1 秒就判');
 
   await page.click('#sendBtn');
   await page.waitForSelector('#ackChk');

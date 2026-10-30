@@ -337,6 +337,7 @@
       const st = state.pages[p.code];
       st.on = !st.on; st.status = ''; st.result = null;
       closePops(); renderPage(p.code); flowEdit();
+      if (st.on) schedulePreGuard(PRE_GUARD_PAGE_MS);   // 勾粉專通常是最後一步：1 秒就先判
     });
     mode.addEventListener('click', e => {
       e.stopPropagation();
@@ -591,9 +592,9 @@
     sendBtn.disabled = !b.canConfirm && !!(flow.guard && flow.guard.ok);
   }
 
-  // 背景預先判讀：內容齊了、有勾粉專、停手 PRE_GUARD_MS 後先打 /guard/check（同樣內容只判一次）。
+  // 背景預先判讀：內容齊了、有勾粉專、停手 PRE_GUARD_MS（勾粉專後 PRE_GUARD_PAGE_MS）先打 /guard/check（同樣內容只判一次）。
   // 按「全部送出」時內容沒變就直接用這次的燈號；泡泡、紅燈勾「我知道風險」、內容一改就作廢都和原本一樣
-  const PRE_GUARD_MS = 2500, PRE_GUARD_TTL = 10 * 60000;
+  const PRE_GUARD_MS = 2500, PRE_GUARD_PAGE_MS = 1000, PRE_GUARD_TTL = 10 * 60000;
   const LIGHT = { green: '綠燈', yellow: '黃燈', red: '紅燈' };
   let preGuard = null, guardTimer = 0, preShown = false;   // preGuard：{ key, p, guard, at, bg }
   function guardFor(input, bg) {
@@ -609,7 +610,7 @@
     preGuard = entry;
     return entry;
   }
-  function schedulePreGuard() {
+  function schedulePreGuard(ms) {
     clearTimeout(guardTimer);
     guardTimer = setTimeout(() => {
       if (overlay.hidden || !Ext.version() || !/^(idle|done)$/.test(flow.state) || !pending().length) return;
@@ -621,7 +622,7 @@
         sendMsg(`🛡 已先判讀：守則${LIGHT[g.level]}，按「全部送出」確認`, g.level === 'green' ? 'ok' : 'muted');
         preShown = true;
       }).catch(() => { /* 背景失敗不打擾；送出時會再判讀並顯示原因 */ });
-    }, PRE_GUARD_MS);
+    }, ms || PRE_GUARD_MS);
   }
 
   // 內容（標題、小編文、照片、時間、粉專…）有改：泡泡作廢、回到第 1 步
