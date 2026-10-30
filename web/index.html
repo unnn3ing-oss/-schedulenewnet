@@ -39,6 +39,11 @@
       <button class="x" id="closeBtn" type="button" aria-label="關閉">✕</button>
     </header>
     <div class="m-body">
+      <div class="url-block">
+          <label for="url">⚡ 文章網址</label>
+          <div class="urlrow"><input id="url" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/life/3012345" autocomplete="off"><button class="btn" id="fillBtn" type="button">帶入</button></div>
+          <div class="hint" id="urlHint" role="status"></div>
+      </div>
       <div class="m-left">
         <div id="framePane">
           <div class="canvas-wrap" id="canvasWrap" tabindex="0">
@@ -73,9 +78,6 @@
         </figure>
       </div>
       <div class="m-right">
-        <label for="url">⚡ 文章網址</label>
-        <div class="urlrow"><input id="url" type="url" inputmode="url" placeholder="https://news.tvbs.com.tw/life/3012345" autocomplete="off"><button class="btn" id="fillBtn" type="button">帶入</button></div>
-        <div class="hint" id="urlHint" role="status"></div>
         <div id="titleBlock">
           <label for="title">標題 <small class="muted" id="limitNote"></small></label>
           <div class="title-box">

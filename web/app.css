@@ -27,10 +27,11 @@ body.locked{overflow:hidden}
 .m-head h2{margin:0;font-size:19px}
 .m-head .mode-switch{flex:1;max-width:236px}
 .x{margin-left:auto;width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:16px;cursor:pointer}
-.m-body{display:grid;grid-template-columns:minmax(320px,420px) 1fr;gap:24px;padding:20px;overflow-y:auto;flex:1;min-height:0}
-.m-left{min-width:0}.m-right{min-width:0;display:flex;flex-direction:column}
-.m-right label,.m-left label{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--muted)}
-.m-right>label:first-child{margin-top:0}
+/* 文章網址在 DOM 最前面：寬版放右欄頂端（左欄跨兩列），窄版（含外掛側邊欄）排在預覽上面 */
+.m-body{display:grid;grid-template-columns:minmax(320px,420px) 1fr;grid-template-rows:auto 1fr;grid-template-areas:"left url" "left right";column-gap:24px;row-gap:0;padding:20px;overflow-y:auto;flex:1;min-height:0}
+.url-block{grid-area:url;min-width:0}.m-left{grid-area:left;min-width:0}.m-right{grid-area:right;min-width:0;display:flex;flex-direction:column}
+.url-block label,.m-right label,.m-left label{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--muted)}
+.url-block label,.m-right>label:first-child{margin-top:0}
 .m-right small{font-weight:400}
 .m-foot{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 20px;border-top:1px solid var(--border);flex-wrap:wrap}
 .pages{display:flex;gap:8px;flex-wrap:wrap}
@@ -246,7 +247,7 @@ textarea.is-skel::placeholder{color:transparent}
   .overlay{padding:0;align-items:stretch}
   .modal{width:100%;max-height:none;height:100%;border-radius:0}
   .confirm{border-radius:0}
-  .m-body{grid-template-columns:1fr;gap:16px;padding:16px}
+  .m-body{grid-template-columns:1fr;grid-template-rows:none;grid-template-areas:"url" "left" "right";gap:16px;padding:16px}
   .m-head{padding:12px 16px;flex-wrap:wrap}
   .m-foot{padding:12px 16px}
   .send{width:100%;justify-content:space-between;flex-wrap:wrap}
