@@ -533,9 +533,22 @@ async function prB(origin) {
   await page.mouse.click(700, 120);
   assert(!(await page.isVisible('#bubble')));
   ok('第 1 次按自動判讀、泡泡列 3 台；改內容或點外面回第 1 步');
+  const gCount = async () => (await calls()).filter(c => c.path === '/guard/check').length;
+  assert.strictEqual(await gCount(), 2, '點外面再按：內容沒改，沿用剛才的燈號');
+
+  // 背景預先判讀：停手 2.5 秒就先判；按送出直接沿用、不再等
+  await page.type('#caption', '。');
+  await page.waitForFunction(() => /已先判讀/.test(document.getElementById('sendMsg').textContent), null, { timeout: 8000 });
+  assert.strictEqual(await gCount(), 3);
+  assert.match(await page.textContent('#sendMsg'), /守則紅燈/);
+  await page.type('#caption', '！');
+  assert.match(await page.textContent('#sendMsg'), /送出時自動判讀/, '內容一改，預先判讀的提示收掉');
+  await page.keyboard.press('Backspace');
+  ok('背景預先判讀：停手後先判，內容一改提示就收掉');
 
   await page.click('#sendBtn');
   await page.waitForSelector('#ackChk');
+  assert.strictEqual(await gCount(), 3, '內容跟背景判讀時一樣：直接用那次的燈號');
   await page.check('#ackChk');
   assert(!(await page.locator('#sendBtn').isDisabled()));
   await page.screenshot({ path: path.join(SHOTS, 'prB-bubble-red.png') });

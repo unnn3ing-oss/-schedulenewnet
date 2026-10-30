@@ -591,14 +591,51 @@
     sendBtn.disabled = !b.canConfirm && !!(flow.guard && flow.guard.ok);
   }
 
+  // 背景預先判讀：內容齊了、有勾粉專、停手 PRE_GUARD_MS 後先打 /guard/check（同樣內容只判一次）。
+  // 按「全部送出」時內容沒變就直接用這次的燈號；泡泡、紅燈勾「我知道風險」、內容一改就作廢都和原本一樣
+  const PRE_GUARD_MS = 2500, PRE_GUARD_TTL = 10 * 60000;
+  const LIGHT = { green: '綠燈', yellow: '黃燈', red: '紅燈' };
+  let preGuard = null, guardTimer = 0, preShown = false;   // preGuard：{ key, p, guard, at, bg }
+  function guardFor(input, bg) {
+    const key = Payload.guardKey(input), c = preGuard;
+    if (c && c.key === key && (!c.guard || Date.now() - c.at < PRE_GUARD_TTL)) return c;
+    const entry = { key, guard: null, at: 0, bg };
+    entry.p = Ext.call('/guard/check', 'POST', Payload.guardBody(input)).then(res => {
+      const g = SendFlow.parseGuard(SendFlow.apiResult(res));
+      entry.guard = g; entry.at = Date.now();
+      if (!g.ok && preGuard === entry) preGuard = null;   // 失敗不留，下次重打
+      return g;
+    });
+    preGuard = entry;
+    return entry;
+  }
+  function schedulePreGuard() {
+    clearTimeout(guardTimer);
+    guardTimer = setTimeout(() => {
+      if (overlay.hidden || !Ext.version() || !/^(idle|done)$/.test(flow.state) || !pending().length) return;
+      const input = currentInput();
+      if (Payload.validateInput(input) || (input.mode !== 'text_card' && !input.caption.trim())) return;
+      const e = guardFor(input, true);
+      e.p.then(g => {
+        if (!g.ok || preGuard !== e || !/^(idle|done)$/.test(flow.state) || e.key !== Payload.guardKey(currentInput())) return;
+        sendMsg(`🛡 已先判讀：守則${LIGHT[g.level]}，按「全部送出」確認`, g.level === 'green' ? 'ok' : 'muted');
+        preShown = true;
+      }).catch(() => { /* 背景失敗不打擾；送出時會再判讀並顯示原因 */ });
+    }, PRE_GUARD_MS);
+  }
+
   // 內容（標題、小編文、照片、時間、粉專…）有改：泡泡作廢、回到第 1 步
   function flowEdit() {
     if (flow.state === 'armed' || flow.state === 'checking') {
       flow.seq++;
       setFlow({ type: 'edit' });
       sendMsg('內容有改，送出前會重新判讀');
-    } else renderFlow();
+    } else {
+      if (preShown && !(preGuard && preGuard.key === Payload.guardKey(currentInput()))) { preShown = false; sendMsg('🛡 送出時自動判讀'); }
+      renderFlow();
+    }
     markPreviewStale();
+    schedulePreGuard();
   }
   modal.addEventListener('input', e => { if (!e.target.closest('#bubble,#timePop')) flowEdit(); });
   Editor.onChange(() => { editorVer++; $('previewBtn').hidden = !Editor.hasImage(); $('previewBtn').disabled = previewing; schedulePreUpload(); flowEdit(); });
@@ -626,12 +663,14 @@
     if (err) { sendMsg(err, 'bad'); return; }
     flow.targets = codes.slice(); flow.ack = false; flow.guard = null;
     setFlow({ type: 'click', guardFailed: true });
-    sendMsg('🛡 守則判讀中…');
+    sendMsg('🛡 守則判讀中…'); preShown = false;
     const my = ++flow.seq, key = Payload.guardKey(input);
-    const res = SendFlow.apiResult(await Ext.call('/guard/check', 'POST', Payload.guardBody(input)));
+    // 背景已判好（或正在判）同樣內容就沿用；背景那次失敗才在這裡重打一次
+    let e = guardFor(input, false), g = await e.p;
+    if (!g.ok && e.bg) { e = guardFor(input, false); g = await e.p; }
     if (my !== flow.seq || flow.state !== 'checking') return;   // 期間被取消或內容被改
     const stale = key !== Payload.guardKey(currentInput());
-    flow.guard = SendFlow.parseGuard(res); flow.key = key;
+    flow.guard = g; flow.key = key;
     setFlow({ type: 'guard', stale });
     sendMsg(stale ? '判讀期間內容有改，燈號作廢，請再按一次' : '請看泡泡確認各台與時間', stale ? 'bad' : '');
   }
@@ -766,6 +805,7 @@
     C.pages.forEach(p => renderPage(p.code));
     Object.assign(flow, { state: 'idle', key: '', guard: null, ack: false, targets: [], recordId: '' }); flow.seq++;
     upCache = null; previewKey = ''; $('bePrev').hidden = true; $('bePrevImg').hidden = true;
+    clearTimeout(guardTimer); preGuard = null; preShown = false;
     sendMsg('🛡 送出時自動判讀');
     closePops(); updateCounters(); drawTextCard(); renderFlow();
   }
