@@ -79,6 +79,7 @@
     const j = await r.json().catch(() => null);
     if (!j) throw new Error(`Rundown 回應看不懂（HTTP ${r.status}）`);
     if (!j.ok) throw new Error(j.error || 'Rundown 失敗');
+    ImgHost.renew(j.data);
     return j.data || {};
   }
   const add = list => call({ action: 'add', entries: list });

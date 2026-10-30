@@ -363,7 +363,7 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
 // 模擬圖床 Worker（/login、/upload），回傳計數；noPassword：模擬沒設 APP_PASSWORD（/config 回 password:false，/login 不看密碼）
 // 預設沒有 /config（404），網頁照要密碼處理
 async function mockWorker(ctx, origin, { noPassword } = {}) {
-  const worker = { logins: 0, configs: 0, uploads: 0, auths: [], rundown: [] };
+  const worker = { logins: 0, configs: 0, uploads: 0, auths: [], rundown: [], renew: false };   // renew：上傳回應附續期憑證
   await ctx.route(IMG_BASE + '/**', async route => {
     const req = route.request(), u = new URL(req.url());
     const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Vary': 'Origin' };
@@ -380,7 +380,8 @@ async function mockWorker(ctx, origin, { noPassword } = {}) {
       worker.auths.push(req.headers().authorization);
       if (req.headers().authorization !== 'Bearer sess-1') return send(401, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
       worker.uploads++;
-      return send(200, { ok: true, data: { url: `${IMG_BASE}/i/${String(worker.uploads).repeat(32)}.jpg`, key: 'k', expiresAt: new Date(Date.now() + 3 * 864e5).toISOString() } });
+      const renew = worker.renew ? { renew: { session: 'sess-1', exp: Math.floor(Date.now() / 1000) + 30 * 86400, ttl: 30 * 86400 } } : {};
+      return send(200, { ok: true, data: Object.assign({ url: `${IMG_BASE}/i/${String(worker.uploads).repeat(32)}.jpg`, key: 'k', expiresAt: new Date(Date.now() + 3 * 864e5).toISOString() }, renew) });
     }
     if (u.pathname === '/rundown') {
       if (req.headers().authorization !== 'Bearer sess-1') return send(401, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
@@ -570,6 +571,14 @@ async function prB(origin) {
   const s1 = await sends();
   assert.deepStrictEqual(s1.map(c => [c.path, c.body.page]), [['/publish', 'news'], ['/schedule', 'shaokang'], ['/publish', 'weather']]);
   assert.strictEqual(worker.uploads, 1, '預覽與送出共用同一次上傳');
+  // 自動續期：Worker 回應附新憑證，網頁就換上（到期時間拉長）
+  const expBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('snn.imghost.v1')).exp);
+  worker.renew = true;
+  await page.evaluate(async () => { await ImgHost.upload(new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' })); });
+  worker.renew = false; worker.uploads--;
+  const expAfter = await page.evaluate(() => JSON.parse(localStorage.getItem('snn.imghost.v1')).exp);
+  assert(expAfter - expBefore > 20 * 86400, '換成 30 天的新憑證');
+  ok('圖床自動續期：上傳回應附新憑證就換上');
   const [news, shao, wx] = s1.map(c => c.body);
   assert.strictEqual(news.image_url, `${IMG_BASE}/i/${'1'.repeat(32)}.jpg`);
   assert.strictEqual(news.crop, null);

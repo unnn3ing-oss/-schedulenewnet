@@ -1,5 +1,6 @@
 /* Cloudflare Worker：暫存圖床（R2），圖片 3 天後自動失效。
- * POST /login  {password}                 → 通過後簽發 12 小時憑證（免密碼模式：不看密碼直接簽發）
+ * POST /login  {password}                 → 通過後簽發憑證，預設 30 天有效（免密碼模式：不看密碼直接簽發）
+ *   自動續期：/upload、/rundown 成功時，憑證剩不到一半效期就在回應 data.renew 附一張新的，常用的人不用再登入
  * GET /config                             → { ok, data:{ password:true|false } }，網頁靠這個決定要不要跳密碼視窗
  * POST /upload（Authorization: Bearer 憑證，內容為圖片原始位元組）→ 存進 R2，回公開網址
  * GET|HEAD /i/<key>                       → 公開讀取（不需登入，網址本身不可猜）
@@ -9,11 +10,16 @@
  *   免密碼模式：刪掉 APP_PASSWORD（或設成空字串）→ /login 不檢查密碼；重新設回 APP_PASSWORD 就恢復要密碼。
  *   其餘檢查不變：仍要 SESSION_SECRET 簽憑證、上傳仍要 Bearer 憑證、檔頭／大小／ALLOWED_ORIGIN 照舊。
  * 必要綁定：IMAGES（R2 bucket）
- * 選用 Variables：ALLOWED_ORIGIN（預設 https://unnn3ing-oss.github.io）、MAX_AGE_DAYS（預設 3）、MAX_BYTES（預設 8388608）、FAIL_DELAY_MS（登入失敗延遲，預設 1000）
+ * 選用 Variables：ALLOWED_ORIGIN（預設 https://unnn3ing-oss.github.io）、SESSION_DAYS（登入有效天數，預設 30，1～365）、MAX_AGE_DAYS（預設 3）、MAX_BYTES（預設 8388608）、FAIL_DELAY_MS（登入失敗延遲，預設 1000）
  * 選用綁定：LOGIN_LIMITER（Rate Limiting；登入以 IP、上傳以憑證當 key）
  * /login 失敗回 HTTP 200 {ok:false,code,error}；/upload 失敗用對應的 HTTP 狀態碼；設定不完整回 500 misconfigured。 */
 
-export const SESSION_TTL_SEC = 43200;
+export const SESSION_TTL_SEC = 30 * 86400;
+// 登入有效秒數：SESSION_DAYS（1～365 天）沒設或不合理就用預設 30 天
+export function sessionTtl(env) {
+  const d = Number(env && env.SESSION_DAYS);
+  return env && env.SESSION_DAYS !== undefined && env.SESSION_DAYS !== '' && Number.isFinite(d) && d >= 1 && d <= 365 ? Math.floor(d * 86400) : SESSION_TTL_SEC;
+}
 const MAX_BODY = 65536;
 const MIN_SECRET = 32;
 const MIN_PASSWORD = 8;
@@ -63,18 +69,37 @@ export async function signSession(secret, exp) {
   return b64urlEncode(payload) + '.' + b64urlEncode(new Uint8Array(sig));
 }
 
-export async function verifySession(secret, session, nowSec) {
-  if (typeof session !== 'string') return false;
+// 憑證有效就回到期時間（秒），無效回 0
+export async function sessionExp(secret, session, nowSec) {
+  if (typeof session !== 'string') return 0;
   const parts = session.split('.');
-  if (parts.length !== 2) return false;
+  if (parts.length !== 2) return 0;
   const payload = b64urlDecode(parts[0]), sig = b64urlDecode(parts[1]);
-  if (!payload || !sig || !payload.length || !sig.length) return false;
+  if (!payload || !sig || !payload.length || !sig.length) return 0;
   let ok;
-  try { ok = await crypto.subtle.verify('HMAC', await hmacKey(secret, ['verify']), sig, payload); } catch (e) { return false; }
-  if (!ok) return false;
+  try { ok = await crypto.subtle.verify('HMAC', await hmacKey(secret, ['verify']), sig, payload); } catch (e) { return 0; }
+  if (!ok) return 0;
   let exp;
-  try { exp = JSON.parse(new TextDecoder().decode(payload)).exp; } catch (e) { return false; }
-  return typeof exp === 'number' && Number.isFinite(exp) && exp > nowSec;
+  try { exp = JSON.parse(new TextDecoder().decode(payload)).exp; } catch (e) { return 0; }
+  return typeof exp === 'number' && Number.isFinite(exp) && exp > nowSec ? exp : 0;
+}
+export async function verifySession(secret, session, nowSec) { return (await sessionExp(secret, session, nowSec)) > 0; }
+
+// 簽一張新憑證（登入、續期共用）
+async function issue(env) {
+  const ttl = sessionTtl(env), exp = Math.floor(Date.now() / 1000) + ttl;
+  return { session: await signSession(env.SESSION_SECRET, exp), exp, ttl };
+}
+// 剩不到一半效期就續一張；舊的到期前仍有效（網頁收到新的就換掉）
+async function renewal(env, exp) {
+  return exp - Math.floor(Date.now() / 1000) < sessionTtl(env) / 2 ? issue(env) : null;
+}
+// 驗 Bearer 憑證：有效回 { session, exp }，無效回 null
+async function bearer(request, env) {
+  const m = /^Bearer (\S+)$/.exec(request.headers.get('authorization') || '');
+  const session = m ? m[1] : '';
+  const exp = await sessionExp(env.SESSION_SECRET, session, Math.floor(Date.now() / 1000));
+  return exp ? { session, exp } : null;
 }
 
 /* 定時比對密碼：以隨機金鑰對輸入做 HMAC，再用 verify（定時比較）檢查，長度不同也不洩漏 */
@@ -146,15 +171,14 @@ async function handleLogin(request, env) {
     if (ms > 0) await sleep(ms);
     return fail(request, env, 'unauthorized');
   }
-  const exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SEC;
-  return reply(request, env, { ok: true, data: { session: await signSession(env.SESSION_SECRET, exp), exp, ttl: SESSION_TTL_SEC } });
+  return reply(request, env, { ok: true, data: await issue(env) });
 }
 
 async function handleUpload(request, env) {
   if (!longEnough(env.SESSION_SECRET) || !hasBucket(env)) return misconfigured(request, env);
-  const m = /^Bearer (\S+)$/.exec(request.headers.get('authorization') || '');
-  const session = m ? m[1] : '';
-  if (!(await verifySession(env.SESSION_SECRET, session, Math.floor(Date.now() / 1000)))) return fail(request, env, 'unauthorized', 401);
+  const auth = await bearer(request, env);
+  if (!auth) return fail(request, env, 'unauthorized', 401);
+  const session = auth.session;
   if (!(await underLimit(env, session))) return fail(request, env, 'rate_limited', 429);
 
   const limit = maxBytes(env);
@@ -175,7 +199,8 @@ async function handleUpload(request, env) {
     customMetadata: { uploadedAt: now.toISOString() }
   });
   const expiresAt = new Date(now.getTime() + maxAgeMs(env)).toISOString();
-  return reply(request, env, { ok: true, data: { url: new URL(request.url).origin + '/i/' + key, key, expiresAt } });
+  const renew = await renewal(env, auth.exp);
+  return reply(request, env, { ok: true, data: Object.assign({ url: new URL(request.url).origin + '/i/' + key, key, expiresAt }, renew ? { renew } : {}) });
 }
 
 /* 只轉送格式正確的排入資料；Apps Script 那邊再驗 TOKEN、找格子 */
@@ -195,9 +220,9 @@ export function rundownBody(body) {
 
 async function handleRundown(request, env) {
   if (!longEnough(env.SESSION_SECRET)) return misconfigured(request, env);
-  const m = /^Bearer (\S+)$/.exec(request.headers.get('authorization') || '');
-  const session = m ? m[1] : '';
-  if (!(await verifySession(env.SESSION_SECRET, session, Math.floor(Date.now() / 1000)))) return fail(request, env, 'unauthorized', 401);
+  const auth = await bearer(request, env);
+  if (!auth) return fail(request, env, 'unauthorized', 401);
+  const session = auth.session;
   if (!RUNDOWN_URL_RE.test(env.RUNDOWN_URL || '') || !longEnough(env.RUNDOWN_TOKEN, 12)) return fail(request, env, 'rundown_off', 503);
   if (!(await underLimit(env, session))) return fail(request, env, 'rate_limited', 429);
   const body = rundownBody(await readJson(request));
@@ -211,7 +236,8 @@ async function handleRundown(request, env) {
   } catch (e) { j = null; }
   if (!j || typeof j !== 'object') return fail(request, env, 'rundown_failed', 502, 'Rundown 的 Apps Script 沒有回 JSON（確認部署的「誰可以存取」是「所有人」）。');
   if (!j.ok) return fail(request, env, 'rundown_failed', 502, 'Rundown：' + String(j.error || '失敗').slice(0, 200));
-  return reply(request, env, { ok: true, data: j.results ? { results: j.results } : { title: j.title, sheets: j.sheets } });
+  const renew = await renewal(env, auth.exp);
+  return reply(request, env, { ok: true, data: Object.assign(j.results ? { results: j.results } : { title: j.title, sheets: j.sheets }, renew ? { renew } : {}) });
 }
 
 async function handleImage(request, env, key) {

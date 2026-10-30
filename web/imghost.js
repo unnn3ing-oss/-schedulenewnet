@@ -1,7 +1,8 @@
 // 暫存圖床（worker/index.js）客戶端＋登入小視窗。網頁直接 fetch Worker（CORS），不經外掛。
 // GET /config → { ok, data:{ password } }；password:false＝免密碼模式（Worker 沒設 APP_PASSWORD），自動登入、不跳視窗
 //   查不到（網路錯、舊版 Worker 沒有 /config）就照要密碼處理
-// POST /login {password} → { ok, data:{ session, exp, ttl } }（失敗也是 HTTP 200 {ok:false,code,error}）
+// POST /login {password} → { ok, data:{ session, exp, ttl } }（失敗也是 HTTP 200 {ok:false,code,error}）；預設 30 天有效
+// /upload、/rundown 成功時若附 data.renew（剩不到一半效期），就換成新憑證：常用的人不用再登入
 // POST /upload（Authorization: Bearer 憑證，body＝圖片位元組）→ { ok, data:{ url, key, expiresAt } }；憑證失效回 401
 // Worker 的 ALLOWED_ORIGIN 要等於本頁的 origin（GitHub Pages：https://unnn3ing-oss.github.io），否則瀏覽器會擋 CORS。
 (function () {
@@ -54,6 +55,11 @@
     write({ session: j.data.session, exp: Number(j.data.exp) || Math.floor(Date.now() / 1000) + 43200 });
     return session();
   }
+  // Worker 續發的新憑證：格式對、而且比手上的晚到期才換
+  function renew(d) {
+    const n = d && d.renew, cur = read();
+    if (n && typeof n.session === 'string' && n.session && Number.isFinite(Number(n.exp)) && (!cur || Number(n.exp) > cur.exp)) write({ session: n.session, exp: Number(n.exp) });
+  }
 
   // 不跳視窗；免密碼模式下沒憑證或憑證失效會自己再拿一張
   async function upload(blob) {
@@ -74,6 +80,7 @@
     }
     const j = await r.json().catch(() => null);
     if (!r.ok || !j || !j.ok || !j.data || !/^https:\/\//.test(j.data.url || '')) throw err((j && j.code) || 'http_' + r.status, (j && j.error) || `圖床上傳失敗（HTTP ${r.status}）`);
+    renew(j.data);
     return j.data;
   }
 
@@ -83,7 +90,8 @@
   function hint(msg, cls) { $('ilHint').textContent = msg || ''; $('ilHint').className = 'hint' + (cls ? ' ' + cls : ''); }
   function refreshBox() {
     const s = session();
-    $('ilState').textContent = s ? `已登入，約剩 ${Math.max(1, Math.round((s.exp * 1000 - Date.now()) / 3600000))} 小時。` : '上傳圖片給後端抓取用，登入一次 12 小時有效。';
+    const h = s ? (s.exp * 1000 - Date.now()) / 3600000 : 0;
+    $('ilState').textContent = s ? `已登入，約剩 ${h >= 48 ? Math.round(h / 24) + ' 天' : Math.max(1, Math.round(h)) + ' 小時'}（常用會自動延長）。` : '上傳圖片給後端抓取用，登入一次 30 天有效，常用會自動延長。';
     $('ilLogout').hidden = !s;
   }
   // 開視窗；回傳 Promise：登入成功 resolve、取消 reject(need_login)。免密碼模式直接登入、不開視窗
@@ -133,5 +141,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
   checkConfig();
 
-  window.ImgHost = { BASE, session, login, logout, upload, ensureUpload, prompt, cancel, isOpen, passwordFree, checkConfig, onChange: fn => listeners.push(fn) };
+  window.ImgHost = { BASE, session, login, logout, renew, upload, ensureUpload, prompt, cancel, isOpen, passwordFree, checkConfig, onChange: fn => listeners.push(fn) };
 })();
