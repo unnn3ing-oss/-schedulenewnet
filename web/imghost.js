@@ -1,4 +1,6 @@
 // 暫存圖床（worker/index.js）客戶端＋登入小視窗。網頁直接 fetch Worker（CORS），不經外掛。
+// GET /config → { ok, data:{ password } }；password:false＝免密碼模式（Worker 沒設 APP_PASSWORD），自動登入、不跳視窗
+//   查不到（網路錯、舊版 Worker 沒有 /config）就照要密碼處理
 // POST /login {password} → { ok, data:{ session, exp, ttl } }（失敗也是 HTTP 200 {ok:false,code,error}）
 // POST /upload（Authorization: Bearer 憑證，body＝圖片位元組）→ { ok, data:{ url, key, expiresAt } }；憑證失效回 401
 // Worker 的 ALLOWED_ORIGIN 要等於本頁的 origin（GitHub Pages：https://unnn3ing-oss.github.io），否則瀏覽器會擋 CORS。
@@ -20,6 +22,27 @@
   const logout = () => write(null);
 
   const NET = '連不上圖床（網路問題，或 Worker 的 ALLOWED_ORIGIN 不是本頁網址）';
+
+  // ---- 免密碼模式 ----
+  let free = false, cfg = null;       // free：Worker 確認不用密碼；cfg：查詢中的 Promise（失敗就清掉，下次再查）
+  function checkConfig() {
+    if (!cfg) {
+      cfg = fetch(BASE + '/config', typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(5000) } : {})
+        .then(r => r.json())
+        .then(j => { const f = !!(j && j.ok && j.data && j.data.password === false); if (f !== free) { free = f; emit(); } return free; })
+        .catch(() => { cfg = null; return free; });
+    }
+    return cfg;
+  }
+  const passwordFree = () => free;
+  // 免密碼就直接拿憑證；要密碼回 null。Worker 改回要密碼（unauthorized）就切回密碼模式
+  async function autoLogin() {
+    if (!(await checkConfig())) return null;
+    try { return await login(''); } catch (e) {
+      if (e.code === 'unauthorized' || e.code === 'bad_request') { free = false; cfg = null; emit(); return null; }
+      throw e;
+    }
+  }
   async function login(password) {
     let r;
     try {
@@ -32,14 +55,23 @@
     return session();
   }
 
+  // 不跳視窗；免密碼模式下沒憑證或憑證失效會自己再拿一張
   async function upload(blob) {
-    const s = session();
+    const post = async s => {
+      try {
+        return await fetch(BASE + '/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + s.session, 'Content-Type': blob.type || 'image/jpeg' }, body: blob });
+      } catch (e) { throw err('network', NET); }
+    };
+    const s = session() || await autoLogin();
     if (!s) throw err('need_login');
-    let r;
-    try {
-      r = await fetch(BASE + '/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + s.session, 'Content-Type': blob.type || 'image/jpeg' }, body: blob });
-    } catch (e) { throw err('network', NET); }
-    if (r.status === 401) { logout(); throw err('need_login'); }
+    let r = await post(s);
+    if (r.status === 401) {
+      logout();
+      const again = await autoLogin();
+      if (!again) throw err('need_login');
+      r = await post(again);
+      if (r.status === 401) { logout(); throw err('need_login'); }
+    }
     const j = await r.json().catch(() => null);
     if (!r.ok || !j || !j.ok || !j.data || !/^https:\/\//.test(j.data.url || '')) throw err((j && j.code) || 'http_' + r.status, (j && j.error) || `圖床上傳失敗（HTTP ${r.status}）`);
     return j.data;
@@ -54,8 +86,10 @@
     $('ilState').textContent = s ? `已登入，約剩 ${Math.max(1, Math.round((s.exp * 1000 - Date.now()) / 3600000))} 小時。` : '上傳圖片給後端抓取用，登入一次 12 小時有效。';
     $('ilLogout').hidden = !s;
   }
-  // 開視窗；回傳 Promise：登入成功 resolve、取消 reject(need_login)
-  function prompt(reason) {
+  // 開視窗；回傳 Promise：登入成功 resolve、取消 reject(need_login)。免密碼模式直接登入、不開視窗
+  async function prompt(reason) {
+    const s = await autoLogin();
+    if (s) return s;
     const p = new Promise((resolve, reject) => waiting.push({ resolve, reject }));
     if (box().hidden) {
       box().hidden = false;
@@ -97,6 +131,7 @@
     box().addEventListener('mousedown', e => { if (e.target === box()) cancel(); });
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire); else wire();
+  checkConfig();
 
-  window.ImgHost = { BASE, session, login, logout, upload, ensureUpload, prompt, cancel, isOpen, onChange: fn => listeners.push(fn) };
+  window.ImgHost = { BASE, session, login, logout, upload, ensureUpload, prompt, cancel, isOpen, passwordFree, checkConfig, onChange: fn => listeners.push(fn) };
 })();

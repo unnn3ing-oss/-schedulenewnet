@@ -430,7 +430,7 @@
   modal.addEventListener('mousedown', e => { if (!menu.hidden || !pop.hidden) if (!e.target.closest('.menu,.timepop,.pg-mode')) closePops(); });
 
   // ---- 圖床：預覽與送出共用同一次上傳（照片／貼圖沒變就不重傳）----
-  // 背景預先上傳：照片／貼圖停手 PRE_UPLOAD_MS 後就先傳（已登入圖床才傳，不跳登入視窗），送出時直接用
+  // 背景預先上傳：照片／貼圖停手 PRE_UPLOAD_MS 後就先傳（已登入圖床或免密碼模式才傳，不跳登入視窗），送出時直接用
   const PRE_UPLOAD_MS = 1500, URL_MARGIN_MS = 10 * 60000;
   let editorVer = 0, upCache = null, upPending = null, preTimer = 0;
   const cacheOk = () => upCache && upCache.ver === editorVer && !(upCache.exp && Date.parse(upCache.exp) - Date.now() < URL_MARGIN_MS);
@@ -455,14 +455,14 @@
   function schedulePreUpload() {
     clearTimeout(preTimer);
     preTimer = setTimeout(() => {
-      if (overlay.hidden || state.mode === 'text' || !Editor.hasImage() || !ImgHost.session() || cacheOk()) return;
+      if (overlay.hidden || state.mode === 'text' || !Editor.hasImage() || !(ImgHost.session() || ImgHost.passwordFree()) || cacheOk()) return;
       uploadNow(true).catch(() => { /* 背景失敗不打擾；送出時會再傳並顯示原因 */ });
     }, PRE_UPLOAD_MS);
   }
   function renderImgPill() {
-    const s = ImgHost.session();
-    $('imgPill').className = 'pill img-pill ' + (s ? 'ok' : 'warn');
-    $('imgText').textContent = s ? '圖床已登入' : '圖床未登入';
+    const s = ImgHost.session(), free = ImgHost.passwordFree();   // 免密碼模式：不用登入，顯示已連線
+    $('imgPill').className = 'pill img-pill ' + (s || free ? 'ok' : 'warn');
+    $('imgText').textContent = free ? '圖床已連線' : s ? '圖床已登入' : '圖床未登入';
     $('imgPill').setAttribute('aria-label', $('imgText').textContent);
   }
   ImgHost.onChange(renderImgPill);

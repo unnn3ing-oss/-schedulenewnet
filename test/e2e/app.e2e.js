@@ -296,6 +296,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await fillBothModes(`http://localhost:${server.address().port}`);
   await captionFlow(`http://localhost:${server.address().port}`);
   await installGuide(`http://localhost:${server.address().port}`);
+  await noPasswordFlow(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -359,18 +360,20 @@ ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w
   });
 };
 
-// 模擬圖床 Worker（/login、/upload），回傳計數
-async function mockWorker(ctx, origin) {
-  const worker = { logins: 0, uploads: 0, auths: [], rundown: [] };
+// 模擬圖床 Worker（/login、/upload），回傳計數；noPassword：模擬沒設 APP_PASSWORD（/config 回 password:false，/login 不看密碼）
+// 預設沒有 /config（404），網頁照要密碼處理
+async function mockWorker(ctx, origin, { noPassword } = {}) {
+  const worker = { logins: 0, configs: 0, uploads: 0, auths: [], rundown: [] };
   await ctx.route(IMG_BASE + '/**', async route => {
     const req = route.request(), u = new URL(req.url());
     const cors = { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Vary': 'Origin' };
     const send = (status, obj) => route.fulfill({ status, headers: Object.assign({ 'Content-Type': 'application/json;charset=utf-8' }, cors), body: JSON.stringify(obj) });
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors });
+    if (u.pathname === '/config' && noPassword) { worker.configs++; return send(200, { ok: true, data: { password: false } }); }
     if (u.pathname === '/login') {
       worker.logins++;
       const b = JSON.parse(req.postData() || '{}');
-      if (b.password !== 'right-password') return send(200, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
+      if (!noPassword && b.password !== 'right-password') return send(200, { ok: false, code: 'unauthorized', error: '密碼不正確或登入已過期。' });
       return send(200, { ok: true, data: { session: 'sess-1', exp: Math.floor(Date.now() / 1000) + 43200, ttl: 43200 } });
     }
     if (u.pathname === '/upload') {
@@ -1293,5 +1296,64 @@ async function installGuide(origin) {
   assert(await f5.isHidden('#deployBtn') && await f5.isHidden('#deployOverlay'), '嵌在側邊欄：不顯示安裝插件、不跳教學');
   await panel.close();
   ok('嵌在外掛側邊欄（iframe）：不顯示「安裝插件」、不自動跳教學');
+  await browser.close();
+}
+
+// ===== 圖床免密碼模式（Worker 沒設 APP_PASSWORD）：自動登入，不跳密碼視窗 =====
+async function noPasswordFlow(origin) {
+  console.log('\n  圖床免密碼模式');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  // 密碼視窗只要打開過一次就記下來
+  await ctx.addInitScript(() => document.addEventListener('DOMContentLoaded', () => {
+    const box = document.getElementById('imgLogin');
+    new MutationObserver(() => { if (!box.hidden) window.__dlgShown = true; }).observe(box, { attributes: true });
+  }));
+  const worker = await mockWorker(ctx, origin, { noPassword: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  await page.goto(origin + '/index.html');
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  await page.waitForFunction(() => document.getElementById('imgText').textContent === '圖床已連線');
+  assert(await page.evaluate(() => document.getElementById('imgPill').classList.contains('ok')));
+  assert.strictEqual(worker.logins, 0, '還沒要上傳就不先登入');
+  ok('免密碼模式：圖床顯示「已連線」，不用點');
+
+  // 留著舊憑證（例如 Worker 換過 SESSION_SECRET）→ 背景上傳 401 → 自動重拿憑證再傳
+  await page.evaluate(() => localStorage.setItem('snn.imghost.v1', JSON.stringify({ session: 'sess-old', exp: Math.floor(Date.now() / 1000) + 43200 })));
+  await page.reload();
+  await page.waitForFunction(() => document.getElementById('imgText').textContent === '圖床已連線');
+  await page.click('#newBtn');
+  await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
+  await page.waitForFunction(() => Editor.hasImage());
+  await page.fill('#title', '免密碼模式測試\n背景上傳');
+  for (let i = 0; i < 40 && worker.uploads === 0; i++) await page.waitForTimeout(100);
+  assert.strictEqual(worker.uploads, 1, '沒按任何東西就在背景上傳');
+  assert.deepStrictEqual(worker.auths, ['Bearer sess-old', 'Bearer sess-1'], '舊憑證 401 後自動重拿');
+  assert.strictEqual(worker.logins, 1);
+  ok('免密碼模式：背景上傳自動登入，憑證失效自動重拿');
+
+  // 登出（或過期）後按預覽：直接登入上傳，不跳視窗
+  await page.evaluate(() => ImgHost.logout());
+  await page.setInputFiles('#fileInput', path.join(WEB, 'test-image.jpg'));
+  await page.waitForFunction(() => Editor.hasImage());
+  await page.click('#previewBtn');
+  await page.waitForSelector('#bePrevImg:not([hidden])');
+  for (let i = 0; i < 40 && worker.uploads < 2; i++) await page.waitForTimeout(100);
+  assert.strictEqual(worker.uploads, 2);
+  assert.strictEqual(worker.logins, 2);
+  const render = (await page.evaluate(() => window.__calls)).filter(c => c.path === '/render').pop().body;
+  assert.strictEqual(render.image_url, `${IMG_BASE}/i/${'2'.repeat(32)}.jpg`);
+  // 點圖床狀態也只是安靜地拿憑證（新增發文視窗蓋住頂列，直接觸發 click）
+  await page.evaluate(() => { ImgHost.logout(); document.getElementById('imgPill').click(); });
+  await page.waitForFunction(() => !!ImgHost.session());
+  assert.strictEqual(await page.textContent('#imgText'), '圖床已連線');
+  assert.strictEqual(await page.evaluate(() => !!window.__dlgShown), false, '從頭到尾沒跳密碼視窗');
+  assert(await page.isHidden('#imgLogin'));
+  ok('免密碼模式：預覽、點狀態都直接登入，不跳密碼視窗');
+  assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   await browser.close();
 }
