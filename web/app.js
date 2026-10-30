@@ -743,9 +743,11 @@
     const sent = C.pages.map(p => p.code).filter(c => /^(ok|fail)$/.test(state.pages[c].status));
     const failed = sent.filter(c => state.pages[c].status === 'fail');
     const sum = SendFlow.summary(sent.map(c => state.pages[c].status));
-    const base = failed.length ? sum + '：' + failed.map(c => `${labelOf(c)} ${state.pages[c].result.error}`).join('；') : sum + '・要發下一篇請按「清空頁面」';
-    sendMsg(base + (rd.msg ? '｜' + rd.msg : ''), failed.length || rd.bad ? 'bad' : 'ok');
+    const base = failed.length ? sum + '：' + failed.map(c => `${labelOf(c)} ${state.pages[c].result.error}`).join('；') : sum;
+    const full = base + (rd.msg ? '｜' + rd.msg : '');
+    sendMsg(full, failed.length || rd.bad ? 'bad' : 'ok');
     if (failed.length) toast(`${failed.length} 台送出失敗`, { label: '重試', fn: () => resendCodes(failed) });
+    else showDone(full);   // 全部成功（Rundown 沒寫好也算，訊息放進彈窗）：問要回列表還是再發一篇
   }
   // 送出進度條：null＝收起來
   function progress(done, total) {
@@ -794,11 +796,18 @@
     confirmFn = fn;
     $('confirm').hidden = false; $('cfStay').focus();
   }
+  // 送出成功彈窗：預設（焦點、Enter）是「再發一篇」；兩個都會清掉內容，紀錄已在送出時存好
+  function showDone(body) {
+    closePops();
+    $('dnBody').textContent = body;
+    $('doneDlg').hidden = false; $('dnAgain').focus();
+  }
   function isDirty() {
     return !!($('url').value.trim() || getLines().length || $('caption').value.trim() || Editor.hasContent());
   }
   const allSent = () => C.pages.some(p => state.pages[p.code].status === 'ok') && !pending().length;
   function resetAll() {
+    $('doneDlg').hidden = true;
     $('url').value = ''; $('caption').value = ''; titleEl.value = ''; $('slug').value = ''; hint(''); capHint('');
     state.articleId = ''; state.summary = '';
     cap.auto = cap.ai = ''; cap.title = null; Article.learnSeps('', []);
@@ -818,7 +827,7 @@
     $('url').focus();
   }
   function closeModal() {
-    $('confirm').hidden = true; overlay.hidden = true; document.body.classList.remove('locked');
+    $('confirm').hidden = true; $('doneDlg').hidden = true; overlay.hidden = true; document.body.classList.remove('locked');
     resetAll();
     if (state.openedBy && state.openedBy.focus) state.openedBy.focus();
   }
@@ -859,6 +868,8 @@
   $('closeBtn').addEventListener('click', requestClose);
   $('cfStay').addEventListener('click', () => { $('confirm').hidden = true; $('closeBtn').focus(); });
   $('cfLeave').addEventListener('click', () => (confirmFn || closeModal)());
+  $('dnList').addEventListener('click', closeModal);
+  $('dnAgain').addEventListener('click', () => { resetAll(); $('url').focus(); });
   overlay.addEventListener('mousedown', e => { if (e.target === overlay) requestClose(); });
 
   document.addEventListener('keydown', e => {
@@ -869,6 +880,7 @@
       if (login) { ImgHost.cancel(); return; }
       if (rdSet) { Rundown.close(); $('rdSetBtn').focus(); return; }
       if (!$('confirm').hidden) { $('confirm').hidden = true; return; }
+      if (!$('doneDlg').hidden) { $('doneDlg').hidden = true; $('clearBtn').focus(); return; }   // 只關彈窗、內容留著看結果
       if (Editor.fxOpen()) { Editor.closeFx(true); return; }
       if (!menu.hidden || !pop.hidden) { const c = popFor; closePops(); if (c) pgEls[c].mode.focus(); return; }
       if (flow.state === 'armed') { flow.seq++; setFlow({ type: 'outside' }); sendMsg('已取消，要送出請再按一次'); sendBtn.focus(); return; }
@@ -876,8 +888,8 @@
       return;
     }
     if (e.key !== 'Tab') return;
-    // 焦點鎖在最上層：圖床登入 > 確認視窗 > 彈窗
-    const scope = login ? $('imgLogin') : rdSet ? $('rdDlg') : !$('confirm').hidden ? $('confirm') : modal;
+    // 焦點鎖在最上層：圖床登入 > 確認視窗／送出成功 > 彈窗
+    const scope = login ? $('imgLogin') : rdSet ? $('rdDlg') : !$('confirm').hidden ? $('confirm') : !$('doneDlg').hidden ? $('doneDlg') : modal;
     const f = [...scope.querySelectorAll('a[href],button,input,textarea,select,[tabindex]:not([tabindex="-1"])')]
       .filter(el => !el.disabled && !el.closest('[hidden]') && el.offsetParent !== null && el.type !== 'file');
     if (!f.length) return;

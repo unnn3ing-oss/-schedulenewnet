@@ -645,6 +645,7 @@ async function prB(origin) {
   assert.match(await pg(0).locator('.pg-mode').textContent(), /已發布 ↗/);
   assert.match(await pg(2).locator('.pg-mode').textContent(), /✓ 排程/);
   assert(await page.isVisible('#clearBtn'));
+  assert(await page.isHidden('#doneDlg'), '有台失敗：不跳送出成功彈窗');
   await page.screenshot({ path: path.join(SHOTS, 'prB-result-fail.png') });
   ok('逐台送出 payload 正確；氣象 502 HTML 顯示精簡錯誤與重送鈕；已截圖 prB-result-fail.png');
 
@@ -656,6 +657,7 @@ async function prB(origin) {
   assert.strictEqual(worker.uploads, 1);
   assert.strictEqual((await calls()).filter(c => c.path === '/guard/check').length, 3, '內容沒改：重送不重判');
   assert.match(await page.textContent('#sendMsg'), /3 台成功/);
+  assert(!/清空頁面/.test(await page.textContent('#sendMsg')), '成功訊息不再叫人按清空頁面');
   assert.strictEqual(await page.locator('.pg .retry:visible').count(), 0);
   const recs = await page.evaluate(() => JSON.parse(localStorage.getItem('snn.records.v1')));
   assert.strictEqual(recs.length, 1);
@@ -663,6 +665,20 @@ async function prB(origin) {
   assert.strictEqual(recs[0].pages[0].link, 'https://www.facebook.com/123_news');
   assert.strictEqual(recs[0].pages[1].schedule, tomorrow + 'T21:30');
   ok('只重送失敗的台；本機紀錄 1 筆、3 台都成功');
+
+  // 全部成功：跳「送出成功」彈窗，焦點在「再發一篇」；Esc 只關彈窗、內容留著
+  await page.waitForSelector('#doneDlg:not([hidden])');
+  assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'dnAgain', '預設按鈕是再發一篇');
+  assert.match(await page.textContent('#dnBody'), /3 台成功/);
+  assert.deepStrictEqual(await page.$$eval('#doneDlg button', bs => bs.map(b => b.textContent)), ['回到列表', '再發一篇']);
+  await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
+  assert(await page.evaluate(() => document.getElementById('doneDlg').contains(document.activeElement)), 'Tab 焦點鎖在彈窗內');
+  await page.screenshot({ path: path.join(SHOTS, 'done-dialog.png') });
+  await page.keyboard.press('Escape');
+  assert(await page.isHidden('#doneDlg'));
+  assert(await page.isVisible('#modal'));
+  assert.notStrictEqual(await page.inputValue('#url'), '', 'Esc 不清內容');
+  ok('全部成功跳「送出成功」彈窗、焦點在再發一篇、Tab 鎖在彈窗內；Esc 只關彈窗不清內容；已截圖 done-dialog.png');
 
   // 全部成功：清空頁面不需確認
   await page.click('#clearBtn');
@@ -731,15 +747,26 @@ async function prB(origin) {
   const rdRec = await page.evaluate(() => Records.list()[0].pages.find(p => p.code === 'news').rundown);
   assert.deepStrictEqual([rdRec.ok, rdRec.cell], [true, '2026/10!AB107']);
   ok('Rundown：送出成功後寫入（' + rdMsg.split('｜')[1] + '）');
-  await page.fill('#slug', '自訂 SLUG');
-  await page.click('#clearBtn');
-  assert.strictEqual(await page.inputValue('#slug'), '');
+  // Rundown 沒全寫好但各台都成功：照樣跳彈窗，Rundown 訊息寫在彈窗裡；Enter＝再發一篇
+  await page.waitForSelector('#doneDlg:not([hidden])');
+  assert.match(await page.textContent('#dnBody'), /3 台成功｜Rundown：.*已經排滿/);
+  assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'dnAgain');
+  const recN = await page.evaluate(() => Records.list().length);
+  await page.keyboard.press('Enter');
+  assert(await page.isHidden('#doneDlg'));
+  assert(await page.isVisible('#modal'), '再發一篇：新增發文留著');
+  assert.deepStrictEqual([await page.inputValue('#url'), await page.inputValue('#title'), await page.inputValue('#caption'), await page.inputValue('#slug')], ['', '', '', '']);
+  assert.strictEqual(await page.locator('.pg.done').count(), 0);
+  assert.strictEqual(await page.evaluate(() => Editor.hasImage()), false, '照片也清掉');
+  assert.strictEqual(await page.evaluate(() => document.activeElement.id), 'url', '游標回到文章網址');
+  assert.strictEqual(await page.evaluate(() => Records.list().length), recN, '清空不影響送出紀錄');
+  ok('Rundown 沒全寫好也跳彈窗並附 Rundown 訊息；Enter＝再發一篇：清空內容、留在新增發文、紀錄還在');
   await page.click('#rdOn');
   assert.strictEqual(await page.evaluate(() => Rundown.enabled()), false);
   assert(await page.isDisabled('#slug'), '關閉時 SLUG 停用');
   await page.click('#rdOn'); assert(await page.isEnabled('#slug')); await page.click('#rdOn');
   await page.click('[data-frame="news"]');
-  ok('Rundown 開關可關閉（SLUG 跟著停用）；清空頁面一併清 SLUG');
+  ok('Rundown 開關可關閉（SLUG 跟著停用）；再發一篇一併清 SLUG');
 
   // 手機：純文字底圖 → 預覽 /render_text_card → 泡泡
   await page.setViewportSize({ width: 390, height: 844 });
@@ -770,6 +797,14 @@ async function prB(origin) {
   assert.deepStrictEqual(last.guard, { check_id: 'chk-1', level: 'yellow', ack: false });
   assert.strictEqual(worker.uploads, upText, '純文字不上傳圖床');
   ok('手機：純文字預覽、黃燈泡泡在畫面內、送出 text_card；已截圖 prB-mobile.png');
+  // 回到列表：關閉新增發文並清空
+  await page.waitForSelector('#doneDlg:not([hidden])');
+  await page.click('#dnList');
+  assert(!(await page.isVisible('#modal')), '回到列表：關閉新增發文');
+  assert(await page.isHidden('#doneDlg'));
+  assert.deepStrictEqual([await page.inputValue('#url'), await page.inputValue('#title'), await page.inputValue('#caption')], ['', '', '']);
+  assert.strictEqual(await page.evaluate(() => App.flow.state), 'idle');
+  ok('送出成功按「回到列表」：關閉新增發文並清空內容');
 
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   ok('PR B 沒有 page error / console error');
