@@ -125,13 +125,11 @@ function rdRowTimes(V, blk, x) {
 // 目標格可填（空白／預留格）就直接填；已有稿子就插在這格，這個日期欄往下推到第一個可填的格子為止
 // 插入時隔天那欄若是分鐘碼，同一段分鐘碼也往下推一格（被推的稿子時間不變），新的那格寫 code（目標時間的分鐘碼，15:13 → 13）
 // 分鐘碼在別欄（隔天欄已填內容）或整個區塊沒有分鐘碼時照舊只看時間順序，不寫分鐘碼（別天的欄不能動）
-// 回傳 { status:'exists'|'write'|'insert', row, shiftTo?, codeCol?, code?, addRow?, time } 或 { error }
+// 不檢查重複：同一篇（不論 /文字/、/圖文/）已經在格子裡也照樣排進去，有內容的格子一律往下推、不覆蓋；只有沒 ID 的「/文字/」「/圖文/」預留格會被直接填掉
+// 回傳 { status:'write'|'insert', row, shiftTo?, codeCol?, code?, addRow?, time } 或 { error }
 function rdPlan(V, x, page, hhmm, text) {
   var sec = rdFindSection(V, page);
   if (!sec) return { error: '找不到「' + (RD_SECTIONS[page] || [page])[0] + '」區段' };
-  var key = text.split('/').slice(0, 2).join('/') + '/';
-  if (/^\d{6,8}\/[^/]+\/$/.test(key))
-    for (var r0 = sec.start; r0 < sec.end; r0++) if (rdStr(V[r0][x]).indexOf(key) === 0) return { status: 'exists', row: r0 };
   var blocks = rdBlocks(V, sec);
   if (!blocks.length) return { error: '區段裡沒有時段' };
   var want = +hhmm.slice(0, 2) * 60 + +hhmm.slice(3, 5), blk = blocks[0];
@@ -209,7 +207,6 @@ function rdAddOne(ss, names, en) {
   var p = rdPlan(V, x, en.page, en.time, text);
   if (p.error) return { ok: false, page: en.page, error: p.error };
   var cell = name + '!' + rdA1(p.row, x);
-  if (p.status === 'exists') return { ok: true, page: en.page, status: 'exists', cell: cell };
   if (p.addRow != null) sh.insertRowAfter(p.addRow);   // 在區塊最後一列（1 起算＝p.addRow）下面插一整列，格式沿用上一列
   if (p.status === 'insert') {
     sh.getRange(p.row + 1, x + 1, p.shiftTo - p.row, 1).moveTo(sh.getRange(p.row + 2, x + 1));
