@@ -178,9 +178,16 @@ test('隔天欄已填內容（分鐘碼在別欄）：只推這一欄，不動�
   assert.equal('codeCol' in p, false);
 });
 
-test('同一天同區段已有同篇圖文就不重寫；文字稿不算重複', () => {
-  assert.deepEqual(RD.rdPlan(rows, C, 'news', '08:40', '4041548/圖文/別的'), { status: 'exists', row: 6 });
-  assert.notEqual(RD.rdPlan(rows, C, 'news', '08:40', '4041477/圖文/手錶').status, 'exists');
+test('不檢查重複：同篇（/圖文/ 或 /文字/）已在格子裡也照樣排入，有 ID 的格子往下推、不覆蓋', () => {
+  for (const t of ['4041548/圖文/別的', '4041477/圖文/手錶', '4041477/文字/手錶']) {
+    const g = rows.map(r => r.slice()), before = g.map(r => r[C]).filter(v => /^\d+\//.test(v));
+    const p = RD.rdPlan(g, C, 'news', '08:40', t);
+    assert.ok(p.status === 'write' || p.status === 'insert', t);
+    if (p.status === 'write') assert.ok(!/^\d+\//.test(g[p.row][C]), '只填空格或預留格');
+    apply(g, C, p, t);
+    const after = g.map(r => r[C]);
+    before.forEach(v => assert.ok(after.includes(v), '原有稿子還在：' + v));
+  }
 });
 
 test('區段尾端的 0000 不會搶走白天的時間；排滿就在區塊下面插一整列', () => {
