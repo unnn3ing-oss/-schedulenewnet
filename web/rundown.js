@@ -9,12 +9,13 @@
   const TYPE = '圖文';
   const pad = n => String(n).padStart(2, '0');
 
-  // 標題最前面的「新/」「最新/」「快訊/」是標籤不是內容，抓 SLUG 時先拿掉（半形「/」或全形「／」都算）
-  const TAG_PREFIX = /^\s*(?:最新|快訊|新)\s*[\/／]\s*/;
-  // 沒填 SLUG：標題第一行去掉上面的標籤後，去空白前 4 字（「/」會打亂格式，一併拿掉）
+  // 標題第一行有「/」（半形或全形「／」，例：「快訊/」「最新/」「新/」）就只抓第一個斜線後面的字，前面是標籤不是內容；
+  // 斜線後面沒字就照舊。沒填 SLUG 時取去空白後的前 4 字（「/」會打亂格式，其餘的也一併拿掉）
   function defaultSlug(lines) {
-    const first = ((Array.isArray(lines) ? lines : [lines]).find(l => String(l || '').trim()) || '').replace(TAG_PREFIX, '');
-    return Array.from(String(first).replace(/[\s/]+/g, '')).slice(0, 4).join('');
+    let first = String((Array.isArray(lines) ? lines : [lines]).find(l => String(l || '').trim()) || '');
+    const cut = first.search(/[\/／]/);
+    if (cut >= 0 && first.slice(cut + 1).replace(/[\s\/／]+/g, '')) first = first.slice(cut + 1);
+    return Array.from(first.replace(/[\s\/／]+/g, '')).slice(0, 4).join('');
   }
   const cleanSlug = s => String(s == null ? '' : s).replace(/[\s/]+/g, '');
   const entryText = (articleId, slug) => `${articleId || ''}/${TYPE}/${slug}`;
