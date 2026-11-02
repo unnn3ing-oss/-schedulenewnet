@@ -212,6 +212,10 @@ test('網站端：SLUG 預設標題前 4 字；格式 文章ID/圖文/SLUG', () 
   assert.equal(W.defaultSlug(['新/ 颱風假北北基桃']), '颱風假北', '「新/」後有空格');
   assert.equal(W.defaultSlug(['新聞快訊颱風假']), '新聞快訊', '沒有斜線就照舊');
   assert.equal(W.defaultSlug(['颱風假最新/北北基桃']), '北北基桃', '不管斜線前面是什麼，都抓斜線後面');
+  assert.equal(W.defaultSlug(['》颱風假，北北基桃']), '颱風假北', '標點、符號都排除');
+  assert.equal(W.defaultSlug(['「天氣」！要降溫#']), '天氣要降', '全形引號、驚嘆號、井字號');
+  assert.equal(W.defaultSlug(['ＡＢ１２》３４']), 'ＡＢ１２', '全形英數留著');
+  assert.equal(W.cleanSlug(' 颱風》/假！ '), '颱風假', '手動填的 SLUG 也排除標點符號');
   assert.equal(W.defaultSlug(['快訊/']), '快訊', '斜線後面沒字、也沒有下一行就照舊');
   assert.equal(W.defaultSlug(['快訊', '颱風假北北基桃']), '颱風假北', '第一行只有「快訊」就抓第二行');
   assert.equal(W.defaultSlug(['最新/', '', '颱風假北北基桃']), '颱風假北', '「最新/」單獨一行、中間有空行');
