@@ -207,6 +207,11 @@ const W = require('../web/rundown.js');
 test('網站端：SLUG 預設標題前 4 字；格式 文章ID/圖文/SLUG', () => {
   assert.equal(W.defaultSlug(['颱風假 最新！北北基桃', '明天照常']), '颱風假最');
   assert.equal(W.defaultSlug(['', 'a/b c d']), 'abcd');
+  assert.equal(W.defaultSlug(['快訊/颱風假北北基桃']), '颱風假北', '去掉開頭的「快訊/」');
+  assert.equal(W.defaultSlug(['最新／颱風假北北基桃']), '颱風假北', '全形斜線、「最新」');
+  assert.equal(W.defaultSlug(['新/ 颱風假北北基桃']), '颱風假北', '「新/」後有空格');
+  assert.equal(W.defaultSlug(['新聞快訊颱風假']), '新聞快訊', '沒有斜線就不是標籤，照舊');
+  assert.equal(W.defaultSlug(['颱風假最新/北北基桃']), '颱風假最', '中間的不動');
   assert.equal(W.entryText('4041548', '颱風假'), '4041548/圖文/颱風假');
   assert.equal(W.cleanSlug(' 颱風 /假 '), '颱風假');
 });

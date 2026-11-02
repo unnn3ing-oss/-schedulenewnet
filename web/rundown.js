@@ -9,9 +9,11 @@
   const TYPE = '圖文';
   const pad = n => String(n).padStart(2, '0');
 
-  // 沒填 SLUG：標題第一行去空白後前 4 字（「/」會打亂格式，一併拿掉）
+  // 標題最前面的「新/」「最新/」「快訊/」是標籤不是內容，抓 SLUG 時先拿掉（半形「/」或全形「／」都算）
+  const TAG_PREFIX = /^\s*(?:最新|快訊|新)\s*[\/／]\s*/;
+  // 沒填 SLUG：標題第一行去掉上面的標籤後，去空白前 4 字（「/」會打亂格式，一併拿掉）
   function defaultSlug(lines) {
-    const first = (Array.isArray(lines) ? lines : [lines]).find(l => String(l || '').trim()) || '';
+    const first = ((Array.isArray(lines) ? lines : [lines]).find(l => String(l || '').trim()) || '').replace(TAG_PREFIX, '');
     return Array.from(String(first).replace(/[\s/]+/g, '')).slice(0, 4).join('');
   }
   const cleanSlug = s => String(s == null ? '' : s).replace(/[\s/]+/g, '');
