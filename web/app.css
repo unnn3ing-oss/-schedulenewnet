@@ -168,6 +168,8 @@ input.tp-date{width:auto;flex:1;min-width:0;font-weight:700}
 .rec-tabs .n{font-size:12px;font-variant-numeric:tabular-nums;opacity:.8}
 .rec-tabs .n:empty{display:none}
 .rec-tabs button.has-fail .n{display:inline-block;min-width:20px;padding:0 6px;border-radius:999px;background:#fde2e2;color:#9b1c1c;opacity:1}
+.rec-clean{display:flex;align-items:center;justify-content:space-between;gap:8px 16px;flex-wrap:wrap;padding:6px 0 10px;font-size:13px}.rec-auto{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.rp-ack{display:flex;align-items:center;gap:6px;margin:10px 0;font-size:14px;cursor:pointer}
 .rec-list{display:flex;flex-direction:column}
 .rec{display:grid;grid-template-columns:72px minmax(0,1fr) minmax(0,auto);gap:14px;align-items:center;padding:12px 4px}
 .rec+.rec{border-top:1px solid var(--border)}

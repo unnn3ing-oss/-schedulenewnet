@@ -14,6 +14,7 @@
   const KEY = 'snn.records.v1';
   const MAX = 200;                 // 最多留 200 筆，舊的丟掉
   const PAGE_SIZE = 20;            // 列表每頁 20 筆
+  const CLEAN_DAYS = 7;            // 列表預設清掉 7 天前已發布的紀錄
   const THUMB_DAYS = 7;            // 縮圖只留 7 天
   const THUMB_KEEP = 60;           // 最多 60 筆帶縮圖（最新的）
   const THUMB_CHARS = 28000;       // 縮圖 dataURL 上限（約 20 KB）
@@ -185,6 +186,27 @@
     return `newsnet-${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}.png`;
   }
 
+  // ---- 清除舊紀錄 ----
+  // 清除對象：已發布（含推測已發布）、且最後動靜（送出／重送／排程時間）超過 days 天的紀錄。
+  // 還有排程中、失敗（可能要重送）的台、或沒有任何台的紀錄一律保留。只動本機紀錄，不影響 FB 上的貼文。
+  function lastActivity(rec) {
+    let t = time(rec.updatedAt) || time(rec.at);
+    for (const p of rec.pages || []) {
+      t = Math.max(t, time(p.sentAt));
+      if (p.kind === 'sched') { const d = parseSchedule(p.schedule); if (d) t = Math.max(t, d.getTime()); }
+    }
+    return t;
+  }
+  function expired(list, now, days) {
+    const limit = now.getTime() - (days || CLEAN_DAYS) * DAY;
+    return list.filter(r => {
+      const pages = r.pages || [];
+      if (!pages.length || !lastActivity(r)) return false;
+      const st = pages.map(p => pageState(p, now));
+      return lastActivity(r) < limit && st.some(x => x === 'published' || x === 'due') && !st.some(x => x === 'scheduled' || x === 'failed' || x === 'unknown');
+    });
+  }
+
   // ---- 儲存衛生 ----
   // 新的在前、最多 MAX 筆；縮圖只留 7 天內且最新 THUMB_KEEP 筆；成功的台不會再重送，拿掉 body
   function prune(all, now) {
@@ -253,18 +275,22 @@
       const all = list(), rest = all.filter(r => r.id !== id);
       return rest.length !== all.length && save(rest);
     }
-    return { list, get, add, update, updatePage, remove, error: () => lastError, onChange: fn => listeners.push(fn),
+    function removeMany(ids) {
+      const set = new Set(ids), all = list(), rest = all.filter(r => !set.has(r.id));
+      return rest.length !== all.length && save(rest);
+    }
+    return { list, get, add, update, updatePage, remove, removeMany, error: () => lastError, onChange: fn => listeners.push(fn),
       clear: () => { try { store.removeItem(KEY); } catch (e) { /* 無妨 */ } listeners.forEach(fn => fn()); } };
   }
 
-  const api = { KEY, MAX, PAGE_SIZE, THUMB_DAYS, THUMB_KEEP, THUMB_CHARS, TABS, create, parseSchedule, fmtMD, titleParts, modeLabel, frameLabel,
+  const api = { KEY, MAX, CLEAN_DAYS, expired, lastActivity, PAGE_SIZE, THUMB_DAYS, THUMB_KEEP, THUMB_CHARS, TABS, create, parseSchedule, fmtMD, titleParts, modeLabel, frameLabel,
     pageState, postLink, matches, filter, counts, pageCount, clampPage, slicePage, pageWindow, imageExpiry, resendCheck, validateAt, resendRequest,
     guardBodyOf, copyInput, titleText, renderRequest, copyImageCheck, imageFileName, prune, okThumb };
   if (typeof window !== 'undefined') {
     let ls = null;
     try { ls = window.localStorage; } catch (e) { /* 隱私模式等被停用 */ }
     if (ls) Object.assign(api, create(ls));
-    else Object.assign(api, { list: () => [], get: () => null, add: () => '', update: () => false, updatePage: () => false, remove: () => false, error: () => 'disabled', onChange() {}, clear() {} });
+    else Object.assign(api, { list: () => [], get: () => null, add: () => '', update: () => false, updatePage: () => false, remove: () => false, removeMany: () => false, error: () => 'disabled', onChange() {}, clear() {} });
   }
   return api;
 });

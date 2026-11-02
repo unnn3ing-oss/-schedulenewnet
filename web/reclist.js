@@ -107,6 +107,8 @@
     $('recList').replaceChildren(...Records.slicePage(list, view.page, Records.PAGE_SIZE).map(r => row(r, n)));
     $('recEmpty').hidden = all.length > 0;
     $('recTabs').hidden = !all.length;
+    $('recClean').hidden = !all.length;
+    $('recAuto').checked = autoOn();
     $('recNone').hidden = !all.length || list.length > 0;
     $('recFoot').hidden = !list.length;
     $('recCnt').textContent = `共 ${list.length} 則`;
@@ -230,7 +232,7 @@
     else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }, true);
-  [$('rsDlg'), $('rcDlg')].forEach(d => d.addEventListener('mousedown', e => { if (e.target === d) { if (d === $('rsDlg')) rs = null; hideDlg(); } }));
+  [$('rsDlg'), $('rcDlg'), $('rpDlg')].forEach(d => d.addEventListener('mousedown', e => { if (e.target === d) { if (d === $('rsDlg')) rs = null; hideDlg(); } }));
 
   // ---- 刪除紀錄（只刪本機）----
   let delId = '';
@@ -246,6 +248,42 @@
     returnTo = $('newBtn');
     hideDlg(); render();
     opts.toast(ok ? '已刪除紀錄' : '刪除失敗（瀏覽器儲存空間無法寫入）');
+  });
+
+  // ---- 清除舊紀錄：自動（預設開）＋手動一次清除（要勾「無法復原」才能按）----
+  // 只清已發布且超過 7 天的；排程中、失敗的紀錄保留。只刪這台瀏覽器的紀錄，不影響 FB 上的貼文。
+  const AUTO_KEY = 'snn.recclean.v1';
+  function autoOn() { try { const v = JSON.parse(localStorage.getItem(AUTO_KEY) || '{}'); return v.auto !== false; } catch (e) { return true; } }
+  function setAuto(on) { try { localStorage.setItem(AUTO_KEY, JSON.stringify({ auto: !!on })); } catch (e) { /* 存不了就只在這次有效 */ } }
+  function autoClean() {
+    if (!autoOn()) return;
+    const old = Records.expired(Records.list(), now(), Records.CLEAN_DAYS);
+    if (old.length && Records.removeMany(old.map(r => r.id))) opts.toast(`已自動清除 ${old.length} 筆超過 ${Records.CLEAN_DAYS} 天的已發布紀錄`);
+  }
+  $('recAuto').addEventListener('change', () => {
+    setAuto($('recAuto').checked);
+    opts.toast($('recAuto').checked ? `已開啟：之後開啟頁面時，自動清除超過 ${Records.CLEAN_DAYS} 天的已發布紀錄` : '已關閉自動清除');
+  });
+  let purgeIds = [];
+  $('recPurge').addEventListener('click', () => {
+    const old = Records.expired(Records.list(), now(), Records.CLEAN_DAYS);
+    if (!old.length) { opts.toast(`沒有超過 ${Records.CLEAN_DAYS} 天的已發布紀錄`); return; }
+    purgeIds = old.map(r => r.id);
+    const names = old.slice(0, 3).map(r => `「${Records.titleParts(r).first}」`).join('、') + (old.length > 3 ? ` 等 ${old.length} 筆` : '');
+    $('rpBody').textContent = `將刪除 ${old.length} 筆已發布超過 ${Records.CLEAN_DAYS} 天的紀錄：${names}。只會從這台瀏覽器刪掉，不會影響 FB 上的貼文；排程中和失敗的紀錄會保留。`;
+    $('rpAck').checked = false; $('rpGo').disabled = true; $('rpGo').textContent = `清除 ${old.length} 筆`;
+    showDlg($('rpDlg'), $('recPurge'), $('rpCancel'));
+  });
+  $('rpAck').addEventListener('change', () => { $('rpGo').disabled = !$('rpAck').checked; });
+  $('rpCancel').addEventListener('click', hideDlg);
+  $('rpGo').addEventListener('click', () => {
+    if ($('rpGo').disabled) return;
+    // 確認當下再算一次：只刪還符合條件、且是剛才列給你看的那幾筆
+    const still = new Set(Records.expired(Records.list(), now(), Records.CLEAN_DAYS).map(r => r.id));
+    const ids = purgeIds.filter(id => still.has(id));
+    const ok = ids.length ? Records.removeMany(ids) : true;
+    hideDlg(); render();
+    opts.toast(ok ? `已清除 ${ids.length} 筆紀錄` : '清除失敗（瀏覽器儲存空間無法寫入）');
   });
 
   // ---- 從列表重送 ----
@@ -361,10 +399,11 @@
 
   function mount(o) {
     opts = Object.assign(opts, o || {});
+    autoClean();
     Records.onChange(render);
     window.addEventListener('storage', e => { if (e.key === Records.KEY) render(); });   // 其他分頁送出
     setInterval(render, 60000);                                                          // 排程時間到了改成「已發布 ↗」或「應已發布（推測）」
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { autoClean(); render(); } });
     render();
   }
   window.RecList = { mount, render, view };

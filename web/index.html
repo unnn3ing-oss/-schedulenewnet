@@ -21,6 +21,10 @@
         <button type="button" role="tab" data-tab="all" class="active" aria-selected="true">全部 <span class="n"></span></button><button type="button" role="tab" data-tab="sched" aria-selected="false">已排程 <span class="n"></span></button><button type="button" role="tab" data-tab="pub" aria-selected="false">已發布 <span class="n"></span></button><button type="button" role="tab" data-tab="fail" aria-selected="false">失敗 <span class="n"></span></button>
       </div>
     </div>
+    <div class="rec-clean" id="recClean" hidden>
+      <label class="rec-auto"><input type="checkbox" id="recAuto"> 自動清除 7 天前已發布的紀錄</label>
+      <button class="btn sm ghost" id="recPurge" type="button">清除 7 天前已發布…</button>
+    </div>
     <div class="rec-list" id="recList" role="tabpanel" aria-labelledby="recTitle"></div>
     <p class="muted rec-none" id="recNone" hidden>這個分類沒有紀錄</p>
     <div class="empty" id="recEmpty"><div class="empty-ic" aria-hidden="true">📭</div><p><b>還沒有送出紀錄</b></p><p class="muted">按右上角「＋ 新增發文」開始。送出後的紀錄會顯示在這裡（只存在這台瀏覽器）。</p></div>
@@ -159,6 +163,11 @@
 <div class="dlg" id="rcDlg" role="alertdialog" aria-modal="true" aria-labelledby="rcTitle" hidden>
   <div class="cf-box"><h3 id="rcTitle">刪除這筆紀錄？</h3><p class="muted" id="rcBody">只會刪掉這台瀏覽器裡的紀錄，不會影響已發布或已排程的貼文。</p>
     <div class="row"><button class="btn" id="rcCancel" type="button">取消</button><button class="btn danger" id="rcGo" type="button">刪除紀錄</button></div></div>
+</div>
+<div class="dlg" id="rpDlg" role="alertdialog" aria-modal="true" aria-labelledby="rpTitle" aria-describedby="rpBody" hidden>
+  <div class="cf-box"><h3 id="rpTitle">清除 7 天前已發布的紀錄？</h3><p class="muted" id="rpBody"></p>
+    <label class="rp-ack"><input type="checkbox" id="rpAck"> 我了解這些紀錄刪除後無法復原</label>
+    <div class="row"><button class="btn" id="rpCancel" type="button">取消</button><button class="btn danger" id="rpGo" type="button" disabled>清除</button></div></div>
 </div>
 <div class="toast" id="toast" role="status" hidden></div>
 <!-- 「安裝插件」全螢幕教學（沿用 schedulenewnet-ext 網頁版；樣式與腳本放在 deploy.css／deploy.js）：

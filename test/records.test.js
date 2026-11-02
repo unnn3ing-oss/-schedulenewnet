@@ -271,3 +271,27 @@ test('prune：保留 render（只有網址與文字，很小）', () => {
   assert.deepEqual(out[0].render, render);
   assert.equal('body' in out[0].pages[0], false);
 });
+
+test('expired：只選已發布且超過天數的；排程中、失敗、沒有台的保留', () => {
+  const now = new Date('2026-11-10T12:00:00');
+  const ok = (code, extra) => Object.assign({ code, status: 'ok', kind: 'now' }, extra);
+  const rec = (id, at, pages) => ({ id, at, pages });
+  const list = [
+    rec('old', '2026-11-01T10:00:00', [ok('a')]),
+    rec('new', '2026-11-08T10:00:00', [ok('a')]),
+    rec('oldFail', '2026-11-01T10:00:00', [ok('a'), { code: 'b', status: 'fail' }]),
+    rec('oldSched', '2026-11-01T10:00:00', [ok('a', { kind: 'sched', schedule: '2026-11-12T10:00' })]),
+    rec('oldDue', '2026-10-20T10:00:00', [ok('a', { kind: 'sched', schedule: '2026-10-21T10:00' })]),
+    rec('empty', '2026-10-01T10:00:00', []),
+    rec('resent', '2026-10-01T10:00:00', [ok('a', { sentAt: '2026-11-09T10:00:00' })]),
+  ];
+  assert.deepEqual(R.expired(list, now, 7).map(r => r.id), ['old', 'oldDue']);
+});
+
+test('removeMany：一次刪多筆', () => {
+  const rec = R.create(memStore());
+  const a = rec.add({ pages: [] }), b = rec.add({ pages: [] }), c = rec.add({ pages: [] });
+  assert.ok(rec.removeMany([a, b]));
+  assert.deepEqual(rec.list().map(r => r.id), [c]);
+  assert.equal(rec.removeMany(['nope']), false);
+});
