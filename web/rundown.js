@@ -11,8 +11,11 @@
 
   // 標題第一行有「/」（半形或全形「／」，例：「快訊/」「最新/」「新/」）就只抓第一個斜線後面的字，前面是標籤不是內容；
   // 斜線後面沒字就照舊。沒填 SLUG 時取去空白後的前 4 字（「/」會打亂格式，其餘的也一併拿掉）
+  // 第一行只有「快訊」「最新」「新」這種標籤（後面可帶斜線）時，改抓下一個有字的行
+  const TAG_ONLY = /^\s*(?:最新|快訊|新)\s*[\/／]?\s*$/;
   function defaultSlug(lines) {
-    let first = String((Array.isArray(lines) ? lines : [lines]).find(l => String(l || '').trim()) || '');
+    const rows = (Array.isArray(lines) ? lines : [lines]).filter(l => String(l || '').trim());
+    let first = String(rows.find(l => !TAG_ONLY.test(l)) || rows[0] || '');
     const cut = first.search(/[\/／]/);
     if (cut >= 0 && first.slice(cut + 1).replace(/[\s\/／]+/g, '')) first = first.slice(cut + 1);
     return Array.from(first.replace(/[\s\/／]+/g, '')).slice(0, 4).join('');

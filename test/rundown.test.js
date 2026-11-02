@@ -212,7 +212,11 @@ test('網站端：SLUG 預設標題前 4 字；格式 文章ID/圖文/SLUG', () 
   assert.equal(W.defaultSlug(['新/ 颱風假北北基桃']), '颱風假北', '「新/」後有空格');
   assert.equal(W.defaultSlug(['新聞快訊颱風假']), '新聞快訊', '沒有斜線就照舊');
   assert.equal(W.defaultSlug(['颱風假最新/北北基桃']), '北北基桃', '不管斜線前面是什麼，都抓斜線後面');
-  assert.equal(W.defaultSlug(['快訊/']), '快訊', '斜線後面沒字就照舊');
+  assert.equal(W.defaultSlug(['快訊/']), '快訊', '斜線後面沒字、也沒有下一行就照舊');
+  assert.equal(W.defaultSlug(['快訊', '颱風假北北基桃']), '颱風假北', '第一行只有「快訊」就抓第二行');
+  assert.equal(W.defaultSlug(['最新/', '', '颱風假北北基桃']), '颱風假北', '「最新/」單獨一行、中間有空行');
+  assert.equal(W.defaultSlug(['快訊', '新/颱風假北北基桃']), '颱風假北', '下一行也有斜線一樣抓斜線後面');
+  assert.equal(W.defaultSlug(['快訊颱風假', '第二行']), '快訊颱風', '不是只有標籤就不跳行');
   assert.equal(W.defaultSlug(['', '快訊/颱風假北北基桃', '第二行']), '颱風假北', '取第一個有字的行');
   assert.equal(W.entryText('4041548', '颱風假'), '4041548/圖文/颱風假');
   assert.equal(W.cleanSlug(' 颱風 /假 '), '颱風假');
