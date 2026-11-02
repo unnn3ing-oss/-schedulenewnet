@@ -1332,8 +1332,9 @@ async function installGuide(origin) {
   ok('下載 ZIP：只取 extension/、路徑去掉前綴（' + await page.textContent('#deployStatus') + '）');
   await page.keyboard.press('Escape');
   assert(await page.isHidden('#deployOverlay'));
+  await page.click('#setBtn');
   await page.click('#deployBtn');
-  assert(await page.isVisible('#deployOverlay'));
+  assert(await page.isHidden('#stDlg') && await page.isVisible('#deployOverlay'), '設定裡的安裝插件：設定彈窗收起、開教學');
   await page.click('#deployNextBtn');
   assert(await page.isHidden('#deployCopyCmd'), 'Windows 不顯示 Mac 終端機指令');
   for (let i = 0; i < 3; i++) await page.click('#deployNextBtn');

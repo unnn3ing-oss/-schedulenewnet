@@ -8,7 +8,6 @@
   <div class="brand"><img class="brand-ic" src="icons/icon128.png" alt="" width="28" height="28"><span>網新<b>快速排程</b></span></div>
   <div class="spacer"></div>
   <span class="pill" id="extPill" role="status"><i class="dot"></i><span id="extText">偵測外掛中…</span></span>
-  <button class="btn ghost sm" id="deployBtn" type="button" title="安裝 Chrome 插件">🧩<span class="lbl"> 安裝插件</span></button>
   <button class="pill img-pill" id="imgPill" type="button" title="暫存圖床登入狀態"><i class="dot"></i><span id="imgText">圖床未登入</span></button>
   <button class="btn primary" id="newBtn" type="button">＋ 新增發文</button>
   <button class="btn ghost sm" id="setBtn" type="button" title="設定（清除送出紀錄）">⚙<span class="lbl"> 設定</span></button>
@@ -170,6 +169,10 @@
     <section class="st-sec"><b>手動清除</b>
       <div class="st-btns"><button class="btn sm" id="recPurge7" type="button">清除 7 天前已發布…</button><button class="btn sm danger" id="recPurgeAll" type="button">清除全部紀錄…</button></div>
       <p class="hint">只刪這台瀏覽器的紀錄，不影響 FB 上的貼文；清除前會再確認一次。</p>
+    </section>
+    <section class="st-sec st-ext"><b>Chrome 插件</b>
+      <button class="btn sm" id="deployBtn" type="button">🧩 安裝插件</button>
+      <p class="hint">網頁要透過插件才能帶著網新後台的登入狀態送出。</p>
     </section>
     <div class="row"><button class="btn primary" id="stClose" type="button">完成</button></div></div>
 </div>

@@ -266,6 +266,7 @@
   function openSettings(from) { $('recAuto').checked = autoOn(); showDlg($('stDlg'), from || $('setBtn'), $('stClose')); }
   $('setBtn').addEventListener('click', () => openSettings($('setBtn')));
   $('stClose').addEventListener('click', hideDlg);
+  $('deployBtn').addEventListener('click', hideDlg);   // 先收起設定彈窗（焦點回設定鈕），再由 deploy.js 開安裝教學
   let purge = { mode: 'old', ids: [] };
   const purgeTargets = mode => (mode === 'all' ? Records.list() : Records.expired(Records.list(), now(), Records.CLEAN_DAYS));
   function askPurge(mode) {

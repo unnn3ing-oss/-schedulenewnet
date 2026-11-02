@@ -254,7 +254,6 @@ textarea.is-skel::placeholder{color:transparent}
   .m-foot{padding:12px 16px}
   .send{width:100%;justify-content:space-between;flex-wrap:wrap}
   .img-pill span{display:none}.brand{font-size:16px}
-  #deployBtn .lbl{display:none}
   input,textarea{font-size:16px}
   /* 送出紀錄：縮圖＋標題一列，狀態換到下一列並可換行 */
   .rec{grid-template-columns:56px minmax(0,1fr);gap:4px 12px;align-items:start;padding:12px 0}
@@ -297,4 +296,4 @@ textarea.is-skel::placeholder{color:transparent}
 .rd-box > label:not(.ck):not(.switch){display:block;margin:12px 0 0;font-size:13px;font-weight:700;color:var(--muted)}
 .rd-box .switch{margin:10px 0 4px !important;font-size:14px}
 .rd-box .row{flex-wrap:wrap;gap:8px;margin-top:14px}.rd-box #rdTest{margin-right:auto}
-.in-panel #deployBtn{display:none}   /* 嵌在外掛側邊欄：不顯示「安裝插件」 */
+.in-panel .st-ext{display:none}   /* 嵌在外掛側邊欄：不顯示「安裝插件」 */
