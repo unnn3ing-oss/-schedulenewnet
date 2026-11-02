@@ -183,6 +183,16 @@
   wordmark.onload = () => drawTextCard();
   wordmark.src = 'frames/wordmark_newsnet.png';
   if (document.fonts) document.fonts.load(`${TC.px}px "WHZ-Heavy"`).then(() => drawTextCard(), () => {});
+  // 一行超過 maxW 就折行（畫布與預覽上的輸入框共用，兩邊的行數才會一致）
+  function wrapRows(c, text) {
+    const rows = [];
+    text.split('\n').forEach(para => {
+      let cur = '';
+      for (const ch of para) { if (cur && c.measureText(cur + ch).width > TC.maxW) { rows.push(cur); cur = ''; } cur += ch; }
+      rows.push(cur);
+    });
+    return rows;
+  }
   function drawTextCard() {
     const cv = $('textCanvas'), c = cv.getContext('2d'), st = C.textCardStyles.find(s => s.key === state.cardStyle);
     c.fillStyle = st.bg; c.fillRect(0, 0, cv.width, cv.height);
@@ -190,12 +200,7 @@
     c.font = `${TC.px}px "WHZ-Heavy","Microsoft JhengHei",sans-serif`;
     c.fillStyle = st.fg; c.textAlign = 'center'; c.textBaseline = 'alphabetic';
     c.shadowColor = TC.shadow; c.shadowBlur = TC.blur; c.shadowOffsetX = TC.off; c.shadowOffsetY = TC.off;
-    const rows = [];
-    text.split('\n').forEach(para => {
-      let cur = '';
-      for (const ch of para) { if (cur && c.measureText(cur + ch).width > TC.maxW) { rows.push(cur); cur = ''; } cur += ch; }
-      rows.push(cur);
-    });
+    const rows = wrapRows(c, text);
     const y0 = TC.centerY - (rows.length - 1) * TC.lineH / 2 + TC.baseOff;
     rows.forEach((r, i) => c.fillText(r, cv.width / 2, y0 + i * TC.lineH));
     c.shadowColor = 'transparent'; c.shadowOffsetX = c.shadowOffsetY = 0;
@@ -205,12 +210,14 @@
 
   // ---- 純文字底圖也能在預覽上直接改標題（同作圖框：透明輸入框疊在卡面文字上，點兩下編輯，打的字寫回標題框）----
   const textOv = $('textOverlay');
+  textOv.style.whiteSpace = 'pre-wrap'; textOv.style.wordBreak = 'break-all'; textOv.style.lineBreak = 'anywhere';
   function layoutTextOverlay() {
     const cv = $('textCanvas'), k = cv.clientWidth / cv.width;
     if (document.activeElement !== textOv) textOv.value = titleEl.value;
     if (!k || $('textPane').hidden) return;
-    const n = Math.max(1, textOv.value.replace(/\r/g, '').split('\n').length), padY = 12, st = textOv.style;
-    st.left = `${cv.offsetLeft + 60 * k}px`; st.width = `${(cv.width - 120) * k}px`;
+    const c = cv.getContext('2d'); c.font = `${TC.px}px "WHZ-Heavy","Microsoft JhengHei",sans-serif`;
+    const n = Math.max(1, wrapRows(c, textOv.value.replace(/\r/g, '')).length), padY = 12, st = textOv.style;   // 輸入框內也照畫布的折法折行
+    st.left = `${cv.offsetLeft + (cv.width - TC.maxW) / 2 * k - 2}px`; st.width = `${TC.maxW * k + 4}px`;   // 內容寬 = maxW（扣掉 2px 邊框）
     st.top = `${cv.offsetTop + (TC.centerY - n * TC.lineH / 2 - padY) * k}px`;
     st.height = `${(n * TC.lineH + padY * 2) * k}px`;
     st.paddingTop = st.paddingBottom = `${Math.max(0, padY * k - 2)}px`;
