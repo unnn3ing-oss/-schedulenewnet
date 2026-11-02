@@ -254,6 +254,12 @@
         return;
       }
       state.summary = meta.summary || '';
+      // 後端 page_meta 的標題可能是 og:title（與頁面顯示的標題不同），文章頁的 <h1> 抓得到就以它為準
+      const artRes = await artP;
+      if (artRes.ok && artRes.data && typeof artRes.data.html === 'string') {
+        try { const t = Article.parseArticle(artRes.data.html, artRes.data.url || url).title; if (t) meta.title = t; } catch (e) { /* 解析失敗就沿用 page_meta 的標題 */ }
+      }
+      setFrame(Rules.frameForUrl(url));   // 網址是 /entertainment/ 就自動切娛樂粉框，其他回新聞藍框
       if (meta.title) {   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle；兩種模式共用
         const lines = Rules.overrideLines(meta.title);
         Article.learnSeps(Article.overrideOneLine(meta.title), lines);   // 小編文的【標題】接回原標題的樣子

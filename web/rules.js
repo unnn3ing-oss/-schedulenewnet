@@ -39,6 +39,8 @@
 
   // 版型只有兩種（同 QPT 的新聞藍框／娛樂粉框）：所有勾選的粉專都送同一個 template
   const frameTemplate = frame => (frame === 'ent' ? 'newsnet_ent' : 'newsnet_news');
+  // 網址路徑第一段是 entertainment 就用娛樂粉框，其他一律新聞藍框
+  const frameForUrl = url => (/^https?:\/\/[^/]+\/entertainment(\/|\?|#|$)/i.test(String(url || '').trim()) ? 'ent' : 'news');
   const layoutOf = template => cfg.layouts[template] || cfg.layouts.newsnet_news;
   const limitsFor = template => layoutOf(template).limits.slice();
   const pageByCode = code => cfg.pages.find(p => p.code === code) || null;
@@ -140,5 +142,5 @@
   }
   // ===== 複製結束 =====
 
-  return { charWidth, articleId, shortTitle, buildLink, frameTemplate, limitsFor, pageByCode, lineWidth, breakTitle, overrideLines, config: cfg };
+  return { charWidth, articleId, shortTitle, buildLink, frameTemplate, frameForUrl, limitsFor, pageByCode, lineWidth, breakTitle, overrideLines, config: cfg };
 });

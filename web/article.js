@@ -172,8 +172,9 @@
   // 回傳 { title, tags, images: [{url, caption}], fallbackCaption }
   function parseArticle(html, baseUrl) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const rawTitle = meta(doc, 'og:title', 'twitter:title')
-      || ((doc.querySelector('h1') || {}).textContent || '').trim()
+    // 標題以頁面上實際顯示的 <h1> 為準；og:title 常是 SEO 用的另一個版本（例如多帶地點），h1 沒有才退回 og／<title>
+    const rawTitle = ((doc.querySelector('h1') || {}).textContent || '').trim()
+      || meta(doc, 'og:title', 'twitter:title')
       || ((doc.querySelector('title') || {}).textContent || '').trim();
     const title = cleanTitle(rawTitle);
 

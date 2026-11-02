@@ -80,3 +80,10 @@ test('breakTitle：強斷點與冒號補斷', () => {
   assert.deepStrictEqual(R.breakTitle('颱風假最新！北北基桃明天照常上班上課'), ['颱風假最新！', '北北基桃明天照常上班上課']);
   assert.deepStrictEqual(R.breakTitle('賴清德：對手認知作戰已開始'), ['賴清德：', '對手認知作戰已開始']);
 });
+
+test('frameForUrl：entertainment 網址用娛樂框，其他用新聞框', () => {
+  assert.equal(R.frameForUrl('https://news.tvbs.com.tw/entertainment/3012345'), 'ent');
+  assert.equal(R.frameForUrl('https://news.tvbs.com.tw/entertainment/3012345?from=x'), 'ent');
+  assert.equal(R.frameForUrl('https://news.tvbs.com.tw/life/4044422'), 'news');
+  assert.equal(R.frameForUrl(''), 'news');
+});

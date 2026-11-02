@@ -99,3 +99,9 @@ test('replaceTitleLine：不論在第幾行都只換【…】那一行', () => {
   assert.equal(A.replaceTitleLine(empty.text, '再打', '').text, '【再打】\n#颱風');
   assert.equal(A.replaceTitleLine('', 'x', null).index, -1);
 });
+
+test('parseArticle：h1 與 og:title 不同時以頁面顯示的 h1 為準', () => {
+  const html = `<html><head><meta property="og:title" content="莫允雯、江宜蓉宣傳「有愛我們床上談」現身松山奉天宮聯誼｜TVBS新聞網"></head>
+<body><article><h1>莫允雯、江宜蓉宣傳「有愛我們床上談」現身聯誼活動</h1></article></body></html>`;
+  assert.equal(A.parseArticle(html, URL0).title, '莫允雯、江宜蓉宣傳「有愛我們床上談」現身聯誼活動');
+});
