@@ -11,6 +11,7 @@
   <button class="btn ghost sm" id="deployBtn" type="button" title="安裝 Chrome 插件">🧩<span class="lbl"> 安裝插件</span></button>
   <button class="pill img-pill" id="imgPill" type="button" title="暫存圖床登入狀態"><i class="dot"></i><span id="imgText">圖床未登入</span></button>
   <button class="btn primary" id="newBtn" type="button">＋ 新增發文</button>
+  <button class="btn ghost sm" id="setBtn" type="button" title="設定（清除送出紀錄）">⚙<span class="lbl"> 設定</span></button>
 </header>
 <main class="wrap">
   <section class="card records" aria-labelledby="recTitle">
@@ -20,10 +21,6 @@
       <div class="mode-switch rec-tabs" id="recTabs" role="tablist" aria-label="篩選送出紀錄">
         <button type="button" role="tab" data-tab="all" class="active" aria-selected="true">全部 <span class="n"></span></button><button type="button" role="tab" data-tab="sched" aria-selected="false">已排程 <span class="n"></span></button><button type="button" role="tab" data-tab="pub" aria-selected="false">已發布 <span class="n"></span></button><button type="button" role="tab" data-tab="fail" aria-selected="false">失敗 <span class="n"></span></button>
       </div>
-    </div>
-    <div class="rec-clean" id="recClean" hidden>
-      <label class="rec-auto"><input type="checkbox" id="recAuto"> 自動清除 7 天前已發布的紀錄</label>
-      <button class="btn sm ghost" id="recPurge" type="button">清除 7 天前已發布…</button>
     </div>
     <div class="rec-list" id="recList" role="tabpanel" aria-labelledby="recTitle"></div>
     <p class="muted rec-none" id="recNone" hidden>這個分類沒有紀錄</p>
@@ -163,6 +160,18 @@
 <div class="dlg" id="rcDlg" role="alertdialog" aria-modal="true" aria-labelledby="rcTitle" hidden>
   <div class="cf-box"><h3 id="rcTitle">刪除這筆紀錄？</h3><p class="muted" id="rcBody">只會刪掉這台瀏覽器裡的紀錄，不會影響已發布或已排程的貼文。</p>
     <div class="row"><button class="btn" id="rcCancel" type="button">取消</button><button class="btn danger" id="rcGo" type="button">刪除紀錄</button></div></div>
+</div>
+<div class="dlg" id="stDlg" role="dialog" aria-modal="true" aria-labelledby="stTitle" hidden>
+  <div class="cf-box st-box"><h3 id="stTitle">設定</h3>
+    <section class="st-sec"><b>送出紀錄</b>
+      <label class="switch"><input type="checkbox" role="switch" id="recAuto"><span>自動清除 7 天前已發布的紀錄</span></label>
+      <p class="hint">開啟頁面時執行；排程中和失敗的紀錄會保留。</p>
+    </section>
+    <section class="st-sec"><b>手動清除</b>
+      <div class="st-btns"><button class="btn sm" id="recPurge7" type="button">清除 7 天前已發布…</button><button class="btn sm danger" id="recPurgeAll" type="button">清除全部紀錄…</button></div>
+      <p class="hint">只刪這台瀏覽器的紀錄，不影響 FB 上的貼文；清除前會再確認一次。</p>
+    </section>
+    <div class="row"><button class="btn primary" id="stClose" type="button">完成</button></div></div>
 </div>
 <div class="dlg" id="rpDlg" role="alertdialog" aria-modal="true" aria-labelledby="rpTitle" aria-describedby="rpBody" hidden>
   <div class="cf-box"><h3 id="rpTitle">清除 7 天前已發布的紀錄？</h3><p class="muted" id="rpBody"></p>

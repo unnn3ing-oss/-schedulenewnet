@@ -107,8 +107,6 @@
     $('recList').replaceChildren(...Records.slicePage(list, view.page, Records.PAGE_SIZE).map(r => row(r, n)));
     $('recEmpty').hidden = all.length > 0;
     $('recTabs').hidden = !all.length;
-    $('recClean').hidden = !all.length;
-    $('recAuto').checked = autoOn();
     $('recNone').hidden = !all.length || list.length > 0;
     $('recFoot').hidden = !list.length;
     $('recCnt').textContent = `共 ${list.length} 則`;
@@ -223,7 +221,7 @@
   }
   document.addEventListener('keydown', e => {
     if (!openDlg) return;
-    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (openDlg === $('rsDlg')) rs = null; hideDlg(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const was = openDlg; if (was === $('rsDlg')) rs = null; hideDlg(); if (was === $('rpDlg')) openSettings(); return; }
     if (e.key !== 'Tab') return;
     const f = [...openDlg.querySelectorAll('button,input,a[href]')].filter(x => !x.disabled && !x.closest('[hidden]') && x.offsetParent !== null);
     if (!f.length) return;
@@ -232,7 +230,7 @@
     else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }, true);
-  [$('rsDlg'), $('rcDlg'), $('rpDlg')].forEach(d => d.addEventListener('mousedown', e => { if (e.target === d) { if (d === $('rsDlg')) rs = null; hideDlg(); } }));
+  [$('rsDlg'), $('rcDlg'), $('rpDlg'), $('stDlg')].forEach(d => d.addEventListener('mousedown', e => { if (e.target === d) { if (d === $('rsDlg')) rs = null; hideDlg(); if (d === $('rpDlg')) openSettings(); } }));
 
   // ---- 刪除紀錄（只刪本機）----
   let delId = '';
@@ -264,24 +262,37 @@
     setAuto($('recAuto').checked);
     opts.toast($('recAuto').checked ? `已開啟：之後開啟頁面時，自動清除超過 ${Records.CLEAN_DAYS} 天的已發布紀錄` : '已關閉自動清除');
   });
-  let purgeIds = [];
-  $('recPurge').addEventListener('click', () => {
-    const old = Records.expired(Records.list(), now(), Records.CLEAN_DAYS);
-    if (!old.length) { opts.toast(`沒有超過 ${Records.CLEAN_DAYS} 天的已發布紀錄`); return; }
-    purgeIds = old.map(r => r.id);
-    const names = old.slice(0, 3).map(r => `「${Records.titleParts(r).first}」`).join('、') + (old.length > 3 ? ` 等 ${old.length} 筆` : '');
-    $('rpBody').textContent = `將刪除 ${old.length} 筆已發布超過 ${Records.CLEAN_DAYS} 天的紀錄：${names}。只會從這台瀏覽器刪掉，不會影響 FB 上的貼文；排程中和失敗的紀錄會保留。`;
-    $('rpAck').checked = false; $('rpGo').disabled = true; $('rpGo').textContent = `清除 ${old.length} 筆`;
-    showDlg($('rpDlg'), $('recPurge'), $('rpCancel'));
-  });
+  // 設定彈窗（開關＋手動清除）；清除要再跳一層確認彈窗，取消會回到設定
+  function openSettings(from) { $('recAuto').checked = autoOn(); showDlg($('stDlg'), from || $('setBtn'), $('stClose')); }
+  $('setBtn').addEventListener('click', () => openSettings($('setBtn')));
+  $('stClose').addEventListener('click', hideDlg);
+  let purge = { mode: 'old', ids: [] };
+  const purgeTargets = mode => (mode === 'all' ? Records.list() : Records.expired(Records.list(), now(), Records.CLEAN_DAYS));
+  function askPurge(mode) {
+    const list = purgeTargets(mode);
+    if (!list.length) { opts.toast(mode === 'all' ? '目前沒有任何紀錄' : `沒有超過 ${Records.CLEAN_DAYS} 天的已發布紀錄`); return; }
+    purge = { mode, ids: list.map(r => r.id) };
+    const names = list.slice(0, 3).map(r => `「${Records.titleParts(r).first}」`).join('、') + (list.length > 3 ? ` 等 ${list.length} 筆` : '');
+    const all = mode === 'all';
+    $('rpTitle').textContent = all ? '清除全部紀錄？' : `清除 ${Records.CLEAN_DAYS} 天前已發布的紀錄？`;
+    $('rpBody').textContent = all
+      ? `將刪除全部 ${list.length} 筆紀錄：${names}。包含排程中和失敗的紀錄（失敗的就不能再從列表重送了）。只會從這台瀏覽器刪掉，不會影響 FB 上的貼文。`
+      : `將刪除 ${list.length} 筆已發布超過 ${Records.CLEAN_DAYS} 天的紀錄：${names}。只會從這台瀏覽器刪掉，不會影響 FB 上的貼文；排程中和失敗的紀錄會保留。`;
+    $('rpAck').checked = false; $('rpGo').disabled = true; $('rpGo').textContent = `清除 ${list.length} 筆`;
+    hideDlg();   // 先收起設定彈窗，再開確認彈窗
+    showDlg($('rpDlg'), $('setBtn'), $('rpCancel'));
+  }
+  $('recPurge7').addEventListener('click', () => askPurge('old'));
+  $('recPurgeAll').addEventListener('click', () => askPurge('all'));
   $('rpAck').addEventListener('change', () => { $('rpGo').disabled = !$('rpAck').checked; });
-  $('rpCancel').addEventListener('click', hideDlg);
+  $('rpCancel').addEventListener('click', () => { hideDlg(); openSettings(); });
   $('rpGo').addEventListener('click', () => {
     if ($('rpGo').disabled) return;
     // 確認當下再算一次：只刪還符合條件、且是剛才列給你看的那幾筆
-    const still = new Set(Records.expired(Records.list(), now(), Records.CLEAN_DAYS).map(r => r.id));
-    const ids = purgeIds.filter(id => still.has(id));
+    const still = new Set(purgeTargets(purge.mode).map(r => r.id));
+    const ids = purge.ids.filter(id => still.has(id));
     const ok = ids.length ? Records.removeMany(ids) : true;
+    returnTo = $('setBtn');
     hideDlg(); render();
     opts.toast(ok ? `已清除 ${ids.length} 筆紀錄` : '清除失敗（瀏覽器儲存空間無法寫入）');
   });
