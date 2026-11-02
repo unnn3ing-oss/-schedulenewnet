@@ -87,3 +87,10 @@ test('frameForUrl：entertainment 網址用娛樂框，其他用新聞框', () =
   assert.equal(R.frameForUrl('https://news.tvbs.com.tw/life/4044422'), 'news');
   assert.equal(R.frameForUrl(''), 'news');
 });
+
+test('autoLines：沒空格沒標點的長標題，在成對引號前後斷開', () => {
+  assert.deepEqual(R.autoLines('莫允雯、江宜蓉宣傳「有愛我們床上談」現身聯誼活動'), ['莫允雯、江宜蓉宣傳', '「有愛我們床上談」', '現身聯誼活動']);
+  assert.deepEqual(R.autoLines('短標題「引號」'), ['短標題「引號」'], '放得下一行就不動');
+  assert.deepEqual(R.autoLines('蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始'), R.overrideLines('蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始'), '原本就斷得出來的不碰');
+  assert.deepEqual(R.autoLines('前面一長串文字「引號內容」\n後面'), R.overrideLines('前面一長串文字「引號內容」\n後面'), '小編自己排的換行不碰');
+});

@@ -142,5 +142,21 @@
   }
   // ===== 複製結束 =====
 
-  return { charWidth, articleId, shortTitle, buildLink, frameTemplate, frameForUrl, limitsFor, pageByCode, lineWidth, breakTitle, overrideLines, config: cfg };
+  // 沒有空格、沒有標點可斷的長標題：在成對的引號（「」『』）前後斷開。
+  // 例：莫允雯、江宜蓉宣傳「有愛我們床上談」現身聯誼活動 → 莫允雯、江宜蓉宣傳／「有愛我們床上談」／現身聯誼活動
+  // 只在原本斷不出來（只有 1 行）且放不下一行時才動；小編自己排好的換行、已經斷成多行的都不碰。
+  function splitAtQuotes(line) {
+    const m = /^([^「『]*)([「『][^」』]+[」』])([，,、；;。.]?)(.*)$/.exec(line);
+    if (!m) return [line];
+    const parts = [m[1], m[2] + m[3], m[4]].map(x => x.trim()).filter(Boolean);
+    return parts.length > 1 ? parts : [line];
+  }
+  // 帶入標題用：overrideLines 再加上面這一步
+  function autoLines(title) {
+    const lines = overrideLines(title);
+    if (lines.length !== 1 || /\n/.test(title) || lineWidth(lines[0]) <= LINE_CAPACITY) return lines;
+    return splitAtQuotes(lines[0]);
+  }
+
+  return { charWidth, articleId, shortTitle, buildLink, frameTemplate, frameForUrl, limitsFor, pageByCode, lineWidth, breakTitle, overrideLines, autoLines, config: cfg };
 });

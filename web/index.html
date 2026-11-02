@@ -66,8 +66,9 @@
           <div class="fx-bar" id="fxBar" role="group" aria-label="T寶貼圖與馬賽克" hidden></div>
         </div>
         <div id="textPane" hidden>
-          <div class="canvas-wrap text"><canvas id="textCanvas" width="1080" height="1080"></canvas></div>
-          <p class="hint">示意，實際以後端產圖為準</p>
+          <div class="canvas-wrap text"><canvas id="textCanvas" width="1080" height="1080"></canvas>
+            <textarea class="title-overlay" id="textOverlay" placeholder="點兩下輸入標題" spellcheck="false" tabindex="-1" aria-label="在預覽上編輯標題"></textarea></div>
+          <p class="hint">示意，實際以後端產圖為準；點兩下預覽可直接改標題、Enter 換行</p>
           <div class="swatches" id="swatches" role="radiogroup" aria-label="底色"></div>
           <div class="tools"><button class="btn sm" id="previewTextBtn" type="button">🖼 後端預覽</button></div>
         </div>

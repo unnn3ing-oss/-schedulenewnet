@@ -200,7 +200,29 @@
     rows.forEach((r, i) => c.fillText(r, cv.width / 2, y0 + i * TC.lineH));
     c.shadowColor = 'transparent'; c.shadowOffsetX = c.shadowOffsetY = 0;
     if (wordmark.complete && wordmark.naturalWidth) c.drawImage(wordmark, TC.wordmarkAt[0], TC.wordmarkAt[1]);
+    layoutTextOverlay();
   }
+
+  // ---- 純文字底圖也能在預覽上直接改標題（同作圖框：透明輸入框疊在卡面文字上，點兩下編輯，打的字寫回標題框）----
+  const textOv = $('textOverlay');
+  function layoutTextOverlay() {
+    const cv = $('textCanvas'), k = cv.clientWidth / cv.width;
+    if (document.activeElement !== textOv) textOv.value = titleEl.value;
+    if (!k || $('textPane').hidden) return;
+    const n = Math.max(1, textOv.value.replace(/\r/g, '').split('\n').length), padY = 12, st = textOv.style;
+    st.left = `${cv.offsetLeft + 60 * k}px`; st.width = `${(cv.width - 120) * k}px`;
+    st.top = `${cv.offsetTop + (TC.centerY - n * TC.lineH / 2 - padY) * k}px`;
+    st.height = `${(n * TC.lineH + padY * 2) * k}px`;
+    st.paddingTop = st.paddingBottom = `${Math.max(0, padY * k - 2)}px`;
+    st.fontSize = `${TC.px * k}px`; st.lineHeight = `${TC.lineH * k}px`;
+  }
+  $('textCanvas').addEventListener('dblclick', () => {
+    textOv.classList.add('editing'); textOv.focus(); textOv.setSelectionRange(textOv.value.length, textOv.value.length);
+  });
+  textOv.addEventListener('blur', () => { textOv.classList.remove('editing'); layoutTextOverlay(); });
+  textOv.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); textOv.blur(); } });
+  textOv.addEventListener('input', () => { titleEl.value = textOv.value; titleEl.dispatchEvent(new Event('input')); });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(() => layoutTextOverlay()).observe($('textCanvas'));
 
   // ---- 快速帶入 ----
   const hint = (msg, cls) => { const h = $('urlHint'); h.textContent = msg || ''; h.className = 'hint' + (cls ? ' ' + cls : ''); };
@@ -261,7 +283,7 @@
       }
       setFrame(Rules.frameForUrl(url));   // 網址是 /entertainment/ 就自動切娛樂粉框，其他回新聞藍框
       if (meta.title) {   // 與 QPT 相同：有換行照原樣，沒有才 breakTitle；兩種模式共用
-        const lines = Rules.overrideLines(meta.title);
+        const lines = Rules.autoLines(meta.title);
         Article.learnSeps(Article.overrideOneLine(meta.title), lines);   // 小編文的【標題】接回原標題的樣子
         setLines(lines);
         syncCaptionTitle();
