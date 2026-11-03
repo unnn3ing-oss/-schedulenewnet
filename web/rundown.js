@@ -45,10 +45,13 @@
     return { entries: out, skipped };
   }
 
+  // Apps Script 的例外可能是英文原文（例：Exception: …）：交給 SendFlow.zhError 加中文說明；中文原樣保留
+  const SF = typeof SendFlow !== 'undefined' ? SendFlow : typeof require === 'function' ? require('./sendflow.js') : null;
+  const zh = e => (SF ? SF.backendError(e, 'Rundown 試算表發生錯誤') : String(e));
   // GAS 回傳的單筆結果 → 給人看的一句
   function describe(r, label) {
     if (!r) return `${label}：沒有回應`;
-    if (!r.ok) return `${label}：${r.error || '失敗'}`;
+    if (!r.ok) return `${label}：${r.error ? zh(r.error) : '失敗'}`;
     const cell = String(r.cell || '').replace(/^.*!/, '');
     if (r.status === 'exists') return `${label}：已在 ${cell}（不重複寫）`;
     return `${label} ${r.time || ''} → ${cell}${r.status === 'insert' ? '（插入）' : ''}${r.addedRow ? '（新增一列）' : ''}`;
@@ -108,7 +111,7 @@
     $('rdForm').addEventListener('submit', e => { e.preventDefault(); save({ on: $('rdDlgOn').checked }); close(); });
     $('rdTest').addEventListener('click', async () => {
       $('rdTest').disabled = true; hint('測試中…');
-      try { const j = await call({ action: 'ping' }); hint(`連線成功：${j.title || '試算表'}（分頁 ${(j.sheets || []).join('、')}…）`, 'ok'); } catch (x) { hint(x.message, 'bad'); } finally { $('rdTest').disabled = false; }
+      try { const j = await call({ action: 'ping' }); hint(`連線成功：${j.title || '試算表'}（分頁 ${(j.sheets || []).join('、')}…）`, 'ok'); } catch (x) { hint(SendFlow.backendError(x, 'Rundown 發生錯誤'), 'bad'); } finally { $('rdTest').disabled = false; }
     });
     $('rdCancel').addEventListener('click', close);
     box().addEventListener('mousedown', e => { if (e.target === box()) close(); });

@@ -45,7 +45,7 @@
     }
     if (st === 'failed') {
       const b = make('button', 'chip e', `${label}・失敗 ↻ 重送`);
-      b.type = 'button'; b.dataset.rs = key; b.title = (p.error ? p.error + '・' : '') + '點一下重送這一台';
+      b.type = 'button'; b.dataset.rs = key; b.title = (p.error ? SendFlow.zhError(p.error, '發生錯誤') + '・' : '') + '點一下重送這一台';
       b.setAttribute('aria-label', `${label}失敗，重送`);
       return b;
     }
@@ -201,9 +201,9 @@
     const viaDownload = why => png.then(b => { download(b, name); opts.toast(`${why}，已下載 ${name}`); });
     const job = canWrite
       ? navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]).then(() => opts.toast('已複製圖片，可直接貼上'),
-        e => png.then(() => viaDownload('瀏覽器不允許複製圖片' + (e && e.name === 'NotAllowedError' ? '' : '（' + ((e && e.message) || e) + '）'))))
+        e => png.then(() => viaDownload('瀏覽器不允許複製圖片' + (e && e.name === 'NotAllowedError' ? '' : '（' + SendFlow.zhError(e, '瀏覽器錯誤') + '）'))))
       : viaDownload('這個瀏覽器不支援複製圖片');
-    job.catch(e => opts.toast('複製圖片失敗：' + ((e && e.message) || e))).finally(() => {
+    job.catch(e => opts.toast('複製圖片失敗：' + SendFlow.zhError(e, '瀏覽器錯誤'))).finally(() => {
       view.busy.delete(key); render();
       const again = document.querySelector(`[data-cimg="${id}"]`); if (again && document.activeElement === document.body) again.focus();
     });
@@ -310,7 +310,7 @@
     rs = { key: id + '|' + code, id, code, chk, at: chk.kind === 'sched' && !chk.needTime ? chk.at : null, guard: g, ack: false, checking: false, seq: 0, fresh: false };
     const p = rec.pages.find(x => x.code === code);
     $('rsTitle').textContent = `重送${labelOf(p)}？`;
-    $('rsWhat').textContent = `「${Records.titleParts(rec).first}」・上次失敗：${p.error || '未知錯誤'}`;
+    $('rsWhat').textContent = `「${Records.titleParts(rec).first}」・上次失敗：${p.error ? SendFlow.zhError(p.error, '發生錯誤') : '未知錯誤'}`;
     $('rsAck').checked = false;
     const timeBox = chk.kind === 'sched';
     $('rsTime').hidden = !timeBox;

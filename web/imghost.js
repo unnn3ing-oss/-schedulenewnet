@@ -12,7 +12,7 @@
   const $ = id => document.getElementById(id);
   const listeners = [];
   const emit = () => listeners.forEach(fn => fn(session()));
-  const err = (code, msg) => Object.assign(new Error(msg || code), { code });
+  const err = (code, msg) => Object.assign(new Error(msg || (code === 'need_login' ? '沒有登入圖床，請先登入' : code)), { code });
 
   // ---- 憑證（只存憑證與到期時間；不存密碼）----
   function read() {

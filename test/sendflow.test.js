@@ -19,7 +19,7 @@ test('niceError：HTML 換成通用訊息、取 detail／message／error', () =>
   const html = '<!doctype html><html><body>' + 'x'.repeat(5000) + '</body></html>';
   assert.equal(F.niceError(502, html), '後端回傳錯誤頁（HTTP 502），請稍後再試');
   assert.equal(F.niceError(400, '{"detail":"排程時間太近"}'), 'HTTP 400：排程時間太近');
-  assert.equal(F.niceError(422, '{"detail":[{"msg":"field required"}]}'), 'HTTP 422：field required');
+  assert.equal(F.niceError(422, '{"detail":[{"msg":"field required"}]}'), '後端說資料格式不對（HTTP 422；原文：field required）');
   assert.equal(F.niceError(500, JSON.stringify(JSON.stringify({ error: { message: '深層' } }))), 'HTTP 500：深層');
   assert.match(F.niceError(401, ''), /沒有登入網新/);
   assert.ok(F.niceError(500, 'y'.repeat(1000)).length < 200);
@@ -33,7 +33,7 @@ test('外掛斷線錯誤：重新載入（沒送出）與中途斷線（結果�
   assert.equal(F.extErrorKind('no_extension'), '');
   assert.match(F.apiResult({ ok: false, error: "Cannot read properties of undefined (reading 'sendMessage')" }).error, /重新整理頁面.*沒有送出|沒有送出.*重新整理/);
   assert.match(F.apiResult({ ok: false, error: 'A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received' }).error, /結果不明.*確認/);
-  assert.match(F.apiResult({ ok: false, error: 'boom' }).error, /外掛回報錯誤：boom/);
+  assert.equal(F.apiResult({ ok: false, error: 'boom' }).error, '外掛發生未知錯誤（原文：boom）');
 });
 
 test('apiResult', () => {
@@ -42,7 +42,8 @@ test('apiResult', () => {
   assert.deepEqual(F.apiResult(ext(200, '{"post_url":"https://fb.com/1"}')).json, { post_url: 'https://fb.com/1' });
   assert.equal(F.apiResult(ext(200, '<html>login</html>')).ok, false);
   assert.equal(F.apiResult(ext(200, '{"error":"bad"}')).ok, false);
-  assert.equal(F.apiResult(ext(200, '{"ok":false,"message":"no"}')).error, 'no');
+  assert.equal(F.apiResult(ext(200, '{"ok":false,"message":"no"}')).error, '後端回報錯誤（原文：no）');
+  assert.equal(F.apiResult(ext(200, '{"ok":false,"message":"排程時間已過"}')).error, '排程時間已過');
   assert.equal(F.apiResult(ext(200, '', { image: 'data:image/png;base64,AA' })).image, 'data:image/png;base64,AA');
   assert.equal(F.apiResult(ext(502, '<html>bad gateway</html>')).error, '後端回傳錯誤頁（HTTP 502），請稍後再試');
 });

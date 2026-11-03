@@ -30,12 +30,27 @@
     }
     return '';
   }
+  // HTTP 狀態碼 → 中文說明；head 用在「說明：後端原文」，tail 是沒有原文時補的建議
+  const STATUS = {
+    400: ['後端說請求內容有問題', '，請確認填寫的內容'], 404: ['後端找不到這個功能', '，請回報'],
+    408: ['後端等太久沒收到資料', '，請再試一次'], 413: ['送出的內容太大', '，請換小一點的圖片或縮短文字'],
+    422: ['後端說資料格式不對', '，請確認填寫的內容'], 429: ['送出太頻繁，後端暫時擋下', '，請等一下再試'],
+    500: ['後端發生錯誤', '，請稍後再試'], 502: ['後端暫時連不上', '，請稍後再試'],
+    503: ['後端暫時無法服務', '，請稍後再試'], 504: ['後端處理逾時', '，請稍後再試']
+  };
+  function statusText(status) {
+    const [head, tail] = STATUS[status] || (status >= 500 ? ['後端發生錯誤', '，請稍後再試'] : status >= 400 ? ['後端拒絕了這次請求', '，請稍後再試或回報'] : ['後端回應異常', '，請稍後再試']);
+    return { head, code: status ? `HTTP ${status}` : '', tail };
+  }
+  const hasCjk = s => /[\u3000-\u9fff\uff00-\uffef]/.test(String(s || ''));
   function niceError(status, text) {
     if (isHtml(text)) return status ? `後端回傳錯誤頁（HTTP ${status}），請稍後再試` : '後端回傳錯誤頁，請稍後再試';
     const msg = pickMessage(parseJson(text)) || String(text || '').trim();
     const short = msg.length > 160 ? msg.slice(0, 160) + '…' : msg;
     if (status === 401 || status === 403) return '沒有登入網新發文台（' + status + '），請先登入' + (short ? '：' + short : '');
-    return (status ? `HTTP ${status}` : '錯誤') + (short ? '：' + short : '');
+    const t = statusText(status);
+    if (!short) return t.head + (t.code ? `（${t.code}）` : '') + t.tail;
+    return hasCjk(short) ? (t.code || '錯誤') + '：' + short : `${t.head}（${t.code ? t.code + '；' : ''}原文：${short}）`;   // 後端給的中文原樣保留
   }
 
   // 外掛連線斷掉的錯誤（Chrome 原文）分兩種：
@@ -49,13 +64,69 @@
   }
   const EXT_RELOADED = '外掛剛更新或重新載入，這個頁面和外掛斷線了（這次沒有送出），請重新整理頁面（F5；側邊欄請關掉再打開）後再試';
   const EXT_INTERRUPTED = '外掛連線中途斷了，結果不明：請先到粉專確認是否已發出，沒有再重送';
-  // 外掛回的錯誤 → 給人看的一句
-  function extError(e) {
-    const k = extErrorKind(e);
-    if (k === 'reloaded') return EXT_RELOADED;
-    if (k === 'interrupted') return EXT_INTERRUPTED;
-    return e === 'no_extension' ? '外掛沒回應，請確認外掛已安裝並更新到 0.5.0' : e === 'path_not_allowed' ? '外掛版本太舊（不允許這個端點），請更新到 0.5.0' : '外掛回報錯誤：' + e;
+  // 外掛、瀏覽器回的錯誤代碼或英文原文 → 中文（外掛 background.js／bridge.js 的代碼、Chrome／瀏覽器的英文錯誤）
+  // 已經是中文的（後端、圖床、Apps Script 給的）原樣回傳；認不得的英文加上 lead 開頭、原文放括號，方便回報除錯
+  const CODES = {
+    no_extension: '外掛沒回應，請確認外掛已安裝並更新到 0.5.0',
+    path_not_allowed: '外掛版本太舊（不允許這個端點），請更新到 0.5.0',
+    unknown_op: '外掛版本太舊，不支援這個功能，請更新外掛',
+    method_not_allowed: '外掛不允許這種請求方式，請回報',
+    unknown_mode: '外掛不認得這個連線方式，請更新外掛',
+    empty_response: '外掛沒有回傳結果，請重新整理頁面後再試；一直這樣請更新外掛',
+    host_not_allowed: '網址不在允許範圍（只能是 tvbs.com.tw 的 https 網址）',
+    not_html: '這個網址不是網頁',
+    not_image: '這個網址不是圖片',
+    too_big: '檔案太大，超過上限',
+    timeout: '等太久沒有回應（逾時），請稍後再試',
+    need_login: '沒有登入圖床，請先登入',
+    network: '網路連線失敗，請確認網路後再試',
+    bad_image: '讀不到這張圖片',
+    no_image: '還沒有放照片',
+    export_failed: '圖片輸出失敗，請再試一次',
+    quota: '瀏覽器儲存空間不足'
+  };
+  // 瀏覽器錯誤（DOMException 名稱或常見英文訊息）
+  const PATTERNS = [
+    [/NotAllowedError|permission denied|not allowed by the user agent|denied permission/i, '瀏覽器不允許這個動作（權限被拒絕），請允許後再試'],
+    [/AbortError|aborted/i, '動作被中斷或逾時，請再試一次'],
+    [/TimeoutError|timed? ?out/i, '等太久沒有回應（逾時），請稍後再試'],
+    [/Failed to fetch|NetworkError|Load failed|network error|ERR_[A-Z_]+/i, '網路連線失敗，請確認網路後再試'],
+    [/QuotaExceededError|quota/i, '瀏覽器或磁碟空間不足'],
+    [/SecurityError|insecure|tainted/i, '瀏覽器的安全限制不允許這個動作'],
+    [/NotFoundError|could not be found/i, '找不到指定的檔案或資料夾（可能被移走或改名）'],
+    [/NoModificationAllowedError|InvalidModificationError/i, '檔案無法寫入（可能是唯讀或被其他程式占用）'],
+    [/InvalidStateError/i, '檔案或資料夾的狀態已改變，請重試'],
+    [/EncodingError|decode|Image load/i, '讀不到這張圖片（格式不支援或檔案損毀）'],
+    [/Unexpected token|JSON/i, '回應格式看不懂']
+  ];
+  function zhError(e, lead) {
+    if (e == null || e === '') return '發生未知錯誤';
+    const name = e && typeof e === 'object' && typeof e.name === 'string' && e.name !== 'Error' ? e.name : '';
+    const s = String(e && typeof e === 'object' && 'message' in e ? e.message || name : e).trim();
+    if (!s) return name ? zhError(name, lead) : '發生未知錯誤';
+    const legacy = /^外掛回報錯誤：(.+)$/s.exec(s);   // 舊版存進紀錄的「外掛回報錯誤：英文原文」
+    if (legacy) return zhError(legacy[1], lead);
+    if (hasCjk(s)) return s;
+    const k = extErrorKind(s);
+    if (k) return k === 'reloaded' ? EXT_RELOADED : EXT_INTERRUPTED;
+    if (Object.prototype.hasOwnProperty.call(CODES, s)) return CODES[s];
+    const h = /^http_(\d+)$/.exec(s);
+    if (h) return h[1] === '404' ? '網址找不到（HTTP 404）' : `網站回應錯誤（HTTP ${h[1]}）`;
+    const full = name ? name + ': ' + s : s;
+    for (const [re, zh] of PATTERNS) if (re.test(full)) return zh;
+    return `${lead || '外掛發生未知錯誤'}（原文：${full.length > 160 ? full.slice(0, 160) + '…' : full}）`;
   }
+  // 後端／Apps Script 自己回的錯誤文字：不套瀏覽器的判斷（免得 quota、permission 被講成瀏覽器的問題）；
+  // 中文原樣、已知代碼翻譯，其他加 lead 開頭並附原文
+  function backendError(e, lead) {
+    const s = String(e && typeof e === 'object' && 'message' in e ? e.message : e == null ? '' : e).trim();
+    if (!s) return lead || '後端回報錯誤';
+    if (hasCjk(s)) return s;
+    if (Object.prototype.hasOwnProperty.call(CODES, s)) return CODES[s];
+    return `${lead || '後端回報錯誤'}（原文：${s.length > 160 ? s.slice(0, 160) + '…' : s}）`;
+  }
+  // 外掛回的錯誤 → 給人看的一句
+  const extError = e => zhError(e, '外掛發生未知錯誤');
 
   // 外掛 Ext.call 的結果 → { ok, status, json, text, image, error }
   function apiResult(r) {
@@ -67,7 +138,7 @@
     if (d.image) return { ok: true, status, image: d.image };
     if (isHtml(text)) return { ok: false, status, text, error: '後端回了網頁（可能被導去登入頁），請先登入網新發文台' };
     const json = parseJson(text);
-    if (json && (json.ok === false || (json.error && !json.post_url && !json.post_id))) return { ok: false, status, json, text, error: niceError(status, text).replace(/^HTTP \d+：/, '') };
+    if (json && (json.ok === false || (json.error && !json.post_url && !json.post_id))) return { ok: false, status, json, text, error: backendError(pickMessage(json) || '後端回報失敗', '後端回報錯誤') };
     return { ok: true, status, json, text };
   }
 
@@ -77,7 +148,7 @@
     if (!res || !res.ok) return { ok: false, error: (res && res.error) || '判讀失敗' };
     const obj = res.json;
     if (!obj || typeof obj !== 'object') return { ok: false, error: '判讀回應格式不認得' };
-    if (obj.error) return { ok: false, error: '判讀失敗：' + pickMessage(obj) };   // §5.5：含 error 視為過期
+    if (obj.error) return { ok: false, error: '判讀失敗：' + backendError(pickMessage(obj), '後端回報錯誤') };   // §5.5：含 error 視為過期
     const pools = [obj, obj.data, obj.result].filter(o => o && typeof o === 'object');
     const first = keys => { for (const o of pools) for (const k of keys) if (o[k] != null && o[k] !== '') return o[k]; return null; };
     const raw = String(first(['level', 'light', 'color']) || '').toLowerCase().replace('燈', '');
@@ -144,5 +215,5 @@
     return [ok ? `${ok} 台成功` : '', bad ? `${bad} 台失敗` : ''].filter(Boolean).join('・');
   }
 
-  return { isHtml, parseJson, niceError, extErrorKind, extError, apiResult, parseGuard, sendOutcome, bubble, next, summary };
+  return { isHtml, parseJson, niceError, extErrorKind, extError, zhError, backendError, apiResult, parseGuard, sendOutcome, bubble, next, summary };
 });

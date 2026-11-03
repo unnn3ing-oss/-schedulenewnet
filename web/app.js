@@ -301,7 +301,7 @@
       if (meta.image) {   // 不論目前是作圖框或純文字底圖都先載入主圖，之後切到作圖框不用再按一次帶入
         const im = await imP;
         if (im.ok && im.data && im.data.image) { try { await Editor.loadUrl(im.data.image); msg += state.mode === 'frame' ? '與主圖' : '與主圖（切到作圖框即可使用）'; } catch (e) { msg += '，但主圖讀不出來'; cls = 'bad'; } }
-        else { msg += '；主圖沒抓到（' + (im.error === 'host_not_allowed' ? '圖片網域不在允許範圍' : im.error === 'no_extension' ? '外掛沒回應，請更新外掛到 0.4.0 以上' : im.error) + '），請手動上傳'; cls = 'bad'; }
+        else { msg += '；主圖沒抓到（' + (im.error === 'host_not_allowed' ? '圖片網域不在允許範圍' : im.error === 'no_extension' ? '外掛沒回應，請更新外掛到 0.4.0 以上' : SendFlow.zhError(im.error)) + '），請手動上傳'; cls = 'bad'; }
       }
       skel($('canvasWrap'), false);
       const c = await fillCaption(artP, url);
@@ -319,7 +319,7 @@
       try { art = Article.parseArticle(res.data.html, res.data.url || url); } catch (e) { fail = '文章網頁讀不懂'; }
     } else if (/^(unknown_op|no_extension|empty_response)$/.test(res.error)) old = true;
     else if (SendFlow.extErrorKind(res.error)) fail = SendFlow.extError(res.error);
-    else fail = `文章網頁沒抓到（${({ host_not_allowed: '網址不是 tvbs.com.tw', not_html: '不是網頁', too_big: '網頁太大', timeout: '逾時' })[res.error] || res.error}）`;
+    else fail = `文章網頁沒抓到（${({ host_not_allowed: '網址不是 tvbs.com.tw', not_html: '不是網頁', too_big: '網頁太大', timeout: '逾時' })[res.error] || SendFlow.zhError(res.error)}）`;
     const caption = art ? Article.mainCaption(art) : '', tags = art ? art.tags : [];
     const notes = [];
     if (art && !caption) notes.push('沒抓到圖說');
@@ -527,7 +527,7 @@
       const key = previewKeyNow();
       if (input.mode === 'single') {
         previewHint('上傳圖片到圖床…');
-        try { input.imageUrl = await ensureUploaded(); } catch (e) { previewHint(e.message, 'bad'); return; }
+        try { input.imageUrl = await ensureUploaded(); } catch (e) { previewHint(SendFlow.zhError(e, '圖片上傳失敗'), 'bad'); return; }
       }
       previewHint('後端產圖中…');
       const rq = Payload.previewRequest(input);
@@ -746,7 +746,7 @@
         codes.forEach(c => { state.pages[c].status = prev[c]; renderPage(c); });
         setFlow({ type: 'abort' });
         progress(null);
-        sendMsg('圖片沒有上傳：' + e.message, 'bad');
+        sendMsg('圖片沒有上傳：' + SendFlow.zhError(e, '圖片上傳失敗'), 'bad');
         toast('圖片沒有上傳', { label: '重試', fn: () => resendCodes(codes) });
         return;
       }
@@ -806,8 +806,9 @@
   async function toRundownSend(entries) {
     let j;
     try { j = await Rundown.add(entries); } catch (e) {
-      entries.forEach(en => Records.updatePage(flow.recordId, en.page, { rundown: { ok: false, error: e.message } }));
-      return { msg: 'Rundown 沒寫入：' + e.message, bad: true };
+      const why = SendFlow.backendError(e, 'Rundown 發生錯誤');
+      entries.forEach(en => Records.updatePage(flow.recordId, en.page, { rundown: { ok: false, error: why } }));
+      return { msg: 'Rundown 沒寫入：' + why, bad: true };
     }
     const res = Array.isArray(j && j.results) ? j.results : [];
     entries.forEach((en, i) => { const r = res[i] || { ok: false, error: '沒有回應' };
