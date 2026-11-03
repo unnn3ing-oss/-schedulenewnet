@@ -170,6 +170,11 @@
       <div class="st-btns"><button class="btn sm" id="recPurge7" type="button">清除 7 天前已發布…</button><button class="btn sm danger" id="recPurgeAll" type="button">清除全部紀錄…</button></div>
       <p class="hint">只刪這台瀏覽器的紀錄，不影響 FB 上的貼文；清除前會再確認一次。</p>
     </section>
+    <section class="st-sec st-health" aria-labelledby="hcTitle"><b id="hcTitle">連線與異常檢測</b>
+      <p class="hint">打開設定會先快速檢測；按「一鍵檢測」會再實際測試網新後台與 Rundown。</p>
+      <div class="hc-head"><button class="btn sm" id="hcRun" type="button">🩺 一鍵檢測</button><span class="hc-sum" id="hcSum" role="status" aria-live="polite"></span></div>
+      <ul class="hc-list" id="hcList"></ul>
+    </section>
     <section class="st-sec st-ext"><b>Chrome 插件</b>
       <button class="btn sm" id="deployBtn" type="button">🧩 安裝插件</button>
       <p class="hint">網頁要透過插件才能帶著網新後台的登入狀態送出。</p>
@@ -506,5 +511,5 @@
     </footer>
   </div>
 </div>
-<script src="config.js"></script><script src="rules.js"></script><script src="article.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="rundown.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="installer.js"></script><script src="deploy.js"></script><script src="app.js"></script>
+<script src="config.js"></script><script src="rules.js"></script><script src="article.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="rundown.js"></script><script src="health.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="installer.js"></script><script src="deploy.js"></script><script src="app.js"></script>
 </body></html>

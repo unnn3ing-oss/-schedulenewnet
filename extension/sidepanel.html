@@ -34,6 +34,13 @@
     <div class="status" id="loginStatus">檢查中…</div>
   </section>
 
+  <section class="card" id="hcCard">
+    <h2>連線與異常檢測</h2>
+    <div class="hc-head"><button type="button" class="btn primary" id="hcRun">🩺 一鍵檢測</button><span class="hc-sum" id="hcSum" role="status" aria-live="polite"></span></div>
+    <ul class="hc-list" id="hcList"></ul>
+    <div class="hint">切到這一頁會先快速檢測；按「一鍵檢測」會再實際測試網新後台與 Rundown。</div>
+  </section>
+
   <section class="card">
     <h2>工具</h2>
     <div class="links">
@@ -68,5 +75,6 @@
 </dialog>
 <script src="updater.js"></script>
 <script src="sidepanel.js"></script>
+<script src="sphealth.js"></script>
 </body>
 </html>

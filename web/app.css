@@ -297,3 +297,14 @@ textarea.is-skel::placeholder{color:transparent}
 .rd-box .switch{margin:10px 0 4px !important;font-size:14px}
 .rd-box .row{flex-wrap:wrap;gap:8px;margin-top:14px}.rd-box #rdTest{margin-right:auto}
 .in-panel .st-ext{display:none}   /* 嵌在外掛側邊欄：不顯示「安裝插件」 */
+/* 設定彈窗：一鍵檢測（web/health.js）；每列「圖示 項目 結果」，異常時下一行是處理方式 */
+.st-health{align-items:stretch !important}
+.hc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hc-sum{font-size:13px;font-weight:700;color:var(--muted)}.hc-sum.ok{color:var(--ok)}.hc-sum.warn{color:var(--warn-fg)}.hc-sum.bad{color:var(--danger)}
+.hc-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}.hc-list:empty{display:none}
+.hc-row{display:grid;grid-template-columns:22px minmax(0,auto) minmax(0,1fr);column-gap:6px;align-items:baseline;padding:6px 8px;border-radius:10px;background:var(--track);font-size:13px;line-height:1.5}
+.hc-row b{white-space:nowrap}.hc-text{color:var(--muted);word-break:break-word}
+.hc-row.bad{background:#fde2e2}.hc-row.bad .hc-text{color:#9b1c1c}.hc-row.warn{background:var(--warn-bg)}.hc-row.warn .hc-text{color:var(--warn-fg)}
+.hc-hint{grid-column:2 / -1;font-size:12px;color:var(--text);word-break:break-word}
+@media (prefers-color-scheme:dark){.hc-row.bad{background:#401818}.hc-row.bad .hc-text{color:#ff9a9a}}
+@media (max-width:420px){.hc-row{grid-template-columns:22px minmax(0,1fr)}.hc-text,.hc-hint{grid-column:2}}

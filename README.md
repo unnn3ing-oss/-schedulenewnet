@@ -116,6 +116,23 @@ PR C（送出紀錄）：
 - **v0.2.0（含）以前的版本沒有更新功能**，需要手動把 `extension/` 資料夾整個換成新版一次（重新載入外掛）；之後就能自動更新。
 - 維護規則：只要 `extension/` 內有任何變動，就要同步調高 `manifest.json` 的 `version`，並在 `changelog.json` 加一筆對應版本的說明。
 
+## 一鍵檢測（連線與異常）
+
+網頁版「⚙ 設定」和外掛側邊欄「狀態與更新」都有「🩺 一鍵檢測」：所有項目同時檢查（每項最多 8 秒），逐列顯示 ✅／⚠️／❌、結果，有問題時附一句怎麼處理。打開設定（或切到「狀態與更新」）會先**快速檢測**；按按鈕才會另外實際測網新後台與 Rundown。
+
+| 項目 | 怎麼檢查 |
+|---|---|
+| 網路連線 | `navigator.onLine`＋抓一個本站小圖示 |
+| 外掛／頁面與外掛連線 | `Ext.ping`；外掛剛更新、頁面還是舊的內容腳本時提示「外掛剛更新，請重新整理頁面」 |
+| 外掛版本 | 網頁：比對 GitHub `main` 的 `extension/manifest.json` 版本號；側邊欄：沿用 `Updater.checkLatest()`（比對檔案內容） |
+| 網新發文台登入 | 只看 `queen_session` cookie 在不在、幾天到期（不讀值） |
+| 網新後台回應（按按鈕才測） | 經外掛 `GET /page_meta?url=https://news.tvbs.com.tw/`（白名單內、唯讀）；401／403 或被導去登入頁算未登入 |
+| 圖床 Worker／圖床登入 | `GET /config`（沒有＝舊版，請重新部署 `worker/index.js`）；本機圖床憑證剩幾天。不會跳登入視窗、不會改憑證 |
+| Rundown（有開啟才測、按按鈕才測） | 經 Worker `/rundown` 送 `{action:'ping'}`（同「測試連線」）；沒登入圖床是 ⚠️ |
+| 外掛背景服務、側邊欄裡的網頁版（只在側邊欄） | 對背景送 `ping`；請嵌入的網頁版（postMessage）代跑上面網頁那邊的項目後回傳結果 |
+
+邏輯在 `web/health.js`（相依都可注入，`test/health.test.js` 測試）；側邊欄的部分在 `extension/sphealth.js`。
+
 ## 部署
 
 `main` 有推送時，`.github/workflows/pages.yml` 會把 `web/` 發布到 GitHub Pages（不跑測試）。第一次需要到 repo 的 Settings → Pages，把 Source 設成「GitHub Actions」。

@@ -338,6 +338,7 @@ const ok = (name) => { passed++; console.log('  ok -', name); };
   await captionFlow(`http://localhost:${server.address().port}`);
   await installGuide(`http://localhost:${server.address().port}`);
   await noPasswordFlow(`http://localhost:${server.address().port}`);
+  await healthFlow(`http://localhost:${server.address().port}`);
   server.close();
   console.log(`\n${passed} checks passed`);
 })().catch(async e => { console.error('FAIL', e); server.close(); process.exit(1); });
@@ -1441,6 +1442,87 @@ async function noPasswordFlow(origin) {
   assert.strictEqual(await page.evaluate(() => !!window.__dlgShown), false, '從頭到尾沒跳密碼視窗');
   assert(await page.isHidden('#imgLogin'));
   ok('免密碼模式：預覽、點狀態都直接登入，不跳密碼視窗');
+  assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
+  await browser.close();
+}
+
+// ===== 設定彈窗的一鍵檢測：模擬外掛（舊版 0.6.0）、圖床 Worker 沒有 /config（舊版） =====
+async function healthFlow(origin) {
+  console.log('\n  一鍵檢測');
+  const browser = await chromium.launch({ args: ['--no-sandbox'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  await ctx.addInitScript(MOCK_BRIDGE);
+  const worker = await mockWorker(ctx, origin);
+  await ctx.route('https://raw.githubusercontent.com/unnn3ing-oss/-schedulenewnet/main/extension/manifest.json',
+    r => r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ version: '0.8.4' }) }));
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  await page.goto(origin + '/index.html');
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  const rows = () => page.$$eval('#hcList .hc-row', ls => Object.fromEntries(ls.map(l => [l.dataset.id, { cls: l.className.replace('hc-row ', ''), text: l.querySelector('.hc-text').textContent, hint: (l.querySelector('.hc-hint') || {}).textContent || '' }])));
+  const settled = () => page.waitForFunction(() => { const l = document.querySelectorAll('#hcList .hc-row'); return l.length === 9 && ![...l].some(x => x.classList.contains('wait')) && !document.getElementById('hcRun').disabled; }, null, { timeout: 15000 });
+
+  // 打開設定 → 自動快速檢測
+  await page.click('#setBtn');
+  assert(await page.isVisible('#hcRun'));
+  await settled();
+  let r = await rows();
+  assert.deepStrictEqual(Object.keys(r), ['net', 'ext', 'conn', 'extUpdate', 'login', 'backend', 'imgWorker', 'imgLogin', 'rundown']);
+  assert.strictEqual(r.net.cls, 'ok');
+  assert.match(r.ext.text, /v0\.6\.0/);
+  assert.strictEqual(r.conn.cls, 'ok');
+  assert.strictEqual(r.extUpdate.cls, 'warn');
+  assert.match(r.extUpdate.text, /有新版 v0\.8\.4/);
+  assert.match(r.login.text, /已登入/);
+  assert.strictEqual(r.backend.cls, 'skip', '快速檢測不打後台');
+  assert.strictEqual(r.imgWorker.cls, 'warn');
+  assert.match(r.imgWorker.hint, /Worker 是舊版，請重新部署 worker\/index\.js/);
+  assert.match(r.imgLogin.text, /圖床未登入/);
+  assert.match(await page.textContent('#hcSum'), /快速檢測：.*項要注意/);
+  assert(!(await page.evaluate(() => window.__calls)).some(c => c.path), '快速檢測沒有呼叫後台');
+  assert.strictEqual(worker.logins, 0, '檢測不會登入圖床');
+  assert(await page.isHidden('#imgLogin'), '不跳圖床登入視窗');
+  ok('打開設定自動快速檢測：9 項逐列顯示；舊版 Worker（沒有 /config）提示重新部署、外掛有新版');
+
+  // 一鍵檢測：打後台（唯讀 page_meta）、Rundown 開啟但沒登入圖床 → ⚠️
+  await page.evaluate(() => Rundown.save({ on: true }));
+  await page.click('#hcRun');
+  await settled();
+  r = await rows();
+  assert.strictEqual(r.backend.cls, 'ok');
+  assert.match(r.backend.text, /後台有回應/);
+  assert.strictEqual(r.rundown.cls, 'warn');
+  assert.match(r.rundown.text, /先登入圖床/);
+  const paths = (await page.evaluate(() => window.__calls)).map(c => c.path).filter(Boolean);
+  assert.deepStrictEqual(paths, ['/page_meta?url=' + encodeURIComponent('https://news.tvbs.com.tw/')], '只打唯讀的 page_meta');
+  // 登入圖床後再測：Rundown ping 經 Worker
+  await page.evaluate(() => ImgHost.login('right-password'));
+  await page.click('#hcRun');
+  await settled();
+  r = await rows();
+  assert.strictEqual(r.rundown.cls, 'ok');
+  assert.match(r.rundown.text, /FB RUNDOWN/);
+  assert.match(r.imgLogin.text, /已登入，約剩 12 小時/, '模擬 Worker 的憑證 12 小時：快到期 ⚠️');
+  assert.deepStrictEqual(worker.rundown.map(b => b.action), ['ping']);
+  ok('一鍵檢測：後台只打 page_meta、Rundown 沒登入圖床是 ⚠️、登入後 ping 成功');
+
+  // 外掛剛更新（頁面上是舊的內容腳本）
+  await page.evaluate(() => { Ext.ping = async () => ({ ok: false, error: 'Extension context invalidated.' }); });
+  await page.click('#hcRun');
+  await settled();
+  r = await rows();
+  assert.strictEqual(r.conn.cls, 'bad');
+  assert.match(r.conn.text, /外掛剛更新，請重新整理頁面/);
+  assert(!JSON.stringify(r).includes('sess-1'), '不顯示憑證');
+  ok('外掛剛更新：頁面與外掛連線 ❌ 請重新整理頁面');
+
+  // 手機寬度：不水平捲動
+  await page.setViewportSize({ width: 380, height: 720 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth && document.querySelector('#stDlg .cf-box').scrollWidth <= document.querySelector('#stDlg .cf-box').clientWidth), '窄版不水平捲動');
+  await page.screenshot({ path: path.join(SHOTS, 'health-mobile.png') });
+  ok('窄版：檢測清單不水平捲動；已截圖 health-mobile.png');
   assert.deepStrictEqual(errors, [], '頁面錯誤：' + errors.join('\n'));
   await browser.close();
 }

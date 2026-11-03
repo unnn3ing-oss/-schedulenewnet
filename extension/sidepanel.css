@@ -58,3 +58,11 @@ body.sp .wrap{flex:1 1 auto;overflow:auto}
 .up-dlg-prog{height:6px;margin:10px 0 2px;border-radius:3px;background:var(--track);overflow:hidden}.up-dlg-prog[hidden]{display:none}
 .up-dlg-prog i{display:block;height:100%;width:0;background:var(--accent);border-radius:3px}
 .up-dlg-btns{display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap}.up-dlg-btns:empty{display:none}
+/* 一鍵檢測（sphealth.js）：每列「圖示 項目 結果」，異常時下一行是處理方式 */
+.hc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hc-sum{font-size:13px;font-weight:700;color:var(--muted)}.hc-sum.ok{color:var(--ok-fg)}.hc-sum.warn{color:var(--warn-fg)}.hc-sum.bad{color:var(--danger)}
+.hc-list{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}.hc-list:empty{display:none}
+.hc-row{display:grid;grid-template-columns:22px minmax(0,1fr);column-gap:6px;padding:6px 8px;border-radius:10px;background:var(--track);font-size:13px;line-height:1.5}
+.hc-row b{grid-column:2}.hc-text{grid-column:2;color:var(--muted);word-break:break-word}.hc-ic{grid-row:1}
+.hc-row.bad{background:var(--bad-bg)}.hc-row.bad .hc-text{color:var(--bad-fg)}.hc-row.warn{background:var(--warn-bg)}.hc-row.warn .hc-text{color:var(--warn-fg)}
+.hc-hint{grid-column:2;font-size:12px;color:var(--text);word-break:break-word}
