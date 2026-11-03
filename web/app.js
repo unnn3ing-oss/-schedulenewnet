@@ -247,7 +247,7 @@
       summary: first(['description', 'og_description', 'ogDescription', 'summary']) };   // 摘要給 AI 產生小編文用
   }
   function metaError(r) {
-    if (!r.ok) return r.error === 'no_extension' ? '未偵測到外掛，無法帶入' : '外掛回報錯誤：' + r.error;
+    if (!r.ok) return r.error === 'no_extension' ? '未偵測到外掛，無法帶入' : SendFlow.extError(r.error);
     const d = r.data || {};
     if (d.status === 401 || d.status === 403) return '沒有登入網新發文台，請先登入後再試';
     if (d.status === 404) return '後端找不到這個端點，請回報';
@@ -318,6 +318,7 @@
     if (res.ok && res.data && typeof res.data.html === 'string') {
       try { art = Article.parseArticle(res.data.html, res.data.url || url); } catch (e) { fail = '文章網頁讀不懂'; }
     } else if (/^(unknown_op|no_extension|empty_response)$/.test(res.error)) old = true;
+    else if (SendFlow.extErrorKind(res.error)) fail = SendFlow.extError(res.error);
     else fail = `文章網頁沒抓到（${({ host_not_allowed: '網址不是 tvbs.com.tw', not_html: '不是網頁', too_big: '網頁太大', timeout: '逾時' })[res.error] || res.error}）`;
     const caption = art ? Article.mainCaption(art) : '', tags = art ? art.tags : [];
     const notes = [];

@@ -25,6 +25,17 @@ test('niceError：HTML 換成通用訊息、取 detail／message／error', () =>
   assert.ok(F.niceError(500, 'y'.repeat(1000)).length < 200);
 });
 
+test('外掛斷線錯誤：重新載入（沒送出）與中途斷線（結果不明）分開講', () => {
+  assert.equal(F.extErrorKind("Cannot read properties of undefined (reading 'sendMessage')"), 'reloaded');
+  assert.equal(F.extErrorKind('Extension context invalidated.'), 'reloaded');
+  assert.equal(F.extErrorKind('Could not establish connection. Receiving end does not exist.'), 'reloaded');
+  assert.equal(F.extErrorKind('A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received'), 'interrupted');
+  assert.equal(F.extErrorKind('no_extension'), '');
+  assert.match(F.apiResult({ ok: false, error: "Cannot read properties of undefined (reading 'sendMessage')" }).error, /重新整理頁面.*沒有送出|沒有送出.*重新整理/);
+  assert.match(F.apiResult({ ok: false, error: 'A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received' }).error, /結果不明.*確認/);
+  assert.match(F.apiResult({ ok: false, error: 'boom' }).error, /外掛回報錯誤：boom/);
+});
+
 test('apiResult', () => {
   assert.equal(F.apiResult({ ok: false, error: 'no_extension' }).ok, false);
   assert.match(F.apiResult({ ok: false, error: 'path_not_allowed' }).error, /0\.5\.0/);

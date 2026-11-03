@@ -38,12 +38,28 @@
     return (status ? `HTTP ${status}` : '錯誤') + (short ? '：' + short : '');
   }
 
+  // 外掛連線斷掉的錯誤（Chrome 原文）分兩種：
+  //   reloaded＝外掛更新／重新載入後，頁面上還是舊的內容腳本，請求根本沒送出去（重新整理頁面就好）
+  //   interrupted＝請求已交給外掛背景，但回應前背景被關掉，結果不明（可能已經發出）
+  function extErrorKind(e) {
+    const s = String(e || '');
+    if (/reading 'sendMessage'|reading 'getManifest'|Extension context invalidated|Receiving end does not exist/i.test(s)) return 'reloaded';
+    if (/message channel closed|message port closed/i.test(s)) return 'interrupted';
+    return '';
+  }
+  const EXT_RELOADED = '外掛剛更新或重新載入，這個頁面和外掛斷線了（這次沒有送出），請重新整理頁面（F5；側邊欄請關掉再打開）後再試';
+  const EXT_INTERRUPTED = '外掛連線中途斷了，結果不明：請先到粉專確認是否已發出，沒有再重送';
+  // 外掛回的錯誤 → 給人看的一句
+  function extError(e) {
+    const k = extErrorKind(e);
+    if (k === 'reloaded') return EXT_RELOADED;
+    if (k === 'interrupted') return EXT_INTERRUPTED;
+    return e === 'no_extension' ? '外掛沒回應，請確認外掛已安裝並更新到 0.5.0' : e === 'path_not_allowed' ? '外掛版本太舊（不允許這個端點），請更新到 0.5.0' : '外掛回報錯誤：' + e;
+  }
+
   // 外掛 Ext.call 的結果 → { ok, status, json, text, image, error }
   function apiResult(r) {
-    if (!r || !r.ok) {
-      const e = r && r.error;
-      return { ok: false, error: e === 'no_extension' ? '外掛沒回應，請確認外掛已安裝並更新到 0.5.0' : e === 'path_not_allowed' ? '外掛版本太舊（不允許這個端點），請更新到 0.5.0' : '外掛回報錯誤：' + e };
-    }
+    if (!r || !r.ok) return { ok: false, error: extError(r && r.error) };
     const d = r.data || {};
     const text = d.text != null ? d.text : (d.snippet || '');
     const status = d.status || 0;
@@ -128,5 +144,5 @@
     return [ok ? `${ok} 台成功` : '', bad ? `${bad} 台失敗` : ''].filter(Boolean).join('・');
   }
 
-  return { isHtml, parseJson, niceError, apiResult, parseGuard, sendOutcome, bubble, next, summary };
+  return { isHtml, parseJson, niceError, extErrorKind, extError, apiResult, parseGuard, sendOutcome, bubble, next, summary };
 });
