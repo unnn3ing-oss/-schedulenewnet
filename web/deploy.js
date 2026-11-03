@@ -322,7 +322,7 @@
       loadFolderEl.textContent = installedPath;
       setStatus(`已下載安裝檔「${name}」。請按「下一步」執行它。`, 'ok');
     } catch (err) {
-      setStatus(err.message || String(err), 'err');
+      setStatus(SendFlow.zhError(err, '發生錯誤'), 'err');
     } finally { setBusy(false); }
   });
 
@@ -330,14 +330,14 @@
     if (busy) return;
     let dir;
     try { dir = await window.showDirectoryPicker({ id: 'snn-extension', mode: 'readwrite' }); }
-    catch (err) { if (err && err.name === 'AbortError') return; setStatus(`無法開啟這個資料夾：${err.message || err}`, 'err'); return; }
+    catch (err) { if (err && err.name === 'AbortError') return; setStatus(`無法開啟這個資料夾：${SendFlow.zhError(err, '瀏覽器錯誤')}`, 'err'); return; }
     setBusy(true);
     try {
       const { count, label } = await deployToFolder(dir, msg => setStatus(msg));
       loadFolderEl.textContent = label;
       setStatus(`已把 ${count} 個檔案寫入「${label}」。請跳到步驟 3「開發人員模式」繼續（到擴充功能頁：chrome://extensions）。`, 'ok');
     } catch (err) {
-      setStatus(err.message || String(err), 'err');
+      setStatus(SendFlow.zhError(err, '發生錯誤'), 'err');
     } finally { setBusy(false); }
   });
 
@@ -350,7 +350,7 @@
       loadFolderEl.textContent = EXT_FOLDER;
       setStatus(`已下載 ZIP（${count} 個檔案）。請先解壓縮，解壓縮後的資料夾就是「${EXT_FOLDER}」，再跳到步驟 3「開發人員模式」（到擴充功能頁：chrome://extensions）。`, 'ok');
     } catch (err) {
-      setStatus(err.message || String(err), 'err');
+      setStatus(SendFlow.zhError(err, '發生錯誤'), 'err');
     } finally { setBusy(false); }
   });
 

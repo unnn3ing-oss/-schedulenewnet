@@ -138,7 +138,7 @@ document.getElementById('extVer').textContent = `v${manifest.version}`;
       if (a !== 'pick') return null;
       try { const dir = await Updater.pickFolder(); await refreshFolderHint(); return dir; } catch (err) {
         if (err && err.name === 'AbortError') return null;
-        msg = err && err.name === 'SecurityError' ? '沒有取得資料夾的存取權限，請再選一次並按允許。' : (err.message || String(err));
+        msg = err && err.name === 'SecurityError' ? '沒有取得資料夾的存取權限，請再選一次並按允許。' : Updater.zhError(err, '選擇資料夾失敗');
       }
     }
   }
@@ -184,7 +184,7 @@ document.getElementById('extVer').textContent = `v${manifest.version}`;
         chrome.action.setBadgeText({ text: '' }).catch(() => {});
       }
     } catch (err) {
-      show(err.message || String(err));
+      show(Updater.zhError(err, '檢查更新失敗'));
       applyBtn.hidden = true;
     } finally {
       checkBtn.disabled = false;
@@ -239,7 +239,7 @@ document.getElementById('extVer').textContent = `v${manifest.version}`;
     } catch (err) {
       busy = false;
       const cancelled = err && err.name === 'AbortError';
-      const msg = cancelled ? '已取消，沒有更新任何檔案' : err && err.name === 'SecurityError' ? '沒有取得資料夾的存取權限' : `更新失敗：${(err && err.message) || err}`;
+      const msg = cancelled ? '已取消，沒有更新任何檔案' : err && err.name === 'SecurityError' ? '沒有取得資料夾的存取權限' : `更新失敗：${Updater.zhError(err, '發生未知錯誤')}`;
       show(msg);
       applyBtn.disabled = checkBtn.disabled = false;
       if (cancelled) { closeModal(); return; }

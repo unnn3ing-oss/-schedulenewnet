@@ -34,9 +34,12 @@
     el.textContent = ok ? `外掛：已連線（v${version}）` : '外掛：沒有偵測到。請照上面第 2 步載入 extension 資料夾後重新整理本頁。';
   }
 
+  // 外掛錯誤代碼／英文原文 → 中文（共用 sendflow.js 的 zhError；載不到就顯示原文）
+  const zh = e => (window.SendFlow ? SendFlow.extError(e) : String(e));
+
   // 判斷一次呼叫的結果
   function judge(r) {
-    if (!r.ok) return { cls: 'bad', text: r.error === 'no_extension' ? '外掛沒回應' : '送出失敗：' + r.error };
+    if (!r.ok) return { cls: 'bad', text: r.error === 'no_extension' ? '外掛沒回應' : '送出失敗：' + zh(r.error) };
     const d = r.data;
     const html = /text\/html/i.test(d.contentType) || /^\s*<(!doctype|html)/i.test(d.snippet);
     if (d.status >= 200 && d.status < 300 && !html) return { cls: 'ok', text: '成功（有帶到登入）' };
@@ -83,7 +86,7 @@
   async function showCookies() {
     const r = await call('cookies', {}, 3000);
     $('cookieCard').hidden = false;
-    if (!r.ok) { $('cookies').textContent = '讀不到（' + (r.error === 'no_extension' ? '外掛沒回應' : r.error) + '）'; return; }
+    if (!r.ok) { $('cookies').textContent = '讀不到（' + (r.error === 'no_extension' ? '外掛沒回應' : zh(r.error)) + '）'; return; }
     const list = r.data;
     const has = list.some(c => c.name === 'queen_session');
     $('cookies').innerHTML = `<p class="${has ? '' : 'muted'}">${has ? '✓ 有 queen_session（後台登入）' : '✗ 沒有 queen_session，請先登入網新發文台'}</p>` +

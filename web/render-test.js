@@ -106,8 +106,8 @@
       report.push({ case: c.name, ok: r.ok, status: d.status, contentType: d.contentType, image: img, error: r.error, snippet: d.snippet });
       const box = document.createElement('div');
       box.className = 'res';
-      box.innerHTML = `<b>${esc(c.name)}</b><span class="tag ${img ? 'ok' : 'bad'}">${img ? '有回圖' : '沒有回圖'}・${esc(d.status ?? r.error ?? '—')}</span>` +
-        (img ? `<img alt="${esc(c.name)} 結果">` : `<pre>${esc((d.snippet || r.error || '').slice(0, 400))}</pre>`);
+      box.innerHTML = `<b>${esc(c.name)}</b><span class="tag ${img ? 'ok' : 'bad'}">${img ? '有回圖' : '沒有回圖'}・${esc(d.status ?? (r.error && window.SendFlow ? SendFlow.extError(r.error) : r.error) ?? '—')}</span>` +
+        (img ? `<img alt="${esc(c.name)} 結果">` : `<pre>${esc((d.snippet || (r.error && window.SendFlow ? SendFlow.extError(r.error) : r.error) || '').slice(0, 400))}</pre>`);
       if (img) box.querySelector('img').src = d.image;
       $('results').appendChild(box);
     }

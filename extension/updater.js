@@ -303,5 +303,29 @@
     }
   }
 
-  root.Updater = { REPO, checkLatest, pickFolder, getFolder, hasSavedFolder, apply, gitBlobSha, diffManifest, isSafePath, notesBetween };
+  // 瀏覽器的英文錯誤（選資料夾、寫檔、下載時的 DOMException／TypeError）→ 中文；本檔自己丟的中文訊息原樣保留
+  // （外掛和網頁不同網域、不能共用 web/sendflow.js，這裡放一份精簡版）
+  const ERR_ZH = [
+    [/NotAllowedError|permission denied|not allowed by the user agent/i, '沒有取得資料夾的存取權限，請再試一次並按「允許」'],
+    [/SecurityError|user gesture|user activation/i, '瀏覽器的安全限制不允許這個動作，請直接點按鈕再試一次'],
+    [/AbortError|aborted/i, '已取消'],
+    [/NotFoundError|could not be found/i, '找不到資料夾或檔案（可能被移走或改名），請重新選擇資料夾'],
+    [/NoModificationAllowedError|InvalidModificationError/i, '檔案無法寫入（可能是唯讀或被其他程式占用），請關掉其他程式後重試'],
+    [/InvalidStateError/i, '資料夾裡的檔案剛被改動，請重試'],
+    [/QuotaExceededError|quota/i, '磁碟空間不足，請清出空間後重試'],
+    [/TypeMismatchError/i, '資料夾裡有同名但類型不同的項目（檔案／資料夾），請檢查後重試'],
+    [/Failed to fetch|NetworkError|Load failed|network error/i, '網路連線失敗，請確認網路後再試'],
+    [/Unexpected token|JSON/i, 'GitHub 回應格式看不懂，請稍後再試']
+  ];
+  function zhError(err, lead = '發生未知錯誤') {
+    if (err == null || err === '') return lead;
+    const name = typeof err === 'object' && err.name && err.name !== 'Error' ? err.name : '';
+    const msg = String(typeof err === 'object' && 'message' in err ? err.message || name : err).trim();
+    if (/[\u3000-\u9fff\uff00-\uffef]/.test(msg)) return msg;
+    const full = name && msg !== name ? `${name}: ${msg}` : msg;
+    for (const [re, zh] of ERR_ZH) if (re.test(full)) return zh;
+    return full ? `${lead}（原文：${full.length > 160 ? full.slice(0, 160) + '…' : full}）` : lead;
+  }
+
+  root.Updater = { REPO, checkLatest, pickFolder, getFolder, hasSavedFolder, apply, gitBlobSha, diffManifest, isSafePath, notesBetween, zhError };
 })(self);

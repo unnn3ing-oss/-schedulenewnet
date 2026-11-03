@@ -67,5 +67,33 @@ const { chromium } = require('playwright'); const path = require('path'); const 
   assert(!log.includes('pick'), '第二次不再選資料夾');
   assert.deepStrictEqual(errs, []);
   console.log('側邊欄更新彈窗：新版彈窗 → 選資料夾（只一次）→ 權限確認 → 完成；第二次沿用資料夾、失敗可重試、取消 — ok');
+  // 5. 一鍵檢測：嵌入的網頁版改由本機 web/ 提供（不連外），圖床 Worker 模擬成沒有 /config 的舊版
+  const fs = require('fs'); const WEB = path.join(__dirname, '..', '..', 'web');
+  const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.json': 'application/json' };
+  await ctx.route('https://unnn3ing-oss.github.io/-schedulenewnet/**', r => {
+    const f = path.join(WEB, decodeURIComponent(new URL(r.request().url()).pathname.replace('/-schedulenewnet/', '/')).replace(/\/$/, '/index.html'));
+    if (!f.startsWith(WEB) || !fs.existsSync(f)) return r.fulfill({ status: 404, body: 'nf' });
+    r.fulfill({ status: 200, contentType: MIME[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
+  });
+  await ctx.route('https://snn-images.19jpz-3.workers.dev/**', r => r.fulfill({ status: 404, contentType: 'application/json',
+    headers: { 'Access-Control-Allow-Origin': 'https://unnn3ing-oss.github.io' }, body: '{"ok":false,"code":"not_found"}' }));
+  await ctx.route('https://raw.githubusercontent.com/**', r => r.fulfill({ status: 404, body: 'nf' }));
+  const h = await ctx.newPage(); h.on('pageerror', e => errs.push(e.message));
+  await h.setViewportSize({ width: 380, height: 720 });
+  await h.goto(`chrome-extension://${id}/sidepanel.html`);
+  await h.click('#tabInfo');
+  await h.waitForFunction(() => { const l = [...document.querySelectorAll('#hcList .hc-row')]; return l.length > 4 && !l.some(x => x.classList.contains('wait')) && !document.getElementById('hcRun').disabled; }, null, { timeout: 20000 });
+  const rows = await h.$$eval('#hcList .hc-row', ls => Object.fromEntries(ls.map(l => [l.dataset.id, { cls: l.className.replace('hc-row ', ''), text: l.querySelector('.hc-text').textContent, hint: (l.querySelector('.hc-hint') || {}).textContent || '' }])));
+  assert.strictEqual(rows.sw.cls, 'ok', '背景服務有回應');
+  assert.strictEqual(rows.web.cls, 'ok', '嵌入的網頁版有回應：' + rows.web.text);
+  assert.strictEqual(rows.extUpdate.cls, 'warn'); assert.match(rows.extUpdate.text, /有新版 v0\.9\.0/);
+  assert.strictEqual(rows.login.cls, 'bad'); assert.match(rows.login.hint, /登入/);
+  assert.strictEqual(rows.ext.cls, 'ok', '網頁版經內容腳本連到外掛：' + rows.ext.text);
+  assert.match(rows.imgWorker.hint, /請重新部署 worker\/index\.js/);
+  assert.strictEqual(await h.locator('#hcList .hc-row[data-id="login"]').count(), 1, '網新登入只列一次（側邊欄自己查）');
+  assert(await h.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), '窄版不水平捲動');
+  await h.screenshot({ path: require('path').join(require('os').tmpdir(), 'sp-health.png'), fullPage: true });
+  assert.deepStrictEqual(errs, []);
+  console.log('側邊欄一鍵檢測：背景服務、網新登入、外掛版本＋嵌入網頁版代跑的網路／外掛連線／圖床 — ok');
   await ctx.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });
