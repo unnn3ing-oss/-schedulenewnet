@@ -358,7 +358,7 @@ const MOCK_BRIDGE = () => {
   // 類似 TVBS 的文章頁（og:title 帶站名、figcaption（圖／TVBS）、#hashtag 連結）；9990002 是沒有圖說與 hashtag 的版本
   const ARTICLE = bare => `<!doctype html><html><head><title>蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始｜TVBS新聞網</title>
 <meta property="og:title" content="蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始｜TVBS新聞網">
-<meta property="og:image" content="https://cc.tvbs.com.tw/img/a.jpg"></head><body><article><h1>標題</h1>
+<meta property="og:image" content="https://cc.tvbs.com.tw/img/a.jpg"></head><body><article><h1>蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始</h1>
 ${bare ? '<p>內文</p>' : `<figure><img src="https://cc.tvbs.com.tw/img/a.jpg?w=800"><figcaption>蔡英文現身造勢場合。（圖／TVBS）</figcaption></figure>
 <p>內文（記者王小明／台北報導）</p><div class="tags"><a href="/tag/沈伯洋">#沈伯洋</a><a href="/tag/蔡英文">#蔡英文</a><a href="/tag/認知作戰">#認知作戰</a><a href="/tag/賴清德">#賴清德</a></div>`}
 </article></body></html>`;
@@ -712,7 +712,7 @@ async function prB(origin) {
   await page.click('#rdDlg button[type=submit]');
   assert(await page.isHidden('#rdDlg'));
   assert.strictEqual(await page.isChecked('#rdOn'), true);
-  assert.match(await page.getAttribute('#slug', 'placeholder'), /金鐘61/);
+  assert.match(await page.getAttribute('#slug', 'placeholder'), /飢餓10/);
   ok('Rundown：開關直接存、⚙ 測試連線經 Worker（不帶金鑰）；SLUG 預設顯示標題前 4 字');
 
   for (const i of [0, 1, 3]) await pg(i).locator('button').first().click();
@@ -740,7 +740,7 @@ async function prB(origin) {
   ok('背景預先上傳；粉框：預覽疊粉框，3 台都送 template=newsnet_ent');
   const rdReq = gas.shift();
   assert.strictEqual(rdReq.action, 'add'); assert.strictEqual('token' in rdReq, false); assert.strictEqual('mode' in rdReq, false);
-  assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['news', '3012399/圖文/金鐘61'], ['ent', '3012399/圖文/金鐘61']], '勾選的粉專各寫一筆，擠看看略過');
+  assert.deepStrictEqual(rdReq.entries.map(e => [e.page, e.text]), [['news', '3012399/圖文/飢餓10'], ['ent', '3012399/圖文/飢餓10']], '勾選的粉專各寫一筆，擠看看略過');
   assert.match(rdReq.entries[0].date, /^\d{4}-\d{2}-\d{2}$/); assert.match(rdReq.entries[0].time, /^\d{2}:\d{2}$/);
   const rdMsg = await page.textContent('#sendMsg');
   assert.match(rdMsg, /Rundown：主粉（新聞粉） \d{2}:\d{2} → AB107；娛樂粉：08:00 時段在這天已經排滿/);
@@ -1211,12 +1211,12 @@ async function captionFlow(origin) {
     await page.click('#fillBtn');
     await page.waitForFunction(re => new RegExp(re).test(document.getElementById('urlHint').textContent), re.source);
   };
-  const T0 = '蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始';
+  const T0 = '蔡英文現身！12萬洋流挺沈伯洋 賴清德：對手認知作戰已開始';   // 以文章頁 h1 為準（空白會正規化成半形）
   const CAP = '（圖／TVBS）', TAGS = '#沈伯洋 #蔡英文 #賴清德';
 
   await page.click('#newBtn');
   await fill('https://news.tvbs.com.tw/politics/3012345', /小編文已帶入/);
-  assert.strictEqual(await cap(), `【${T0}】\n${CAP}\n${TAGS}`, '【原標題（含全形空格）】／主圖圖說／2～3 字 hashtag');
+  assert.strictEqual(await cap(), `【${T0}】\n${CAP}\n${TAGS}`, '【原標題（h1）】／主圖圖說／2～3 字 hashtag');
   assert.match(await hintText(), /小編文已帶入標題、圖說、hashtag/);
   const art = (await page.evaluate(() => window.__calls)).filter(c => c.op === 'fetchArticle');
   assert.deepStrictEqual(art, [{ op: 'fetchArticle', url: 'https://news.tvbs.com.tw/politics/3012345' }]);
@@ -1274,8 +1274,9 @@ async function captionFlow(origin) {
   await page.fill('#caption', '');
   await page.fill('#title', '');
   await fill('https://news.tvbs.com.tw/politics/3012345', /外掛版本太舊/);
-  assert.strictEqual(await page.inputValue('#title'), (await page.evaluate(t => Rules.breakTitle(t), T0)).join('\n'));
-  assert.strictEqual(await cap(), `【${T0}】`);
+  // 舊外掛抓不到文章頁 h1，標題來自 page_meta（保留全形空格）
+  assert.strictEqual(await page.inputValue('#title'), (await page.evaluate(t => Rules.breakTitle(t), T0.replace(' ', '　'))).join('\n'));
+  assert.strictEqual(await cap(), `【${T0.replace(' ', '　')}】`);
   assert.match(await page.getAttribute('#urlHint', 'class'), /bad/);
   ok('舊外掛：提示更新到 0.6.0，標題與【標題】照樣帶入（' + await hintText() + '）');
 
