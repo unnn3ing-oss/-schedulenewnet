@@ -23,7 +23,7 @@ test('作圖框：通用欄位完全照交接文件 §4', () => {
     ip: 'newsnet', mode: 'single', template: 'newsnet_news',
     image_url: 'https://snn-images.19jpz-3.workers.dev/i/' + 'a'.repeat(32) + '.jpg', crop: null,
     line1: '颱風假 最新！北北基桃', line2: '明天照常上班上課', title_lines: ['颱風假 最新！北北基桃', '明天照常上班上課'],
-    caption: '北北基桃明天照常上班上課！\n#颱風', article_id: '3012345', short_title: '颱風假最新', rd_write: true,
+    caption: '北北基桃明天照常上班上課！\n#颱風', article_id: '3012345', short_title: '颱風假最新', rd_write: false,
     guard: { check_id: 'g1', level: 'yellow', ack: false }
   });
 });
@@ -85,15 +85,15 @@ test('每台一個請求：page、link（各台 UTM）、schedule、端點', () 
   // 共用欄位每台相同
   for (const b of [s, w]) for (const k of ['caption', 'image_url', 'template', 'title_lines', 'article_id', 'short_title']) assert.deepEqual(b[k], n[k]);
 });
-test('六台 link 追蹤碼與 rd_write（通用旗標，rd 空的粉專由後端略過）', () => {
+test('六台 link 追蹤碼；rd_write 一律 false（RD 改由本站排入，不讓舊後端回填）', () => {
   const reqs = P.buildRequests(frame(), cfg.pages.map(p => ({ code: p.code, at: null })));
   const byPage = Object.fromEntries(reqs.map(r => [r.code, r.body]));
   for (const p of cfg.pages) {
     assert.equal(byPage[p.code].link, URL_ + '?' + p.utm);
-    assert.equal(byPage[p.code].rd_write, true, p.code);
+    assert.equal(byPage[p.code].rd_write, false, p.code);
   }
-  // rd_write=false 則整篇不寫
-  assert.ok(P.buildRequests(frame({ rdWrite: false }), [{ code: 'news', at: null }]).every(r => r.body.rd_write === false));
+  // 就算傳 rdWrite:true 也不會打開
+  assert.ok(P.buildRequests(frame({ rdWrite: true }), [{ code: 'news', at: null }]).every(r => r.body.rd_write === false));
 });
 
 test('沒有文章網址：link 空字串、article_id 空字串', () => {

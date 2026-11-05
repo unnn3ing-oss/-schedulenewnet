@@ -37,7 +37,7 @@
   const guardKey = input => JSON.stringify(guardBody(input));
 
   // 各粉專共用的部分（§4 通用欄位；粉專、link、schedule 另外加）
-  //   input: { mode:'single'|'text_card', frame:'news'|'ent', imageUrl, lines[], caption, url, shortTitle, rdWrite, cardText, cardStyle,
+  //   input: { mode:'single'|'text_card', frame:'news'|'ent', imageUrl, lines[], caption, url, shortTitle, cardText, cardStyle,
   //            guard:{ checkId, level, ack } }
   function buildBase(input) {
     const card = input.mode === 'text_card';
@@ -59,7 +59,7 @@
       article_id: Rules.articleId(input.url),
       // 手動填優先；否則取標題第一行（純文字底圖沒有標題，取卡面文字第一行）去空白後前 5 字
       short_title: manual || Rules.shortTitle(card ? cardText.split('\n') : titleLines),
-      rd_write: input.rdWrite !== false,
+      rd_write: false,   // 一律關閉舊後端的 RD 回填：RD 由本站的「排入 Rundown」（gas/rundown.gs）負責，避免重複寫入
       guard: { check_id: String(g.checkId || ''), level: g.level || '', ack: g.level === 'red' ? !!g.ack : false }
     };
     if (card) Object.assign(base, textCardFields(cardText, input.cardStyle));
@@ -71,7 +71,7 @@
     const page = Rules.pageByCode(code);
     if (!page) throw new Error('unknown_page:' + code);
     return Object.assign({}, base, {
-      rd_write: base.rd_write,                  // 通用旗標；rd 為空的粉專（擠看看、氣象）由後端略過 RD
+      rd_write: base.rd_write,                  // 一律 false（見 buildBase）
       guard: Object.assign({}, base.guard),
       page: page.code,
       link: Rules.buildLink(url, page.utm),     // 沒有文章網址就是空字串

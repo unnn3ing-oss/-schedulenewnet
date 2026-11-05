@@ -124,32 +124,6 @@ async function fetchArticle(url) {
   } finally { clearTimeout(timer); }
 }
 
-// Rundown 使用者身分寫入（測試）：帶著瀏覽器的 Google 登入 cookie 呼叫 Apps Script 網頁應用程式，
-// 讓「以存取網頁應用程式的使用者身分執行」的部署知道是誰在寫。只允許 Apps Script /exec 網址；
-// 目前只放行 whoami（只回報身分、不寫入），正式寫入之後再加。
-const GAS_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[\w.-]+|(?:a\/[\w.-]+\/)?macros)\/(?:u\/\d{1,2}\/)?s\/[\w-]+\/exec$/;
-const GAS_ACTIONS = ['whoami'];
-const GAS_FINAL = /^https:\/\/(?:script\.google\.com|script\.googleusercontent\.com|accounts\.google\.com)\//;
-function gasUrlOk(u) { return typeof u === 'string' && GAS_URL.test(u); }
-async function gasCall(url, body) {
-  if (!gasUrlOk(url)) return { ok: false, error: 'gas_url_not_allowed' };
-  if (!body || !GAS_ACTIONS.includes(body.action)) return { ok: false, error: 'gas_action_not_allowed' };
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 30000);
-  try {
-    // text/plain：Apps Script 只認 postData；轉址到 script.googleusercontent.com 後拿結果
-    const r = await fetch(url, { method: 'POST', credentials: 'include', redirect: 'follow', signal: ctrl.signal,
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(body) });
-    const finalUrl = r.url || '';
-    const text = await r.text();
-    // 轉到預期以外的網域：只回狀態，不回內容
-    if (!GAS_FINAL.test(finalUrl)) return { ok: true, data: { status: r.status, contentType: '', finalUrl, text: '' } };
-    return { ok: true, data: { status: r.status, contentType: r.headers.get('content-type') || '', finalUrl, text: text.slice(0, 20000) } };
-  } catch (e) {
-    return { ok: false, error: ctrl.signal.aborted ? 'timeout' : String(e && e.message || e) };
-  } finally { clearTimeout(timer); }
-}
-
 async function cookieInfo() {
   // 只回報名稱與到期時間，不回傳值。
   const list = await chrome.cookies.getAll({ url: HOST + '/' });
@@ -165,9 +139,6 @@ async function handle(msg) {
   }
   if (op === 'fetchArticle') {
     try { return await fetchArticle(String((payload || {}).url || '')); } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
-  }
-  if (op === 'gasCall') {
-    try { return await gasCall(String((payload || {}).url || ''), (payload || {}).body); } catch (e) { return { ok: false, error: String(e && e.message || e) }; }
   }
   if (op !== 'call') return { ok: false, error: 'unknown_op' };
   const { mode, path, method = 'GET', body } = payload || {};

@@ -658,7 +658,7 @@ async function prB(origin) {
   assert.strictEqual(shao.schedule, tomorrow + 'T21:30');
   assert.strictEqual(shao.link, 'https://news.tvbs.com.tw/life/3012345?utm_source=facebook&utm_medium=2100roompic');
   assert.strictEqual(wx.link, 'https://news.tvbs.com.tw/life/3012345?utm_source=Facebook&utm_medium=18weather');
-  assert.deepStrictEqual([news.rd_write, shao.rd_write, wx.rd_write], [true, true, true]);
+  assert.deepStrictEqual([news.rd_write, shao.rd_write, wx.rd_write], [false, false, false], '舊後端 RD 回填一律關閉');
   assert.strictEqual(news.article_id, '3012345'); assert.strictEqual(news.short_title, '颱風假最新');
   assert.deepStrictEqual(news.title_lines, ['颱風假最新！北北基桃', '明天照常上班上課']);
   assert.deepStrictEqual(s1.map(c => c.body.template), ['newsnet_news', 'newsnet_news', 'newsnet_news'], '藍框：每台都送 newsnet_news');

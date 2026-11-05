@@ -1,21 +1,9 @@
 {
-  "0.9.2": {
-    "summary": "Rundown 使用者身分測試：可指定用第幾個 Google 帳號",
+  "0.9.3": {
+    "summary": "拿掉 Rundown 使用者身分測試",
     "items": [
-      "接受帶帳號序號的 Apps Script 網址（script.google.com/macros/u/1/s/…/exec），同時登入多個 Google 帳號時可指定用哪一個寫入"
-    ]
-  },
-  "0.9.1": {
-    "summary": "Rundown 使用者身分測試：支援公司網域的 Apps Script 網址",
-    "items": [
-      "接受公司 Google Workspace 帳號部署的 Apps Script 網址（script.google.com/a/macros/公司網域/s/…/exec）"
-    ]
-  },
-  "0.9.0": {
-    "summary": "Rundown 可測試用自己的 Google 帳號寫入",
-    "items": [
-      "新增 Rundown「使用者身分」測試：外掛帶著瀏覽器的 Google 登入呼叫 Apps Script，確認寫入時會顯示誰的名字（目前只測試、不寫入）",
-      "權限變動：新增可存取 script.google.com、script.googleusercontent.com（只用來呼叫 FB RUNDOWN 的 Apps Script）"
+      "0.9.0～0.9.2 試做的「用自己的 Google 帳號寫 Rundown」不做了，相關功能整個拿掉",
+      "權限變動：移除 script.google.com、script.googleusercontent.com（回到 0.8.4 的權限）"
     ]
   },
   "0.8.4": {
