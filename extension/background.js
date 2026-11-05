@@ -127,7 +127,7 @@ async function fetchArticle(url) {
 // Rundown 使用者身分寫入（測試）：帶著瀏覽器的 Google 登入 cookie 呼叫 Apps Script 網頁應用程式，
 // 讓「以存取網頁應用程式的使用者身分執行」的部署知道是誰在寫。只允許 Apps Script /exec 網址；
 // 目前只放行 whoami（只回報身分、不寫入），正式寫入之後再加。
-const GAS_URL = /^https:\/\/script\.google\.com\/(?:a\/[\w.-]+\/)?macros\/s\/[\w-]+\/exec$/;
+const GAS_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[\w.-]+\/s|(?:a\/[\w.-]+\/)?macros\/s)\/[\w-]+\/exec$/;
 const GAS_ACTIONS = ['whoami'];
 const GAS_FINAL = /^https:\/\/(?:script\.google\.com|script\.googleusercontent\.com|accounts\.google\.com)\//;
 function gasUrlOk(u) { return typeof u === 'string' && GAS_URL.test(u); }

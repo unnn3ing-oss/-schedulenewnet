@@ -1,4 +1,10 @@
 {
+  "0.9.1": {
+    "summary": "Rundown 使用者身分測試：支援公司網域的 Apps Script 網址",
+    "items": [
+      "接受公司 Google Workspace 帳號部署的 Apps Script 網址（script.google.com/a/macros/公司網域/s/…/exec）"
+    ]
+  },
   "0.9.0": {
     "summary": "Rundown 可測試用自己的 Google 帳號寫入",
     "items": [

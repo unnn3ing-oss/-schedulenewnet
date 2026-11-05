@@ -59,7 +59,7 @@
   }
 
   // ---- 使用者身分寫入（測試）：外掛帶 Google 登入呼叫「以存取網頁應用程式的使用者身分執行」的部署 ----
-  const GAS_URL = /^https:\/\/script\.google\.com\/(?:a\/[\w.-]+\/)?macros\/s\/[\w-]+\/exec$/;   // 同外掛 background.js
+  const GAS_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[\w.-]+\/s|(?:a\/[\w.-]+\/)?macros\/s)\/[\w-]+\/exec$/;   // 同外掛 background.js
   const gasUrlOk = u => GAS_URL.test(String(u || '').trim());
   const EXT_ERR = {
     no_extension: '沒有偵測到外掛（需要外掛 0.9.0 以上）',
@@ -81,6 +81,8 @@
     }
     if (j) return { cls: 'bad', msg: '有回應，但不是 Rundown 的 Apps Script（確認貼的是 gas/rundown.gs 的部署網址，而且已部署新版本）' };
     if (/^https:\/\/accounts\.google\.com\//.test(finalUrl)) return { cls: 'bad', msg: '被轉到 Google 登入頁：這個瀏覽器沒有登入 Google，或外掛帶不到登入狀態', link: url };
+    // Google 雲端硬碟的「很抱歉，目前無法開啟這個檔案」：瀏覽器預設的 Google 帳號打不開這個部署（多帳號登入最常見）
+    if (/無法開啟這個檔案|無法開啟此檔案|unable to open the file/i.test(d.text || '')) return { cls: 'bad', msg: 'Google 回「無法開啟這個檔案」：這個瀏覽器預設的 Google 帳號打不開這個部署。常見原因：同時登入多個 Google 帳號（預設帳號不是部署的那個）、部署的「誰可以存取」只限自己或公司網域、或網址不是新部署的 /exec', link: url };
     if (d.status === 404) return { cls: 'bad', msg: '找不到這個 Apps Script（網址錯，或部署已封存）' };
     if (/text\/html/i.test(d.contentType || '')) return { cls: 'warn', msg: '這個帳號還沒授權，或沒有存取權：點下面連結開啟，按「允許」後再測一次。如果頁面寫「沒有權限」，請把部署的「誰可以存取」改成「任何擁有 Google 帳戶的使用者」', link: url };
     return { cls: 'bad', msg: `Apps Script 回應看不懂（HTTP ${d.status || '?'}）` };

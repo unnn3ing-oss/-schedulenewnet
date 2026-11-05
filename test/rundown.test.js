@@ -281,3 +281,9 @@ test('whoResult：沒授權、沒登入、404、外掛問題', () => {
   assert.match(W.whoResult({ ok: false, error: 'no_extension' }, EXEC).msg, /外掛/);
   assert.match(W.whoResult(gasRes('{"ok":true}'), EXEC).msg, /不是 Rundown/);
 });
+
+test('gasUrlOk／whoResult：Workspace 網址、雲端硬碟「無法開啟這個檔案」', () => {
+  assert.equal(W.gasUrlOk('https://script.google.com/a/macros/tvbs.com.tw/s/AKfy_x-1/exec'), true);
+  const r = W.whoResult(gasRes('<html><title>Google 雲端硬碟</title>很抱歉，目前無法開啟這個檔案。</html>', { contentType: 'text/html', finalUrl: EXEC }), EXEC);
+  assert.equal(r.cls, 'bad'); assert.match(r.msg, /多個 Google 帳號/);
+});
