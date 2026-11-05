@@ -144,6 +144,12 @@
     <p class="hint">照時間順序排進去：該時間的格子是空的或只有「/文字/」「/圖文/」就直接填；已有稿子就插一格，這天這個時段下面往下推（不覆蓋）。</p>
     <p class="hint">Apps Script 網址與金鑰放在圖床 Worker 的 Secrets（RUNDOWN_URL、RUNDOWN_TOKEN），這裡不用填；寫入時用圖床登入。</p>
     <p class="hint" id="rdHint" role="status"></p>
+    <fieldset class="rd-who"><legend>使用者身分寫入（測試中）</legend>
+      <p class="hint">貼上「執行身分：存取網頁應用程式的使用者」那個部署的網址，按測試：經外掛帶著這個瀏覽器的 Google 登入，確認之後寫入會顯示誰的名字。只測試，不會寫入。</p>
+      <input type="url" id="rdUserUrl" placeholder="https://script.google.com/macros/s/…/exec" aria-label="使用者身分部署網址" autocomplete="off" spellcheck="false">
+      <div class="row"><button class="btn ghost sm" id="rdWho" type="button">測試使用者身分</button></div>
+      <p class="hint" id="rdWhoHint" role="status"></p>
+    </fieldset>
     <div class="row"><button class="btn ghost" id="rdTest" type="button">測試連線</button><button class="btn" id="rdCancel" type="button">取消</button><button class="btn primary" type="submit">儲存</button></div></form>
 </div>
 <div class="dlg" id="rsDlg" role="dialog" aria-modal="true" aria-labelledby="rsTitle" hidden>

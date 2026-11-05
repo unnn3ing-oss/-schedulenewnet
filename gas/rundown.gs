@@ -177,6 +177,7 @@ function doPost(e) {
   var body;
   try { body = JSON.parse(e.postData.contents); } catch (x) { return rdJson({ ok: false, error: '格式錯誤' }); }
   var props = PropertiesService.getScriptProperties();
+  if (body.action === 'whoami') return rdJson(rdWhoami(props));
   var token = props.getProperty('TOKEN');
   if (!token || token.length < 12) return rdJson({ ok: false, error: 'Apps Script 尚未設定 TOKEN（至少 12 字）' });
   if (body.token !== token) return rdJson({ ok: false, error: '金鑰不對' });
@@ -193,6 +194,20 @@ function doPost(e) {
     SpreadsheetApp.flush();
     return rdJson({ ok: true, results: results });
   } finally { lock.releaseLock(); }
+}
+
+// 使用者身分寫入（測試）：外掛帶著瀏覽器的 Google 登入呼叫「以存取網頁應用程式的使用者身分執行」的部署，
+// 回報這次是用誰的身分、打不打得開 FB RUNDOWN。不需要 TOKEN（Google 登入＋試算表權限本身就是門檻），不寫入任何東西。
+// 「執行身分：我」的部署（圖床 Worker 走的那個）匿名呼叫時拿不到使用者，只回 asUser:false，不透露部署者是誰、也不開試算表。
+function rdWhoami(props) {
+  var user = '', me = '';
+  try { user = Session.getActiveUser().getEmail() || ''; } catch (x) { /* 拿不到就當匿名 */ }
+  try { me = Session.getEffectiveUser().getEmail() || ''; } catch (x) { /* 同上 */ }
+  if (!user || user !== me) return { ok: true, app: 'newsnet-rundown', asUser: false };
+  var out = { ok: true, app: 'newsnet-rundown', asUser: true, user: user };
+  try { out.title = SpreadsheetApp.openById(props.getProperty('SHEET_ID') || RD_DEFAULT_SHEET).getName(); out.canOpen = true; }
+  catch (x) { out.canOpen = false; out.error = '這個帳號打不開 FB RUNDOWN（請確認有編輯權限）'; }
+  return out;
 }
 
 function rdAddOne(ss, names, en) {

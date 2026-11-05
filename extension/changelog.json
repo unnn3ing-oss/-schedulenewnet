@@ -1,4 +1,11 @@
 {
+  "0.9.0": {
+    "summary": "Rundown 可測試用自己的 Google 帳號寫入",
+    "items": [
+      "新增 Rundown「使用者身分」測試：外掛帶著瀏覽器的 Google 登入呼叫 Apps Script，確認寫入時會顯示誰的名字（目前只測試、不寫入）",
+      "權限變動：新增可存取 script.google.com、script.googleusercontent.com（只用來呼叫 FB RUNDOWN 的 Apps Script）"
+    ]
+  },
   "0.8.4": {
     "summary": "新增一鍵檢測；錯誤訊息全面改成中文",
     "items": [
