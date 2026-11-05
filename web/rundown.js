@@ -59,7 +59,7 @@
   }
 
   // ---- 使用者身分寫入（測試）：外掛帶 Google 登入呼叫「以存取網頁應用程式的使用者身分執行」的部署 ----
-  const GAS_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[\w.-]+\/s|(?:a\/[\w.-]+\/)?macros\/s)\/[\w-]+\/exec$/;   // 同外掛 background.js
+  const GAS_URL = /^https:\/\/script\.google\.com\/(?:a\/macros\/[\w.-]+|(?:a\/[\w.-]+\/)?macros)\/(?:u\/\d{1,2}\/)?s\/[\w-]+\/exec$/;   // 同外掛 background.js
   const gasUrlOk = u => GAS_URL.test(String(u || '').trim());
   const EXT_ERR = {
     no_extension: '沒有偵測到外掛（需要外掛 0.9.0 以上）',

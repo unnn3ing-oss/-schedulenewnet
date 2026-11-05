@@ -287,3 +287,9 @@ test('gasUrlOk／whoResult：Workspace 網址、雲端硬碟「無法開啟這�
   const r = W.whoResult(gasRes('<html><title>Google 雲端硬碟</title>很抱歉，目前無法開啟這個檔案。</html>', { contentType: 'text/html', finalUrl: EXEC }), EXEC);
   assert.equal(r.cls, 'bad'); assert.match(r.msg, /多個 Google 帳號/);
 });
+
+test('gasUrlOk：帶帳號序號 /u/N/ 的網址', () => {
+  assert.equal(W.gasUrlOk('https://script.google.com/macros/u/1/s/AKfy_x-1/exec'), true);
+  assert.equal(W.gasUrlOk('https://script.google.com/a/macros/tvbs.com.tw/u/2/s/AKfy/exec'), true);
+  assert.equal(W.gasUrlOk('https://script.google.com/macros/u/x/s/AKfy/exec'), false);
+});

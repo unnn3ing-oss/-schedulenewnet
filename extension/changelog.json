@@ -1,4 +1,10 @@
 {
+  "0.9.2": {
+    "summary": "Rundown 使用者身分測試：可指定用第幾個 Google 帳號",
+    "items": [
+      "接受帶帳號序號的 Apps Script 網址（script.google.com/macros/u/1/s/…/exec），同時登入多個 Google 帳號時可指定用哪一個寫入"
+    ]
+  },
   "0.9.1": {
     "summary": "Rundown 使用者身分測試：支援公司網域的 Apps Script 網址",
     "items": [
