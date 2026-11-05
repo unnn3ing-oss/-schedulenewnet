@@ -450,6 +450,27 @@ async function prB(origin) {
   await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
   assert.strictEqual(await page.textContent('#imgText'), '圖床未登入');
   ok('模擬外掛連線、圖床未登入');
+  // Rundown 預設開啟（沒存過設定）；下面送出流程先關掉，Rundown 另外測
+  assert.strictEqual(await page.evaluate(() => Rundown.enabled()), true);
+  assert.strictEqual(await page.isChecked('#rdOn'), true);
+  // 第一次打開新增發文：「全部送出」上方跳「目前RD預設為開啟」；點一下就收，同一次載入再開不再跳
+  await page.click('#newBtn');
+  await page.waitForSelector('#rdTip:not([hidden])');
+  assert.strictEqual(await page.textContent('#rdTip'), '目前RD預設為開啟');
+  const tipBox = await page.locator('#rdTip').boundingBox(), sendBox = await page.locator('#sendBtn').boundingBox();
+  assert(tipBox.y + tipBox.height <= sendBox.y, '泡泡在全部送出上方');
+  await page.click('#url');
+  assert(await page.isHidden('#rdTip'), '點一下就收起來');
+  await page.keyboard.press('Escape');
+  await page.click('#newBtn');
+  await page.waitForTimeout(200);
+  assert(await page.isHidden('#rdTip'), '同一次載入只跳一次');
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => Rundown.save({ on: false }));
+  await page.reload();
+  await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
+  assert.strictEqual(await page.isChecked('#rdOn'), false, '關掉之後重開頁面仍是關');
+  ok('Rundown 預設開啟、第一次打開新增發文跳一次提醒；關掉會記住');
 
   const calls = () => page.evaluate(() => window.__calls);
   const sends = async () => (await calls()).filter(c => c.path === '/publish' || c.path === '/schedule');

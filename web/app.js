@@ -863,8 +863,21 @@
     Editor.loadFont();   // 還沒抓字型的話現在就抓（預覽標題要用）
     updateCounters();
     $('url').focus();
+    showRdTip();
+  }
+  // 「目前RD預設為開啟」：每次載入網頁（或打開外掛側邊欄）後，第一次打開新增發文時在「全部送出」上方跳一次；Rundown 關著就不跳
+  let rdTipShown = false, rdTipTimer = 0;
+  function hideRdTip() { clearTimeout(rdTipTimer); $('rdTip').hidden = true; document.removeEventListener('pointerdown', hideRdTip, true); }
+  function showRdTip() {
+    if (rdTipShown) return;
+    rdTipShown = true;
+    if (!Rundown.enabled()) return;
+    $('rdTip').hidden = false;
+    rdTipTimer = setTimeout(hideRdTip, 6000);
+    document.addEventListener('pointerdown', hideRdTip, true);   // 點任何地方就收起來
   }
   function closeModal() {
+    hideRdTip();
     $('confirm').hidden = true; $('doneDlg').hidden = true; overlay.hidden = true; document.body.classList.remove('locked');
     resetAll();
     if (state.openedBy && state.openedBy.focus) state.openedBy.focus();

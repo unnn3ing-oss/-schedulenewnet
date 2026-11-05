@@ -66,11 +66,15 @@
   if (typeof document === 'undefined') return;
   const KEY = 'snn.rundown.v1', $ = id => document.getElementById(id);
   const listeners = [];
+  // 預設開啟：沒存過（第一次用、換瀏覽器、清過資料）就是開；小編自己關掉才會記成關
+  let mem = null;   // localStorage 被停用時，這次分頁內照常記住切換
   function settings() {
-    try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); return { on: !!(v && v.on) }; } catch (e) { return { on: false }; }
+    try { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); if (v && typeof v.on === 'boolean') return { on: v.on }; } catch (e) { /* 讀不到就看分頁內的 */ }
+    return { on: mem ? mem.on : true };
   }
   function save(patch) {
     const v = { on: !!Object.assign(settings(), patch).on };
+    mem = v;
     try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) { /* 被停用：這次分頁內照常 */ }
     listeners.forEach(fn => fn(v));
     return v;
