@@ -296,11 +296,11 @@
         syncCaptionTitle();
       }
       skel($('title'), false);
-      let msg = '已帶入' + (meta.title ? '標題' : '') + (state.articleId ? `（文章 ${state.articleId}）` : ''), cls = 'ok';
+      let msg = '已帶入' + (meta.title ? '標題' : ''), cls = 'ok';
       const imP = meta.image ? Ext.fetchImage(meta.image) : null;
       if (meta.image) {   // 不論目前是作圖框或純文字底圖都先載入主圖，之後切到作圖框不用再按一次帶入
         const im = await imP;
-        if (im.ok && im.data && im.data.image) { try { await Editor.loadUrl(im.data.image); msg += state.mode === 'frame' ? '與主圖' : '與主圖（切到作圖框即可使用）'; } catch (e) { msg += '，但主圖讀不出來'; cls = 'bad'; } }
+        if (im.ok && im.data && im.data.image) { try { await Editor.loadUrl(im.data.image); msg += (meta.title ? '與' : '') + (state.mode === 'frame' ? '主圖' : '主圖（切到作圖框即可使用）'); } catch (e) { msg += '，但主圖讀不出來'; cls = 'bad'; } }
         else { msg += '；主圖沒抓到（' + (im.error === 'host_not_allowed' ? '圖片網域不在允許範圍' : im.error === 'no_extension' ? '外掛沒回應，請更新外掛到 0.4.0 以上' : SendFlow.zhError(im.error)) + '），請手動上傳'; cls = 'bad'; }
       }
       skel($('canvasWrap'), false);
@@ -865,15 +865,15 @@
     $('url').focus();
     showRdTip();
   }
-  // 「目前RD預設為開啟」：每次載入網頁（或打開外掛側邊欄）後，第一次打開新增發文時在「全部送出」上方跳一次；Rundown 關著就不跳
+  // Rundown 提醒：每次載入網頁（或打開外掛側邊欄）後，第一次打開新增發文時在「全部送出」上方跳一次，開著／關著各說明目前狀態
   let rdTipShown = false, rdTipTimer = 0;
   function hideRdTip() { clearTimeout(rdTipTimer); $('rdTip').hidden = true; document.removeEventListener('pointerdown', hideRdTip, true); }
   function showRdTip() {
     if (rdTipShown) return;
     rdTipShown = true;
-    if (!Rundown.enabled()) return;
+    $('rdTip').textContent = Rundown.enabled() ? '目前RD預設為開啟' : '目前RD為關閉';
     $('rdTip').hidden = false;
-    rdTipTimer = setTimeout(hideRdTip, 6000);
+    rdTipTimer = setTimeout(hideRdTip, 2000);
     document.addEventListener('pointerdown', hideRdTip, true);   // 點任何地方就收起來
   }
   function closeModal() {

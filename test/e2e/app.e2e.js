@@ -470,7 +470,13 @@ async function prB(origin) {
   await page.reload();
   await page.waitForFunction(() => /登入剩/.test(document.getElementById('extText').textContent));
   assert.strictEqual(await page.isChecked('#rdOn'), false, '關掉之後重開頁面仍是關');
-  ok('Rundown 預設開啟、第一次打開新增發文跳一次提醒；關掉會記住');
+  await page.click('#newBtn');
+  await page.waitForSelector('#rdTip:not([hidden])');
+  assert.strictEqual(await page.textContent('#rdTip'), '目前RD為關閉', '關著時提醒目前是關閉');
+  await page.waitForTimeout(2300);
+  assert(await page.isHidden('#rdTip'), '2 秒後自動消失');
+  await page.keyboard.press('Escape');
+  ok('Rundown 預設開啟、第一次打開新增發文跳一次提醒（開／關各自說明，2 秒消失）；關掉會記住');
 
   const calls = () => page.evaluate(() => window.__calls);
   const sends = async () => (await calls()).filter(c => c.path === '/publish' || c.path === '/schedule');
@@ -483,6 +489,7 @@ async function prB(origin) {
   // 快速帶入：標題照 QPT breakTitle 分行，一行一句填進標題框
   await page.click('#fillBtn');
   await page.waitForFunction(() => /已帶入標題/.test(document.getElementById('urlHint').textContent));
+  assert.doesNotMatch(await page.textContent('#urlHint'), /（文章/, '帶入提示不顯示文章編號');
   const broke = await page.evaluate(() => Rules.breakTitle('蔡英文現身！12萬洋流挺沈伯洋　賴清德：對手認知作戰已開始'));
   assert.strictEqual(broke.length, 3);
   assert.strictEqual(await page.inputValue('#title'), broke.join('\n'));
