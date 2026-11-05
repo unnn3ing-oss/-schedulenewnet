@@ -182,7 +182,7 @@
   const wordmark = new Image();
   wordmark.onload = () => drawTextCard();
   wordmark.src = 'frames/wordmark_newsnet.png';
-  if (document.fonts) document.fonts.load(`${TC.px}px "WHZ-Heavy"`).then(() => drawTextCard(), () => {});
+  Editor.onFontLoad(() => drawTextCard());   // 同一個字型檔，Editor 會在頁面載完、閒置時才開始抓
   // 一行超過 maxW 就折行（畫布與預覽上的輸入框共用，兩邊的行數才會一致）
   function wrapRows(c, text) {
     const rows = [];
@@ -860,6 +860,7 @@
   function openModal() {
     state.openedBy = document.activeElement;
     overlay.hidden = false; document.body.classList.add('locked');
+    Editor.loadFont();   // 還沒抓字型的話現在就抓（預覽標題要用）
     updateCounters();
     $('url').focus();
   }

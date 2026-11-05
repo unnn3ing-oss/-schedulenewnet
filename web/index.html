@@ -3,6 +3,8 @@
 <title>網新快速排程</title>
 <link rel="icon" type="image/png" sizes="32x32" href="icons/icon32.png"><link rel="icon" type="image/png" sizes="16x16" href="icons/icon16.png"><link rel="apple-touch-icon" href="icons/icon128.png">
 <link rel="stylesheet" href="verify.css"><link rel="stylesheet" href="segmented.css"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="deploy.css">
+<!-- defer 放在 head：瀏覽器一開始就同時下載全部程式（放 body 最後會一支一支排隊抓），照順序在 HTML 解析完後執行，行為和放最後一樣 -->
+<script defer src="config.js"></script><script defer src="rules.js"></script><script defer src="article.js"></script><script defer src="sched.js"></script><script defer src="payload.js"></script><script defer src="sendflow.js"></script><script defer src="records.js"></script><script defer src="ext.js"></script><script defer src="imghost.js"></script><script defer src="rundown.js"></script><script defer src="health.js"></script><script defer src="segmented.js"></script><script defer src="stickers.js"></script><script defer src="editor.js"></script><script defer src="reclist.js"></script><script defer src="installer.js"></script><script defer src="deploy.js"></script><script defer src="app.js"></script>
 </head><body>
 <header class="topbar">
   <div class="brand"><img class="brand-ic" src="icons/icon128.png" alt="" width="28" height="28"><span>網新<b>快速排程</b></span></div>
@@ -511,5 +513,4 @@
     </footer>
   </div>
 </div>
-<script src="config.js"></script><script src="rules.js"></script><script src="article.js"></script><script src="sched.js"></script><script src="payload.js"></script><script src="sendflow.js"></script><script src="records.js"></script><script src="ext.js"></script><script src="imghost.js"></script><script src="rundown.js"></script><script src="health.js"></script><script src="segmented.js"></script><script src="stickers.js"></script><script src="editor.js"></script><script src="reclist.js"></script><script src="installer.js"></script><script src="deploy.js"></script><script src="app.js"></script>
 </body></html>

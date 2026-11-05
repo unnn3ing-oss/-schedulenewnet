@@ -56,7 +56,21 @@
   // 後端：同為 WHZ-Heavy、66px、白字置中、行距 93px，最後一行固定在 y≈931，往上疊（不是整塊置中）
   const SIZE = W;
   const FONT_STACK = `"WHZ-Heavy", "Microsoft JhengHei", "PMingLiU", sans-serif`;
-  const whzFontReady = document.fonts ? document.fonts.load(`67px "WHZ-Heavy"`).catch(() => {}) : Promise.resolve();
+  // WHZ-Heavy 字型檔很大（woff2 約 2.8 MB）：不在開頁時跟程式搶頻寬，等頁面載完、閒置時才抓；打開新增發文會馬上抓
+  let whzFontReady = null;
+  const fontCbs = [() => render()];   // 字型到了要重畫的東西（app.js 的純文字底圖也掛在這）
+  function loadFont() {
+    if (!whzFontReady) {
+      whzFontReady = document.fonts ? document.fonts.load(`67px "WHZ-Heavy"`).catch(() => {}) : Promise.resolve();
+      whzFontReady.then(() => fontCbs.forEach(cb => cb()));
+    }
+    return whzFontReady;
+  }
+  const onFontLoad = cb => { if (whzFontReady) whzFontReady.then(cb); else fontCbs.push(cb); };
+  function loadFontWhenIdle() {
+    const go = () => (window.requestIdleCallback ? requestIdleCallback(loadFont, { timeout: 3000 }) : setTimeout(loadFont, 500));
+    if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+  }
   const LAST_LINE_Y = 931;     // 最後一行的中線（textBaseline: middle），量自後端產圖
   const LINE_HEIGHT = 93;      // 行距（px），量自後端產圖
   const TITLE_PX = 66;         // 字級（px），量自後端產圖（同字型寬度比 67px 小 1.5%）
@@ -90,7 +104,7 @@
     });
   }
   // ===== 複製結束 =====
-  whzFontReady.then(() => render());
+  loadFontWhenIdle();
 
   function render() {
     drawBase(ctx);
@@ -342,6 +356,7 @@
   });
 
   window.Editor = {
+    loadFont, onFontLoad,
     setFrame, setTitleLines, exportBlob, loadFile, loadUrl, clearImage, mountFxBar, fxOpen, closeFx,
     hasImage: () => !!bg.image,
     hasContent: () => !!bg.image || items.length > 0,

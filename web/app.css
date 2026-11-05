@@ -1,5 +1,5 @@
 /* 套版預覽的標題字型（同 QPT style.css） */
-@font-face{font-family:"WHZ-Heavy";src:url("fonts/whz-heavy.ttf") format("truetype");font-display:swap}
+@font-face{font-family:"WHZ-Heavy";src:url("fonts/whz-heavy.woff2") format("woff2"),url("fonts/whz-heavy.ttf") format("truetype");font-display:swap}
 /* 正式介面。色彩沿用 verify.css 的 token；貼圖列與預覽操作框的樣式取自 QPT watermark.css 的 .fx-*。 */
 :root{--field-bg:var(--surface);--shadow:0 24px 60px -30px rgba(0,43,102,.35);--ok-bg:#15803d}
 @media (prefers-color-scheme:dark){:root{--ok-bg:#1f8f50}}
